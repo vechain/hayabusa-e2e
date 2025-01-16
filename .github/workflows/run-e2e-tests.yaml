@@ -31,7 +31,7 @@ permissions:
 jobs:
     e2e_tests:
         name: Run E2E Tests
-        runs-on: codebuild-Hayabusa-E2E-{{ github.run_id }}-${{ github.run_attempt }}-ubuntu-7.0-large
+        runs-on: codebuild-Hayabusa-E2E-${{ github.run_id }}-${{ github.run_attempt }}-ubuntu-7.0-large
         environment: ${{ inputs.environment || 'default-private' }}
         steps:
             - name: Checkout code
