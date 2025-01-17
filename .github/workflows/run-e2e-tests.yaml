@@ -51,8 +51,6 @@ jobs:
               if: ${{ (inputs.branch_name == 'master-latest' || inputs.branch_name == '')  && inputs.environment != 'mainnet' && inputs.environment != 'testnet' }}
               run: |
                   yarn docker:up
-                  echo "Testing 0.0.0.0.0"
-                  wget -qO- http://0.0.0.0.0:8669/blocks/best 
                   echo "Testing 127.0.0.1"
                   wget -qO- http://127.0.0.1:8669/blocks/best
 
