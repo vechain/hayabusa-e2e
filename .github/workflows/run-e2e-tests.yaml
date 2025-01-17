@@ -50,8 +50,10 @@ jobs:
             - name: Start Docker Network
               if: ${{ (inputs.branch_name == 'master-latest' || inputs.branch_name == '')  && inputs.environment != 'mainnet' && inputs.environment != 'testnet' }}
               run: |
-                yarn docker:up
-                lsof -i :8669
+                  yarn docker:up
+                  wget -qO- http://localhost:8669/blocks/best | jq
+                  wget -qO- http://0.0.0.0.0:8669/blocks/best | jq
+                  wget -qO- http://127.0.0.1:8669/blocks/best | jq
 
             - name: Using Custom Thor Branch
               if: ${{ inputs.branch_name != 'master-latest' && inputs.branch_name != '' }}
