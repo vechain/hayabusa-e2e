@@ -11,6 +11,7 @@ services:
             interval: 1s
             timeout: 5s
             retries: 120
+        network_mode: host
         deploy:
             resources:
                 limits:

@@ -44,15 +44,13 @@ jobs:
               with:
                   node-version: 20
 
-            - name: Install Node Modules
-              run: yarn install
-
             - name: Start Docker Network
               if: ${{ (inputs.branch_name == 'master-latest' || inputs.branch_name == '')  && inputs.environment != 'mainnet' && inputs.environment != 'testnet' }}
+              continue-on-error: true
               run: |
                   yarn docker:up
-                  echo "Testing 127.0.0.1"
-                  wget -qO- http://127.0.0.1:8669/blocks/best
+                  echo "Testing localhost"
+                  wget -qO- http://localhost:8669/blocks/best
 
             - name: Using Custom Thor Branch
               if: ${{ inputs.branch_name != 'master-latest' && inputs.branch_name != '' }}
@@ -67,6 +65,9 @@ jobs:
 
                   # Start the Docker network using the built image
                   THOR_IMAGE=thor:$TAG_NAME yarn docker:up
+
+            - name: Install Node Modules
+              run: yarn install
 
             - name: Run Tests
               run: yarn test
