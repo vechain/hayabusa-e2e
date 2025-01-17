@@ -49,7 +49,9 @@ jobs:
 
             - name: Start Docker Network
               if: ${{ (inputs.branch_name == 'master-latest' || inputs.branch_name == '')  && inputs.environment != 'mainnet' && inputs.environment != 'testnet' }}
-              run: yarn docker:up
+              run: |
+                yarn docker:up
+                lsof -i :8669
 
             - name: Using Custom Thor Branch
               if: ${{ inputs.branch_name != 'master-latest' && inputs.branch_name != '' }}
