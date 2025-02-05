@@ -25,11 +25,12 @@ on:
 permissions:
     checks: write
     pull-requests: write
+    contents: read
 
 jobs:
     e2e_tests:
         name: Run E2E Tests
-        runs-on: ubuntu-latest
+        runs-on: 8-core-10-jobs
         environment: ${{ inputs.environment || 'default-private' }}
         steps:
             - name: Checkout code
