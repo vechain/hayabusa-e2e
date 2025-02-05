@@ -40,6 +40,8 @@ const hexAmount = (amount) => {
         return amount
     }
 
+    console.log('amount', amount)
+
     return BigInt(amount).toString(16)
 }
 
