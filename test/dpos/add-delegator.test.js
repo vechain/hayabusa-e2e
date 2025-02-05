@@ -27,34 +27,42 @@ describe('Staker :: Add Delegator', async () => {
         return await tx.wait()
     }
 
-    describe("Min & Max Staking Amounts", async () => {
-
-        const testCases = [{
-            amount: core.VET.of(MIN_STAKE.wei - 1n, core.Units.wei),
-            reverts: true,
-            comment: 'should not be able to stake less than 25m VET',
-        },
-        {
-            amount: MIN_STAKE,
-            reverts: false,
-            comment: 'should be able to stake the minimum amount',
-        },
-        {
-            amount: core.VET.of(MAX_STAKE.wei + 1n, core.Units.wei),
-            reverts: true,
-            comment: 'should not be able to stake more than 180m VET',
-        },
-        {
-            amount: MAX_STAKE,
-            reverts: false,
-            comment: 'should be able to stake the maximum amount',
-        }]
+    describe('Min & Max Staking Amounts', async () => {
+        const testCases = [
+            {
+                amount: core.VET.of(MIN_STAKE.wei - 1n, core.Units.wei),
+                reverts: true,
+                comment: 'should not be able to stake less than 25m VET',
+            },
+            {
+                amount: MIN_STAKE,
+                reverts: false,
+                comment: 'should be able to stake the minimum amount',
+            },
+            {
+                amount: core.VET.of(MAX_STAKE.wei + 1n, core.Units.wei),
+                reverts: true,
+                comment: 'should not be able to stake more than 180m VET',
+            },
+            {
+                amount: MAX_STAKE,
+                reverts: false,
+                comment: 'should be able to stake the maximum amount',
+            },
+        ]
 
         testCases.forEach((testCase) => {
-            it.e2eTest(testCase.comment, ['default-private', 'solo'], async () => {
-                const receipt = await addValidator(beneficiary, testCase.amount)
-                expect(receipt.reverted).toBe(testCase.reverts)
-            })
+            it.e2eTest(
+                testCase.comment,
+                ['default-private', 'solo'],
+                async () => {
+                    const receipt = await addValidator(
+                        beneficiary,
+                        testCase.amount,
+                    )
+                    expect(receipt.reverted).toBe(testCase.reverts)
+                },
+            )
         })
     })
 })
