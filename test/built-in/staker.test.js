@@ -1,14 +1,11 @@
 import { Client } from '../../../src/thor-client'
 import { contractAddresses } from '../../../src/contracts/addresses'
-import {
-    Staker__factory,
-} from '../../../typechain-types'
+import { Staker__factory } from '../../../typechain-types'
 import { interfaces } from '../../../src/contracts/hardhat'
 import { getBlockRef } from '../../../src/utils/block-utils'
 import { revisions } from '../../../src/constants'
 import { ThorWallet } from '../../../src/wallet'
 import { pollReceipt } from '../../../src/transactions'
-
 
 describe('POST /accounts/*', function () {
     const wallet = ThorWallet.withFunds()
@@ -20,9 +17,7 @@ describe('POST /accounts/*', function () {
         await fundedWallet.waitForFunding()
     })
 
-
     it.e2eTest('should get non-existing validator', 'all', async () => {
-
         const res = await Client.raw.executeAccountBatch({
             clauses: [
                 {
@@ -41,38 +36,22 @@ describe('POST /accounts/*', function () {
             {
                 data: '0x',
                 events: [],
-                transfers: [
-                ],
+                transfers: [],
                 gasUsed: expect.any(Number),
                 reverted: false,
                 vmError: '',
-            }])
+            },
+        ])
     })
 
-    it.e2eTest('should add validators', 'all', async () => {
+    it.e2eTest('should add validators', 'all', async () => {})
 
-    })
+    it.e2eTest('should get validator', 'all', async () => {})
 
-    it.e2eTest('should get validator', 'all', async () => {
-
-    })
-
-    it.e2eTest('should get total stake', 'all', async () => {
-
-    })
-    it.e2eTest('should get active stake', 'all', async () => {
-
-    })
-    it.e2eTest('should get first active', 'all', async () => {
-
-    })
-    it.e2eTest('should get first queued', 'all', async () => {
-
-    })
-    it.e2eTest('should get next', 'all', async () => {
-
-    })
-    it.e2eTest('should withdraw', 'all', async () => {
-
-    })
+    it.e2eTest('should get total stake', 'all', async () => {})
+    it.e2eTest('should get active stake', 'all', async () => {})
+    it.e2eTest('should get first active', 'all', async () => {})
+    it.e2eTest('should get first queued', 'all', async () => {})
+    it.e2eTest('should get next', 'all', async () => {})
+    it.e2eTest('should withdraw', 'all', async () => {})
 })
