@@ -1,4 +1,3 @@
-
 import { Client } from '../../../src/thor-client'
 import { contractAddresses } from '../../../src/contracts/addresses'
 import { Staker__factory } from '../../../typechain-types'
@@ -18,7 +17,5 @@ describe('POST /accounts/*', function () {
         await fundedWallet.waitForFunding()
     })
 
-    it.e2eTest('validate proposers', 'all', async () => {
-
-    })
+    it.e2eTest('validate proposers', 'all', async () => {})
 })
