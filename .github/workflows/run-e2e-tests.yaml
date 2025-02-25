@@ -36,7 +36,7 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
               with:
-                 path: thor-e2e-tests
+                  path: hayabusa-e2e
 
             - name: Setup Node
               uses: actions/setup-node@v4
@@ -44,11 +44,13 @@ jobs:
                   node-version: 20
 
             - name: Install Node Modules
+              working-directory: ./hayabusa-e2e
               run: yarn install
 
             - name: Start Docker Network
               if: ${{ (inputs.branch_name == 'master-latest' || inputs.branch_name == '')  && inputs.environment != 'mainnet' && inputs.environment != 'testnet' && !startsWith(github.event.pull_request.base.ref, 'release/') && !startsWith(github.head_ref, 'release/') }}
               run: yarn docker:up
+              working-directory: ./hayabusa-e2e
 
             - name: Set Custom Thor Branch
               id: set-thor-branch
@@ -65,12 +67,13 @@ jobs:
               if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
               uses: actions/checkout@v4
               with:
-                path: haybusa
-                token: ${{ secrets.GHA_REPO_ACCESS }}
+                  path: haybusa
+                  token: ${{ secrets.GHA_REPO_ACCESS }}
+                  ref: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
 
             - name: Using Custom Thor Branch
               if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
-              working-directory: hayabusa
+              working-directory: ./hayabusa
               run: |
                   TAG_NAME=$(echo ${{ steps.set-thor-branch.outputs.thor_branch_name }} | tr / _)
                   docker build -t thor:$TAG_NAME .
@@ -81,6 +84,7 @@ jobs:
             - name: Run Tests
               run: yarn test
               continue-on-error: true
+              working-directory: ./hayabusa-e2e
               env:
                   # use the provided node_urls or the default NODE_URLS
                   NODE_URLS: ${{ inputs.node_urls || vars.NODE_URLS }}
@@ -92,6 +96,7 @@ jobs:
             - name: Print Docker logs
               if: ${{ (success() || failure()) && (inputs.environment != 'mainnet' && inputs.environment != 'testnet') }}
               run: yarn docker:logs
+              working-directory: ./hayabusa-e2e
 
             - name: Publish Results
               uses: dorny/test-reporter@v1
@@ -105,4 +110,4 @@ jobs:
                   fail-on-error: 'true'
                   reporter: 'java-junit'
                   path: |
-                      junit.xml
+                    ./hayabusa-e2e/junit.xml
