@@ -69,13 +69,14 @@ jobs:
               with:
                   path: /home/runner/work/hayabusa-e2e/hayabusa-e2e/hayabusa
                   token: ${{ secrets.GHA_REPO_ACCESS }}
+                  repository: vechain/hayabusa
                   ref: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
 
             - name: Debug
               if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
               run: |
-                ls -la /home/runner/work/hayabusa-e2e/hayabusa-e2e
-                ls -la /home/runner/work/hayabusa-e2e/hayabusa-e2e/hayabusa
+                  ls -la /home/runner/work/hayabusa-e2e/hayabusa-e2e
+                  ls -la /home/runner/work/hayabusa-e2e/hayabusa-e2e/hayabusa
 
             - name: Using Custom Thor Branch
               if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
