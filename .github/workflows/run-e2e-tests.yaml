@@ -72,12 +72,6 @@ jobs:
                   repository: vechain/hayabusa
                   ref: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
 
-            - name: Debug
-              if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
-              run: |
-                  ls -la /home/runner/work/hayabusa-e2e/hayabusa-e2e
-                  ls -la /home/runner/work/hayabusa-e2e/hayabusa-e2e/hayabusa
-
             - name: Using Custom Thor Branch
               if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
               working-directory: /home/runner/work/hayabusa-e2e/hayabusa-e2e/hayabusa
