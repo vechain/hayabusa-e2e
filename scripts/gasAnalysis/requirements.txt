@@ -1,0 +1,4 @@
+eth-tester
+py-evm
+web3
+py-solc-x
