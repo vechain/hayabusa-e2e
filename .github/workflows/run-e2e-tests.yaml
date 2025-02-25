@@ -35,6 +35,8 @@ jobs:
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
+              with:
+                 path: thor-e2e-tests
 
             - name: Setup Node
               uses: actions/setup-node@v4
@@ -59,14 +61,17 @@ jobs:
                     echo "thor_branch_name=${{ inputs.branch_name }}" >> "$GITHUB_OUTPUT"
                   fi
 
+            - name: Checkout Hayabusa
+              if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
+              uses: actions/checkout@v4
+              with:
+                path: haybusa
+                token: ${{ secrets.GHA_REPO_ACCESS }}
+
             - name: Using Custom Thor Branch
               if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
+              working-directory: hayabusa
               run: |
-                  # Clone only the specified branch from the vechain/hayabusa repository
-                  git clone --branch ${{ steps.set-thor-branch.outputs.thor_branch_name }} --single-branch --depth 1 https://github.com/vechain/hayabusa.git thor-tmp
-
-                  # Navigate to the directory and build the Docker image, replacing / with _ in the branch name
-                  cd thor-tmp
                   TAG_NAME=$(echo ${{ steps.set-thor-branch.outputs.thor_branch_name }} | tr / _)
                   docker build -t thor:$TAG_NAME .
 
