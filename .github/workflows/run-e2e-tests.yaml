@@ -110,4 +110,4 @@ jobs:
                   fail-on-error: 'true'
                   reporter: 'java-junit'
                   path: |
-                    /home/runner/work/hayabusa-e2e/hayabusa-e2e/junit.xml
+                      /home/runner/work/hayabusa-e2e/hayabusa-e2e/junit.xml
