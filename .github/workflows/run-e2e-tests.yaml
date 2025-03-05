@@ -25,15 +25,18 @@ on:
 permissions:
     checks: write
     pull-requests: write
+    contents: read
 
 jobs:
     e2e_tests:
         name: Run E2E Tests
-        runs-on: ubuntu-latest
+        runs-on: 8-core-10-jobs
         environment: ${{ inputs.environment || 'default-private' }}
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
+              with:
+                  path: /home/runner/work/hayabusa-e2e/hayabusa-e2e
 
             - name: Setup Node
               uses: actions/setup-node@v4
@@ -41,11 +44,13 @@ jobs:
                   node-version: 20
 
             - name: Install Node Modules
+              working-directory: /home/runner/work/hayabusa-e2e/hayabusa-e2e
               run: yarn install
 
             - name: Start Docker Network
               if: ${{ (inputs.branch_name == 'master-latest' || inputs.branch_name == '')  && inputs.environment != 'mainnet' && inputs.environment != 'testnet' && !startsWith(github.event.pull_request.base.ref, 'release/') && !startsWith(github.head_ref, 'release/') }}
               run: yarn docker:up
+              working-directory: /home/runner/work/hayabusa-e2e/hayabusa-e2e
 
             - name: Set Custom Thor Branch
               id: set-thor-branch
@@ -58,14 +63,19 @@ jobs:
                     echo "thor_branch_name=${{ inputs.branch_name }}" >> "$GITHUB_OUTPUT"
                   fi
 
+            - name: Checkout Hayabusa
+              if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
+              uses: actions/checkout@v4
+              with:
+                  path: /home/runner/work/hayabusa-e2e/hayabusa-e2e/hayabusa
+                  token: ${{ secrets.GHA_REPO_ACCESS }}
+                  repository: vechain/hayabusa
+                  ref: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
+
             - name: Using Custom Thor Branch
               if: ${{ steps.set-thor-branch.outputs.thor_branch_name }}
+              working-directory: /home/runner/work/hayabusa-e2e/hayabusa-e2e/hayabusa
               run: |
-                  # Clone only the specified branch from the vechain/thor repository
-                  git clone --branch ${{ steps.set-thor-branch.outputs.thor_branch_name }} --single-branch --depth 1 https://github.com/vechain/thor.git thor-tmp
-
-                  # Navigate to the directory and build the Docker image, replacing / with _ in the branch name
-                  cd thor-tmp
                   TAG_NAME=$(echo ${{ steps.set-thor-branch.outputs.thor_branch_name }} | tr / _)
                   docker build -t thor:$TAG_NAME .
 
@@ -75,6 +85,7 @@ jobs:
             - name: Run Tests
               run: yarn test
               continue-on-error: true
+              working-directory: /home/runner/work/hayabusa-e2e/hayabusa-e2e
               env:
                   # use the provided node_urls or the default NODE_URLS
                   NODE_URLS: ${{ inputs.node_urls || vars.NODE_URLS }}
@@ -86,6 +97,7 @@ jobs:
             - name: Print Docker logs
               if: ${{ (success() || failure()) && (inputs.environment != 'mainnet' && inputs.environment != 'testnet') }}
               run: yarn docker:logs
+              working-directory: /home/runner/work/hayabusa-e2e/hayabusa-e2e
 
             - name: Publish Results
               uses: dorny/test-reporter@v1
@@ -99,4 +111,4 @@ jobs:
                   fail-on-error: 'true'
                   reporter: 'java-junit'
                   path: |
-                      junit.xml
+                      /home/runner/work/hayabusa-e2e/hayabusa-e2e/junit.xml
