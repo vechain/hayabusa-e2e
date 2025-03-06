@@ -14,7 +14,7 @@ describe('POST /accounts/*', function () {
     })
 
     it.e2eTest('should get non-existing validator', 'all', async () => {
-        const addr = generateAddress()
+        const addr = await generateAddress()
 
         const res = await Client.raw.executeAccountBatch({
             clauses: [
