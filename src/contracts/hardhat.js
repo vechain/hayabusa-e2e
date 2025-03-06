@@ -4,6 +4,7 @@ import {
     Executor__factory,
     Extension__factory,
     Params__factory,
+    Staker__factory,
 } from '../../typechain-types'
 
 export const interfaces = {
@@ -12,4 +13,5 @@ export const interfaces = {
     extension: Extension__factory.createInterface(),
     params: Params__factory.createInterface(),
     executor: Executor__factory.createInterface(),
+    staker: Staker__factory.createInterface(),
 }
