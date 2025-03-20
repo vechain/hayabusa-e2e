@@ -31,10 +31,11 @@ describe('POST /accounts/*', function () {
         expect(res.success, 'API response should be a success').toBeTruthy()
         expect(res.httpCode, 'Expected HTTP Code').toEqual(200)
 
-        const [stake, weight, status] = interfaces.staker.decodeFunctionResult(
+        const [endorsor, stake, weight, status] = interfaces.staker.decodeFunctionResult(
             'get',
             res.body[0].data,
         )
+        expect(endorsor).toEqual("0x0000000000000000000000000000000000000000")
         expect(stake).toEqual(0n)
         expect(weight).toEqual(0n)
         expect(status).toEqual(0n)

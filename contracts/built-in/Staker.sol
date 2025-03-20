@@ -15,7 +15,7 @@ interface Staker {
     function activeStake() external view returns (uint256);
     function get(
         address validator
-    ) external view returns (uint256, uint256, uint8);
+    ) external view returns (address, uint256, uint256, uint8);
     function firstActive() external view returns (address);
     function firstQueued() external view returns (address);
     function next(address prev) external view returns (address);
