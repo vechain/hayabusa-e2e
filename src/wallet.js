@@ -28,7 +28,7 @@ export const generateAddresses = async (count) => {
     return addresses
 }
 
-const generateEmptyWallet = async () => {
+export const generateEmptyWallet = async () => {
     const privateKey = await Secp256k1.generatePrivateKey()
     const addr = Address.ofPrivateKey(privateKey)
 
