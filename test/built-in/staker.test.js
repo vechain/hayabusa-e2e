@@ -1,13 +1,13 @@
 import { Client } from '../../src/thor-client'
 import { contractAddresses } from '../../src/contracts/addresses'
 import { interfaces } from '../../src/contracts/hardhat'
-import { generateEmptyWallet} from '../../src/wallet'
-import { Hex} from "@vechain/sdk-core"
+import { generateEmptyWallet } from '../../src/wallet'
+import { Hex } from '@vechain/sdk-core'
 
 describe('POST /accounts/*', function () {
     it.e2eTest('should get non-existing validator', 'all', async () => {
         // using private key as random byte[32]
-        const {privateKey: id } = await generateEmptyWallet()
+        const { privateKey: id } = await generateEmptyWallet()
 
         console.log(Hex.of(id).toString())
 
@@ -16,9 +16,7 @@ describe('POST /accounts/*', function () {
                 {
                     to: contractAddresses.staker,
                     value: '0x0',
-                    data: interfaces.staker.encodeFunctionData('get', [
-                        id
-                    ]),
+                    data: interfaces.staker.encodeFunctionData('get', [id]),
                 },
             ],
         })
