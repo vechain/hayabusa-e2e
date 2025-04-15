@@ -9,8 +9,6 @@ describe('POST /accounts/*', function () {
         // using private key as random byte[32]
         const { privateKey: id } = await generateEmptyWallet()
 
-        console.log(Hex.of(id).toString())
-
         const res = await Client.raw.executeAccountBatch({
             clauses: [
                 {
