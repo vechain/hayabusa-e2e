@@ -1,7 +1,6 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-
 interface Staker {
     event ValidatorQueued(
         address indexed endorsor,
@@ -11,11 +10,27 @@ interface Staker {
         uint256 stake,
         bool autoRenew
     );
-    event ValidatorWithdrawn(address indexed endorsor, bytes32 indexed validationID,uint256 stake);
-    event ValidatorUpdatedAutoRenew(address indexed endorsor, bytes32 indexed validationID, bool autoRenew);
+    event ValidatorWithdrawn(
+        address indexed endorsor,
+        bytes32 indexed validationID,
+        uint256 stake
+    );
+    event ValidatorUpdatedAutoRenew(
+        address indexed endorsor,
+        bytes32 indexed validationID,
+        bool autoRenew
+    );
 
-    event StakeIncreased(address indexed endorsor, bytes32 indexed validationID,uint256 added);
-    event StakeDecreased(address indexed endorsor, bytes32 indexed validationID,uint256 removed);
+    event StakeIncreased(
+        address indexed endorsor,
+        bytes32 indexed validationID,
+        uint256 added
+    );
+    event StakeDecreased(
+        address indexed endorsor,
+        bytes32 indexed validationID,
+        uint256 removed
+    );
 
     event DelegationAdded(
         bytes32 indexed validationID,
@@ -24,8 +39,16 @@ interface Staker {
         bool autoRenew,
         uint8 multiplier
     );
-    event DelegationWithdrawn(bytes32 indexed validationID, address indexed delegator, uint256 stake);
-    event DelegationUpdatedAutoRenew(bytes32 indexed validationID, address indexed delegator, bool autoRenew);
+    event DelegationWithdrawn(
+        bytes32 indexed validationID,
+        address indexed delegator,
+        uint256 stake
+    );
+    event DelegationUpdatedAutoRenew(
+        bytes32 indexed validationID,
+        address indexed delegator,
+        bool autoRenew
+    );
 
     function totalStake() external view returns (uint256);
     function addValidator(
@@ -43,8 +66,15 @@ interface Staker {
         bool autoRenew,
         uint8 multiplier
     ) external payable;
-    function updateDelegatorAutoRenew(bytes32 validationID, address delegator, bool active) external;
-    function withdrawDelegation(bytes32 validationID, address delegator) external;
+    function updateDelegatorAutoRenew(
+        bytes32 validationID,
+        address delegator,
+        bool active
+    ) external;
+    function withdrawDelegation(
+        bytes32 validationID,
+        address delegator
+    ) external;
     function getDelegation(
         bytes32 validationID,
         address delegator
@@ -52,9 +82,7 @@ interface Staker {
     function get(
         bytes32 id
     ) external view returns (address, uint256, uint256, uint8, bool);
-    function getWithdraw(
-        bytes32 id
-    ) external view returns (uint256);
+    function getWithdraw(bytes32 id) external view returns (uint256);
     function firstActive() external view returns (bytes32);
     function firstQueued() external view returns (bytes32);
     function next(bytes32 prev) external view returns (bytes32);

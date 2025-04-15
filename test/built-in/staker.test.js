@@ -1,40 +1,28 @@
 import { Client } from '../../src/thor-client'
 import { contractAddresses } from '../../src/contracts/addresses'
 import { interfaces } from '../../src/contracts/hardhat'
-import { generateAddress, ThorWallet } from '../../src/wallet'
+import { generateEmptyWallet } from '../../src/wallet'
+import { Hex } from '@vechain/sdk-core'
 
 describe('POST /accounts/*', function () {
-    const wallet = ThorWallet.withFunds()
-    let fundedWallet
-
-    beforeAll(async () => {
-        await wallet.waitForFunding()
-        fundedWallet = await ThorWallet.newFunded({ vet: '0x0', vtho: 1e18 })
-        await fundedWallet.waitForFunding()
-    })
-
     it.e2eTest('should get non-existing validator', 'all', async () => {
-        const addr = await generateAddress()
+        // using private key as random byte[32]
+        const { privateKey: id } = await generateEmptyWallet()
 
         const res = await Client.raw.executeAccountBatch({
             clauses: [
                 {
                     to: contractAddresses.staker,
                     value: '0x0',
-                    data: interfaces.staker.encodeFunctionData('get', [
-                        addr.toString(),
-                    ]),
+                    data: interfaces.staker.encodeFunctionData('get', [id]),
                 },
             ],
-            caller: addr.toString(),
         })
         expect(res.success, 'API response should be a success').toBeTruthy()
         expect(res.httpCode, 'Expected HTTP Code').toEqual(200)
 
-        const [_, stake, weight, status] = interfaces.staker.decodeFunctionResult(
-            'get',
-            res.body[0].data,
-        )
+        const [_, stake, weight, status] =
+            interfaces.staker.decodeFunctionResult('get', res.body[0].data)
         expect(stake).toEqual(0n)
         expect(weight).toEqual(0n)
         expect(status).toEqual(0n)
