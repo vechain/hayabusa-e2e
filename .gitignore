@@ -28,3 +28,6 @@ jest-report.html
 
 /keys
 network/node-*-data/
+
+package-lock.json
+yarn.lock

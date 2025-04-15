@@ -8,6 +8,7 @@ import './Authority.sol';
 import './Extension.sol';
 import './Params.sol';
 import './Executor.sol';
+import './Staker.sol';
 
 /**
  * @title Builtin
@@ -27,6 +28,11 @@ library Builtin {
             addr := mload(add(b, 32))
         }
         return address(addr);
+    }
+
+    /// @return the instance of the contract "Staker".
+    function getStaker() internal pure returns (Staker) {
+        return Staker(0x00000000000000000000000000005374616B6572);
     }
 
     /// @return the instance of the contract "Authority".
