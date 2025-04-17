@@ -41,5 +41,6 @@ jobs:
 
       - name: Test
         run: go test ./...
+        working-directory: ${{ github.workspace }}/hayabusa-e2e
         env:
           THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa
