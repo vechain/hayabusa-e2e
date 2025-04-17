@@ -40,7 +40,7 @@ jobs:
           git config --global url."https://${{ secrets.GHA_REPO_ACCESS }}@github.com/".insteadOf "https://github.com/"
 
       - name: Test
-        run: go test ./... -v -count=1 -parallel=1
+        run: for PACKAGE in $(go list ./...); do go test -v -failfast ${PACKAGE}; done;
         working-directory: ${{ github.workspace }}/hayabusa-e2e
         env:
           THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa
