@@ -95,19 +95,18 @@ func TestStaker_WithdrawValidator(t *testing.T) {
 }
 
 func TestStaker_IncreaseStake(t *testing.T) {
-	staker, config, validators := newTestSetupWithActiveValidators(t, 3, false, MinStake)
+	staker, config, validators := newTestSetupWithActiveValidators(t, 3, true, MinStake)
 
 	ticker := common.NewTicker(staker.Client())
 
 	// wait for 1 staking period + cooldown period
-	block := config.ForkBlock + config.TransitionPeriod + config.EpochLength + config.CooldownPeriod
+	block := config.ForkBlock + config.TransitionPeriod
 	assert.NoError(t, ticker.WaitForBlock(block))
 
 	// find the validator that has exited
-	account, id, found, err := findExitedValidator(staker, validators)
-	assert.NoError(t, err)
-	if !found {
-		t.Fatal("no validator found")
+	var account devgenesis.DevAccount
+	var id thor.Bytes32
+	for id, account = range validators {
 	}
 
 	// increase the stake
@@ -138,14 +137,12 @@ func TestStaker_DecreaseStake(t *testing.T) {
 	ticker := common.NewTicker(staker.Client())
 
 	// wait for 1 staking period + cooldown period
-	block := config.ForkBlock + config.TransitionPeriod + config.EpochLength
+	block := config.ForkBlock + config.TransitionPeriod
 	assert.NoError(t, ticker.WaitForBlock(block))
 
-	// find the validator that has exited
-	account, id, found, err := findExitedValidator(staker, validators)
-	assert.NoError(t, err)
-	if !found {
-		t.Fatal("no validator found")
+	var account devgenesis.DevAccount
+	var id thor.Bytes32
+	for id, account = range validators {
 	}
 
 	// decrease the stake
