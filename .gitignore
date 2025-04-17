@@ -31,3 +31,4 @@ network/node-*-data/
 
 package-lock.json
 yarn.lock
+vendor
