@@ -9,7 +9,7 @@ replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.1
 require (
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/stretchr/testify v1.10.0
-	github.com/vechain/draupnir v0.0.0-20250417101755-fd62f19cad8f
+	github.com/vechain/draupnir v0.0.0-20250417160023-5664209575a1
 	github.com/vechain/networkhub v0.0.5-0.20250416124710-6390e5e79c4d
 	github.com/vechain/thor/v2 v2.2.2-0.20250417102501-6267fbb4e26c
 )

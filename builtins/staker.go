@@ -166,7 +166,16 @@ func (s *Staker) TotalStake() (*big.Int, error) {
 	return out, nil
 }
 
+func (s *Staker) QueuedStake() (*big.Int, error) {
+	out := new(big.Int)
+	if err := s.contract.CallInto("queuedStake", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type Validator struct {
+	Master    *thor.Address
 	Endorsor  *thor.Address
 	Stake     *big.Int
 	Weight    *big.Int
@@ -179,21 +188,23 @@ func (v *Validator) Exists() bool {
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
-	var out = make([]interface{}, 5)
+	var out = make([]interface{}, 6)
 	out[0] = new(common.Address)
-	out[1] = new(*big.Int)
+	out[1] = new(common.Address)
 	out[2] = new(*big.Int)
-	out[3] = new(uint8)
-	out[4] = new(bool)
+	out[3] = new(*big.Int)
+	out[4] = new(uint8)
+	out[5] = new(bool)
 	if err := s.contract.CallInto("get", &out, id); err != nil {
 		return nil, err
 	}
 	validator := &Validator{
-		Endorsor:  (*thor.Address)(out[0].(*common.Address)),
-		Stake:     *(out[1].(**big.Int)),
-		Weight:    *(out[2].(**big.Int)),
-		Status:    Status(*(out[3].(*uint8))),
-		AutoRenew: *(out[4].(*bool)),
+		Master:    (*thor.Address)(out[0].(*common.Address)),
+		Endorsor:  (*thor.Address)(out[1].(*common.Address)),
+		Stake:     *(out[2].(**big.Int)),
+		Weight:    *(out[3].(**big.Int)),
+		Status:    Status(*(out[4].(*uint8))),
+		AutoRenew: *(out[5].(*bool)),
 	}
 
 	return validator, nil

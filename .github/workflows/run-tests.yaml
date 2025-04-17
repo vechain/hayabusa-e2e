@@ -29,6 +29,7 @@ jobs:
           repository: vechain/hayabusa
           path: hayabusa
           token: ${{ secrets.GHA_REPO_ACCESS }}
+          ref: darren/fix/native-param-names
 
       - name: Install Go
         uses: actions/setup-go@v5

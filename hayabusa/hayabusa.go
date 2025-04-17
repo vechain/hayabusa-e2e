@@ -12,9 +12,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/draupnir/builtins"
 	"github.com/vechain/draupnir/genesisbuilder"
 	"github.com/vechain/draupnir/network"
+	"github.com/vechain/hayabusa-e2e/builtins"
 	networkhubNetwork "github.com/vechain/networkhub/network"
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/network/node/genesis"
