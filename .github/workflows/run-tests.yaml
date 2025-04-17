@@ -19,6 +19,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          repository: '${{ github.repository }}'
+          path: hayabusa-e2e
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: vechain/hayabusa
+          path: hayabusa
+          token: ${{ secrets.GHA_REPO_ACCESS }}
 
       - name: Install Go
         uses: actions/setup-go@v5
@@ -31,3 +41,5 @@ jobs:
 
       - name: Test
         run: go test ./...
+        env:
+          THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa
