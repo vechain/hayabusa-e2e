@@ -53,7 +53,7 @@ jobs:
           git config --global url."https://${{ secrets.GHA_REPO_ACCESS }}@github.com/".insteadOf "https://github.com/"
 
       - name: Test
-        run: go test -v -failfast -timeout 3600s ./${{ matrix.packages }}/...
+        run: go test -v -failfast -timeout 3600s ./${{ matrix.packages }}
         working-directory: ${{ github.workspace }}/hayabusa-e2e
         env:
           THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa
