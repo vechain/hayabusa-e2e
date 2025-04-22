@@ -65,7 +65,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	t.Log("✅ - Both validators are activated")
 
-	block += config.EpochLength
+	block += config.MinStakingPeriod
 	id3 := addValidator(t, staker, authority3.PrivateKey, authority3.Address, false, config.MinStakingPeriod)
 	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
@@ -126,7 +126,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Log("✅ - All three validators are activated")
 
 	// assert validators are on cooldown
-	block += config.EpochLength
+	block += config.MinStakingPeriod
 	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
@@ -134,7 +134,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Log("✅ - Non-AutoRenew validators are on cooldown")
 
 	// assert 1 validator has exited
-	block += config.EpochLength
+	block += config.CooldownPeriod
 	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
@@ -157,10 +157,10 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 		Nodes:             6,
 		MaxBlockProposers: 3,
 		ForkBlock:         0,
-		TransitionPeriod:  4,
+		TransitionPeriod:  6,
 		EpochLength:       2,
 		CooldownPeriod:    2,
-		MinStakingPeriod:  2,
+		MinStakingPeriod:  4,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 	}
@@ -229,7 +229,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	t.Log("✅ - AutoRenew updated")
 
-	block += config.EpochLength
+	block += config.MinStakingPeriod
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusCooldown, block)
