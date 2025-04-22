@@ -1,0 +1,53 @@
+name: Run Hayabusa Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      hayabusa-branch:
+        description: 'Branch to test against'
+        required: true
+        default: 'release/hayabusa'
+
+permissions:
+  contents: read
+
+jobs:
+  run-tests:
+    runs-on: 8-core-10-jobs
+
+    env:
+      GOPRIVATE: github.com/vechain/draupnir/*
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: '${{ github.repository }}'
+          path: hayabusa-e2e
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: vechain/hayabusa
+          path: hayabusa
+          token: ${{ secrets.GHA_REPO_ACCESS }}
+          ref: ${{ inputs.hayabusa-branch }}
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+
+      - name: Configure git for private modules
+        run: |
+          git config --global url."https://${{ secrets.GHA_REPO_ACCESS }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Test
+        run: for PACKAGE in $(go list ./...); do go test -v -failfast -timeout 3600s ${PACKAGE}; done;
+        working-directory: ${{ github.workspace }}/hayabusa-e2e
+        env:
+          THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa
