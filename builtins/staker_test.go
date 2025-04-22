@@ -309,7 +309,7 @@ func newTestSetup(t *testing.T, maxBlockProposers uint32) (*builtins.Staker, *ha
 
 	config := &hayabusa.Config{
 		Nodes:             3,
-		ForkBlock:         6,
+		ForkBlock:         0,
 		MaxBlockProposers: maxBlockProposers,
 		TransitionPeriod:  6,
 		CooldownPeriod:    3,

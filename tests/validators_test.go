@@ -20,7 +20,7 @@ func defaultConfig() *hayabusa.Config {
 	return &hayabusa.Config{
 		Nodes:             6,
 		MaxBlockProposers: 3,
-		ForkBlock:         6,
+		ForkBlock:         0,
 		TransitionPeriod:  6,
 		EpochLength:       6,
 		CooldownPeriod:    6,
