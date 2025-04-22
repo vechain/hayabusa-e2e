@@ -5,6 +5,12 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+    inputs:
+      hayabusa-branch:
+        description: 'Branch to test against'
+        required: true
+        default: 'release/hayabusa'
 
 permissions:
   contents: read
@@ -29,7 +35,7 @@ jobs:
           repository: vechain/hayabusa
           path: hayabusa
           token: ${{ secrets.GHA_REPO_ACCESS }}
-          ref: darren/fix/native-param-names
+          ref: ${{ inputs.hayabusa-branch }}
 
       - name: Install Go
         uses: actions/setup-go@v5
