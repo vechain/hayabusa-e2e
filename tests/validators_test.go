@@ -16,22 +16,18 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-func defaultConfig() *hayabusa.Config {
-	return &hayabusa.Config{
+func TestHayabusaNoForkThenJoinLater(t *testing.T) {
+	config := &hayabusa.Config{
 		Nodes:             6,
 		MaxBlockProposers: 3,
 		ForkBlock:         0,
-		TransitionPeriod:  6,
-		EpochLength:       6,
-		CooldownPeriod:    6,
-		MinStakingPeriod:  6,
+		TransitionPeriod:  2,
+		EpochLength:       2,
+		CooldownPeriod:    2,
+		MinStakingPeriod:  2,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 	}
-}
-
-func TestHayabusaNoForkThenJoinLater(t *testing.T) {
-	config := defaultConfig()
 	client, cancel, err := hayabusa.StartNetwork(config)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +75,17 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 }
 
 func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
-	config := defaultConfig()
+	config := &hayabusa.Config{
+		Nodes:             6,
+		MaxBlockProposers: 3,
+		ForkBlock:         0,
+		TransitionPeriod:  4,
+		EpochLength:       2,
+		CooldownPeriod:    2,
+		MinStakingPeriod:  2,
+		MidStakingPeriod:  12,
+		HighStakingPeriod: 259200,
+	}
 	client, cancel, err := hayabusa.StartNetwork(config)
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +153,17 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 }
 
 func TestHayabusaQueuedAndThenEnter(t *testing.T) {
-	config := defaultConfig()
+	config := &hayabusa.Config{
+		Nodes:             6,
+		MaxBlockProposers: 3,
+		ForkBlock:         0,
+		TransitionPeriod:  4,
+		EpochLength:       2,
+		CooldownPeriod:    2,
+		MinStakingPeriod:  2,
+		MidStakingPeriod:  12,
+		HighStakingPeriod: 259200,
+	}
 	client, cancel, err := hayabusa.StartNetwork(config)
 	if err != nil {
 		t.Fatal(err)

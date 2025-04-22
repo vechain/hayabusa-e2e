@@ -2,6 +2,7 @@ package builtins_test
 
 import (
 	_ "embed"
+	"log/slog"
 	"math/big"
 	"testing"
 
@@ -306,17 +307,16 @@ func TestStaker_UpdateDelegatorAutoRenew(t *testing.T) {
 
 func newTestSetup(t *testing.T, maxBlockProposers uint32) (*builtins.Staker, *hayabusa.Config) {
 	t.Helper()
-
 	config := &hayabusa.Config{
 		Nodes:             3,
 		ForkBlock:         0,
 		MaxBlockProposers: maxBlockProposers,
-		TransitionPeriod:  6,
-		CooldownPeriod:    3,
-		EpochLength:       3,
-		MinStakingPeriod:  3,
-		MidStakingPeriod:  6,
-		HighStakingPeriod: 12,
+		TransitionPeriod:  2,
+		CooldownPeriod:    2,
+		EpochLength:       2,
+		MinStakingPeriod:  2,
+		MidStakingPeriod:  8,
+		HighStakingPeriod: 16,
 	}
 	client, cancel, err := hayabusa.StartNetwork(config)
 	if err != nil {
@@ -415,6 +415,7 @@ func findExitedValidator(staker *builtins.Staker, validators map[thor.Bytes32]de
 		if err != nil {
 			return devgenesis.DevAccount{}, thor.Bytes32{}, false, err
 		}
+		slog.Info("validator", "id", id, "status", validator.Status, "master", validator.Master, "stake", validator.Stake, "autoRenew", validator.AutoRenew)
 		if validator.Status == builtins.StatusExited {
 			return account, id, true, nil
 		}
