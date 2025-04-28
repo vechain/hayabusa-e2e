@@ -15,12 +15,12 @@ import (
 )
 
 func TestStaker(t *testing.T) {
-	amount := uint32(3)
+	mbp := uint32(3)
 	config := &hayabusa.Config{
-		Nodes:             3,
-		ForkBlock:         2,
-		MaxBlockProposers: amount,
-		TransitionPeriod:  4,
+		Nodes:             6,
+		ForkBlock:         0,
+		MaxBlockProposers: mbp,
+		TransitionPeriod:  2,
 		CooldownPeriod:    2,
 		EpochLength:       2,
 		MinStakingPeriod:  2,
@@ -41,7 +41,7 @@ func TestStaker(t *testing.T) {
 
 	// add validators
 	senders := &contracts.Senders{}
-	for i := range amount {
+	for i := range mbp {
 		validator := devgenesis.DevAccounts()[i]
 		sender := staker.Attach(validator.PrivateKey).AddValidator(validator.Address, builtins.MinStake, config.MinStakingPeriod, true)
 		senders.Add(sender)
@@ -59,7 +59,7 @@ func TestStaker(t *testing.T) {
 	t.Run("TotalStake", func(t *testing.T) {
 		totalStake, err := staker.TotalStake()
 		require.NoError(t, err)
-		expectedStake := new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(amount)))
+		expectedStake := new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(mbp)))
 		require.Equal(t, expectedStake, totalStake)
 	})
 
@@ -105,7 +105,7 @@ func TestStaker(t *testing.T) {
 	var validator devgenesis.DevAccount
 
 	t.Run("AddValidator", func(t *testing.T) {
-		validator = devgenesis.DevAccounts()[amount+1]
+		validator = devgenesis.DevAccounts()[mbp+1]
 		sender := staker.Attach(validator.PrivateKey).AddValidator(validator.Address, builtins.MinStake, config.MinStakingPeriod, false)
 		receipt, _, err := sender.Receipt(false)
 		require.NoError(t, err)
