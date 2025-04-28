@@ -18,9 +18,9 @@ func TestStaker(t *testing.T) {
 	amount := uint32(3)
 	config := &hayabusa.Config{
 		Nodes:             3,
-		ForkBlock:         0,
+		ForkBlock:         2,
 		MaxBlockProposers: amount,
-		TransitionPeriod:  2,
+		TransitionPeriod:  4,
 		CooldownPeriod:    2,
 		EpochLength:       2,
 		MinStakingPeriod:  2,
@@ -35,9 +35,13 @@ func TestStaker(t *testing.T) {
 
 	staker := builtins.NewStaker(client, devgenesis.DevAccounts()[0].PrivateKey)
 
+	if err := staker.WaitForFork(config.ForkBlock); err != nil {
+		t.Fatalf("failed to wait for fork: %v", err)
+	}
+
 	// add validators
 	senders := &contracts.Senders{}
-	for i := 0; i < int(amount); i++ {
+	for i := range amount {
 		validator := devgenesis.DevAccounts()[i]
 		sender := staker.Attach(validator.PrivateKey).AddValidator(validator.Address, builtins.MinStake, config.MinStakingPeriod, true)
 		senders.Add(sender)
@@ -47,9 +51,6 @@ func TestStaker(t *testing.T) {
 	}
 	if err := staker.WaitForPOS(config.ForkBlock + config.TransitionPeriod); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
-	}
-	if err := staker.WaitForFork(config.ForkBlock); err != nil {
-		t.Fatalf("failed to wait for fork: %v", err)
 	}
 
 	firstActive, firstID, err := staker.FirstActive()
