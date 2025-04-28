@@ -113,7 +113,7 @@ func StartNetwork(config *Config) (*thorclient.Client, func(), error) {
 	nodes := make([]node.Node, config.Nodes)
 	for i := range config.Nodes {
 		generatedNode := &node.BaseNode{
-			ID:        "node" + strconv.Itoa(i),
+			ID:        "Node-" + strconv.Itoa(i),
 			Key:       common.Bytes2Hex(devgenesis.DevAccounts()[i].PrivateKey.D.Bytes()),
 			Genesis:   customGenesis,
 			Verbosity: 3,
