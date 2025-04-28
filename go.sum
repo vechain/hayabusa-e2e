@@ -159,8 +159,8 @@ github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5
 github.com/stretchr/testify v1.7.2/go.mod h1:R6va5+xMeoiuVRoj+gSkQ7d3FALtqAAGI1FQKckRals=
 github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
-github.com/vechain/draupnir v0.0.0-20250422101332-a75674ae73fd h1:qcy8Ky7c9H/kQVp5yKKN9XBDS70uSuEz+buS0UwGfdQ=
-github.com/vechain/draupnir v0.0.0-20250422101332-a75674ae73fd/go.mod h1:kR5EPNGwkXSE2+SxDRbNcNwB0wWWx4LsAPkQxiujJVU=
+github.com/vechain/draupnir v0.0.0-20250425094316-a7a5b1f22acc h1:wWl4x9z4sAB8dkPUkZPNwrF2HF3hy6eX6DO0JglMVZ8=
+github.com/vechain/draupnir v0.0.0-20250425094316-a7a5b1f22acc/go.mod h1:kR5EPNGwkXSE2+SxDRbNcNwB0wWWx4LsAPkQxiujJVU=
 github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765 h1:jvr+TSivjObZmOKVdqlgeLtRhaDG27gE39PMuE2IJ24=
 github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765/go.mod h1:cwnTMgAVzMb30xMKnGI1LdU1NjMiPllYb7i3ibj/fzE=
 github.com/vechain/go-ethereum v1.8.15-0.20241126085506-c74017ec91b2 h1:ch3DqXvl1ApfJut768bf5Vlhqtw+bxAWTyPDYXQkQZk=
