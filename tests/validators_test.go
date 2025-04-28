@@ -21,7 +21,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 		Nodes:             6,
 		MaxBlockProposers: 3,
 		ForkBlock:         0,
-		TransitionPeriod:  2,
+		TransitionPeriod:  4,
 		EpochLength:       2,
 		CooldownPeriod:    2,
 		MinStakingPeriod:  2,
