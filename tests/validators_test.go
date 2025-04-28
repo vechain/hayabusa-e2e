@@ -202,7 +202,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	_, validatorID, err = staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, id5, validatorID)
+	assert.Equal(t, id4, validatorID)
 	t.Log("✅ - Three validators are activated, 2 are queued, queue order has changed based on weight")
 
 	receipt, _, err := staker.Attach(authority3.PrivateKey).UpdateAutoRenew(id3, false).Receipt(false)
@@ -222,7 +222,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	_, validationID, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, id5, validationID)
+	assert.Equal(t, id4, validationID)
 
 	t.Log("✅ - Three validators are activated, 2 are queued, queue order has changed based on weight")
 
@@ -230,8 +230,8 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusExited, block)
-	assertValidatorStatus(t, staker, id4, builtins.StatusQueued, block)
-	assertValidatorStatus(t, staker, id5, builtins.StatusActive, block)
+	assertValidatorStatus(t, staker, id4, builtins.StatusActive, block)
+	assertValidatorStatus(t, staker, id5, builtins.StatusQueued, block)
 
 	t.Log("✅ - Three validators are active one is queued and one has exited")
 }
