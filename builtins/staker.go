@@ -216,28 +216,23 @@ func (s *Staker) AddValidator(master thor.Address, stake *big.Int, period uint32
 
 func (s *Staker) AddDelegation(
 	validationID thor.Bytes32,
-	delegator thor.Address,
 	stake *big.Int,
 	autoRenew bool,
 	multiplier uint8,
 ) *contracts.Sender {
-	return s.contract.SendWithVET(stake, "addDelegation", validationID, delegator, autoRenew, multiplier)
+	return s.contract.SendWithVET(stake, "addDelegation", validationID, autoRenew, multiplier)
 }
 
-func (s *Staker) UpdateDelegatorAutoRenew(
-	validationID thor.Bytes32,
-	delegator thor.Address,
-	autoRenew bool,
-) *contracts.Sender {
-	return s.contract.Send("updateDelegatorAutoRenew", validationID, delegator, autoRenew)
+func (s *Staker) UpdateDelegationAutoRenew(delegationID thor.Bytes32, autoRenew bool) *contracts.Sender {
+	return s.contract.Send("updateDelegationAutoRenew", delegationID, autoRenew)
 }
 
 func (s *Staker) UpdateAutoRenew(validationID thor.Bytes32, autoRenew bool) *contracts.Sender {
 	return s.contract.Send("updateAutoRenew", validationID, autoRenew)
 }
 
-func (s *Staker) WithdrawDelegation(validationID thor.Bytes32, delegator thor.Address) *contracts.Sender {
-	return s.contract.Send("withdrawDelegation", validationID, delegator)
+func (s *Staker) WithdrawDelegation(delegationID thor.Bytes32) *contracts.Sender {
+	return s.contract.Send("withdrawDelegation", delegationID)
 }
 
 func (s *Staker) Withdraw(validationID thor.Bytes32) *contracts.Sender {
@@ -266,12 +261,12 @@ type Delegator struct {
 	AutoRenew  bool
 }
 
-func (s *Staker) GetDelegation(validationID thor.Bytes32, delegator thor.Address) (*Delegator, error) {
+func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegator, error) {
 	var out = make([]interface{}, 3)
 	out[0] = new(*big.Int)
 	out[1] = new(uint8)
 	out[2] = new(bool)
-	if err := s.contract.CallInto("getDelegation", &out, validationID, delegator); err != nil {
+	if err := s.contract.CallInto("getDelegation", &out, delegationID); err != nil {
 		return nil, err
 	}
 	delegatorInfo := &Delegator{
@@ -384,7 +379,7 @@ func (s *Staker) FilterValidatorUpdatedAutoRenew(from, to uint32) ([]ValidatorUp
 
 type DelegationAddedEvent struct {
 	ValidationID thor.Bytes32
-	Delegator    thor.Address
+	DelegationID thor.Bytes32
 	Stake        *big.Int
 	AutoRenew    bool
 	Multiplier   uint8
@@ -403,8 +398,8 @@ func (s *Staker) FilterDelegationAdded(from, to uint32) ([]DelegationAddedEvent,
 
 	out := make([]DelegationAddedEvent, len(raw))
 	for i, log := range raw {
-		validationID := thor.Bytes32(log.Topics[1][:])     // indexed
-		delegator := thor.BytesToAddress(log.Topics[2][:]) // indexed
+		validationID := thor.Bytes32(log.Topics[1][:]) // indexed
+		delegationID := thor.Bytes32(log.Topics[2][:]) // indexed
 
 		// non-indexed
 		data := make([]interface{}, 4)
@@ -423,7 +418,7 @@ func (s *Staker) FilterDelegationAdded(from, to uint32) ([]DelegationAddedEvent,
 
 		out[i] = DelegationAddedEvent{
 			ValidationID: validationID,
-			Delegator:    delegator,
+			DelegationID: delegationID,
 			Stake:        *(data[0].(**big.Int)),
 			AutoRenew:    *(data[1].(*bool)),
 			Multiplier:   *(data[2].(*uint8)),
@@ -434,8 +429,7 @@ func (s *Staker) FilterDelegationAdded(from, to uint32) ([]DelegationAddedEvent,
 }
 
 type DelegationUpdatedAutoRenewEvent struct {
-	ValidationID thor.Bytes32
-	Delegator    thor.Address
+	DelegationID thor.Bytes32
 	AutoRenew    bool
 }
 
@@ -452,8 +446,7 @@ func (s *Staker) FilterDelegationUpdatedAutoRenew(from, to uint32) ([]Delegation
 
 	out := make([]DelegationUpdatedAutoRenewEvent, len(raw))
 	for i, log := range raw {
-		validationID := thor.Bytes32(log.Topics[1][:])     // indexed
-		delegator := thor.BytesToAddress(log.Topics[2][:]) // indexed
+		delegationID := thor.Bytes32(log.Topics[1][:])
 
 		// non-indexed
 		data := make([]interface{}, 1)
@@ -469,8 +462,7 @@ func (s *Staker) FilterDelegationUpdatedAutoRenew(from, to uint32) ([]Delegation
 		}
 
 		out[i] = DelegationUpdatedAutoRenewEvent{
-			ValidationID: validationID,
-			Delegator:    delegator,
+			DelegationID: delegationID,
 			AutoRenew:    *(data[0].(*bool)),
 		}
 	}
@@ -479,8 +471,7 @@ func (s *Staker) FilterDelegationUpdatedAutoRenew(from, to uint32) ([]Delegation
 }
 
 type DelegationWithdrawnEvent struct {
-	ValidationID thor.Bytes32
-	Delegator    thor.Address
+	DelegationID thor.Bytes32
 	Stake        *big.Int
 }
 
@@ -497,8 +488,7 @@ func (s *Staker) FilterDelegationWithdrawn(from, to uint32) ([]DelegationWithdra
 
 	out := make([]DelegationWithdrawnEvent, len(raw))
 	for i, log := range raw {
-		validationID := thor.Bytes32(log.Topics[1][:])     // indexed
-		delegator := thor.BytesToAddress(log.Topics[2][:]) // indexed
+		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
 
 		// non-indexed
 		data := make([]interface{}, 1)
@@ -514,8 +504,7 @@ func (s *Staker) FilterDelegationWithdrawn(from, to uint32) ([]DelegationWithdra
 		}
 
 		out[i] = DelegationWithdrawnEvent{
-			ValidationID: validationID,
-			Delegator:    delegator,
+			DelegationID: delegationID,
 			Stake:        *(data[0].(**big.Int)),
 		}
 	}

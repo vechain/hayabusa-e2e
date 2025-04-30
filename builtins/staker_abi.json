@@ -10,9 +10,9 @@
       },
       {
         "indexed": true,
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
+        "internalType": "bytes32",
+        "name": "delegationID",
+        "type": "bytes32"
       },
       {
         "indexed": false,
@@ -42,14 +42,8 @@
       {
         "indexed": true,
         "internalType": "bytes32",
-        "name": "validationID",
+        "name": "delegationID",
         "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
       },
       {
         "indexed": false,
@@ -67,14 +61,8 @@
       {
         "indexed": true,
         "internalType": "bytes32",
-        "name": "validationID",
+        "name": "delegationID",
         "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
       },
       {
         "indexed": false,
@@ -241,11 +229,6 @@
         "type": "bytes32"
       },
       {
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
-      },
-      {
         "internalType": "bool",
         "name": "autoRenew",
         "type": "bool"
@@ -257,7 +240,13 @@
       }
     ],
     "name": "addDelegation",
-    "outputs": [],
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
     "stateMutability": "payable",
     "type": "function"
   },
@@ -376,13 +365,8 @@
     "inputs": [
       {
         "internalType": "bytes32",
-        "name": "validationID",
+        "name": "delegationID",
         "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
       }
     ],
     "name": "getDelegation",
@@ -505,13 +489,8 @@
     "inputs": [
       {
         "internalType": "bytes32",
-        "name": "validationID",
+        "name": "delegationID",
         "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
       },
       {
         "internalType": "bool",
@@ -519,7 +498,7 @@
         "type": "bool"
       }
     ],
-    "name": "updateDelegatorAutoRenew",
+    "name": "updateDelegationAutoRenew",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -541,13 +520,8 @@
     "inputs": [
       {
         "internalType": "bytes32",
-        "name": "validationID",
+        "name": "delegationID",
         "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "delegator",
-        "type": "address"
       }
     ],
     "name": "withdrawDelegation",

@@ -185,24 +185,25 @@ func TestStaker(t *testing.T) {
 		require.False(t, validator.AutoRenew)
 	})
 
-	delegator := devgenesis.DevAccounts()[9]
+	var delegationID thor.Bytes32
 
 	t.Run("AddDelegation", func(t *testing.T) {
-		receipt, _, err := staker.Attach(hayabusa.Stargate.PrivateKey).AddDelegation(queuedID, delegator.Address, builtins.MinStake, false, uint8(100)).Receipt(false)
+		receipt, _, err := staker.Attach(hayabusa.Stargate.PrivateKey).AddDelegation(queuedID, builtins.MinStake, false, uint8(100)).Receipt(false)
 		require.NoError(t, err)
 
 		events, err := staker.FilterDelegationAdded(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
-		require.Equal(t, queuedID, events[0].ValidationID)
-		require.Equal(t, delegator.Address, events[0].Delegator)
 		require.Equal(t, builtins.MinStake, events[0].Stake)
 		require.Equal(t, uint8(100), events[0].Multiplier)
 		require.False(t, events[0].AutoRenew)
+		require.False(t, events[0].DelegationID.IsZero())
+
+		delegationID = events[0].DelegationID
 	})
 
 	t.Run("GetDelegation", func(t *testing.T) {
-		delegation, err := staker.GetDelegation(queuedID, delegator.Address)
+		delegation, err := staker.GetDelegation(delegationID)
 		require.NoError(t, err)
 		require.Equal(t, builtins.MinStake, delegation.Stake)
 		require.Equal(t, uint8(100), delegation.Multiplier)
@@ -211,32 +212,30 @@ func TestStaker(t *testing.T) {
 
 	t.Run("UpdateDelegationAutoRenew", func(t *testing.T) {
 		// enable auto renew
-		receipt, _, err := staker.Attach(hayabusa.Stargate.PrivateKey).UpdateDelegatorAutoRenew(queuedID, delegator.Address, true).Receipt(false)
+		receipt, _, err := staker.Attach(hayabusa.Stargate.PrivateKey).UpdateDelegationAutoRenew(delegationID, true).Receipt(false)
 		require.NoError(t, err)
 
 		events, err := staker.FilterDelegationUpdatedAutoRenew(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
-		require.Equal(t, queuedID, events[0].ValidationID)
-		require.Equal(t, delegator.Address, events[0].Delegator)
+		require.Equal(t, delegationID, events[0].DelegationID)
 		require.Equal(t, true, events[0].AutoRenew)
 
-		delegation, err := staker.GetDelegation(queuedID, delegator.Address)
+		delegation, err := staker.GetDelegation(delegationID)
 		require.NoError(t, err)
 		require.Equal(t, true, delegation.AutoRenew)
 
 		// disable auto renew
-		receipt, _, err = staker.Attach(hayabusa.Stargate.PrivateKey).UpdateDelegatorAutoRenew(queuedID, delegator.Address, false).Receipt(false)
+		receipt, _, err = staker.Attach(hayabusa.Stargate.PrivateKey).UpdateDelegationAutoRenew(delegationID, false).Receipt(false)
 		require.NoError(t, err)
 
 		events, err = staker.FilterDelegationUpdatedAutoRenew(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
-		require.Equal(t, queuedID, events[0].ValidationID)
-		require.Equal(t, delegator.Address, events[0].Delegator)
+		require.Equal(t, delegationID, events[0].DelegationID)
 		require.Equal(t, false, events[0].AutoRenew)
 
-		delegation, err = staker.GetDelegation(queuedID, delegator.Address)
+		delegation, err = staker.GetDelegation(delegationID)
 		require.NoError(t, err)
 		require.Equal(t, false, delegation.AutoRenew)
 	})
@@ -260,19 +259,18 @@ func TestStaker(t *testing.T) {
 	})
 
 	t.Run("Withdraw Delegation", func(t *testing.T) {
-		delegation, err := staker.GetDelegation(queuedID, delegator.Address)
+		delegation, err := staker.GetDelegation(delegationID)
 		require.NoError(t, err)
 		require.Equal(t, builtins.MinStake, delegation.Stake)
 
 		// withdraw the delegation
-		receipt, _, err := staker.Attach(hayabusa.Stargate.PrivateKey).WithdrawDelegation(queuedID, delegator.Address).Receipt(false)
+		receipt, _, err := staker.Attach(hayabusa.Stargate.PrivateKey).WithdrawDelegation(delegationID).Receipt(false)
 		require.NoError(t, err)
 
 		events, err := staker.FilterDelegationWithdrawn(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
-		require.Equal(t, queuedID, events[0].ValidationID)
-		require.Equal(t, delegator.Address, events[0].Delegator)
+		require.Equal(t, delegationID, events[0].DelegationID)
 		require.Equal(t, builtins.MinStake, events[0].Stake)
 	})
 }
