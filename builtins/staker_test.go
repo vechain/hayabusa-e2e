@@ -106,8 +106,7 @@ func TestStaker(t *testing.T) {
 
 	t.Run("AddValidator", func(t *testing.T) {
 		validator = devgenesis.DevAccounts()[mbp+1]
-		sender := staker.Attach(validator.PrivateKey).AddValidator(validator.Address, builtins.MinStake, config.MinStakingPeriod, false)
-		receipt, _, err := sender.Receipt(false)
+		receipt, _, err := staker.Attach(validator.PrivateKey).AddValidator(validator.Address, builtins.MinStake, config.MinStakingPeriod, false).Receipt(false)
 		require.NoError(t, err)
 
 		events, err := staker.FilterValidatorQueued(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
@@ -189,7 +188,7 @@ func TestStaker(t *testing.T) {
 	delegator := devgenesis.DevAccounts()[9]
 
 	t.Run("AddDelegation", func(t *testing.T) {
-		receipt, _, err := staker.Attach(validator.PrivateKey).AddDelegation(queuedID, delegator.Address, builtins.MinStake, false, uint8(100)).Receipt(false)
+		receipt, _, err := staker.Attach(hayabusa.Stargate.PrivateKey).AddDelegation(queuedID, delegator.Address, builtins.MinStake, false, uint8(100)).Receipt(false)
 		require.NoError(t, err)
 
 		events, err := staker.FilterDelegationAdded(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
@@ -212,7 +211,7 @@ func TestStaker(t *testing.T) {
 
 	t.Run("UpdateDelegationAutoRenew", func(t *testing.T) {
 		// enable auto renew
-		receipt, _, err := staker.Attach(validator.PrivateKey).UpdateDelegatorAutoRenew(queuedID, delegator.Address, true).Receipt(false)
+		receipt, _, err := staker.Attach(hayabusa.Stargate.PrivateKey).UpdateDelegatorAutoRenew(queuedID, delegator.Address, true).Receipt(false)
 		require.NoError(t, err)
 
 		events, err := staker.FilterDelegationUpdatedAutoRenew(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
@@ -227,7 +226,7 @@ func TestStaker(t *testing.T) {
 		require.Equal(t, true, delegation.AutoRenew)
 
 		// disable auto renew
-		receipt, _, err = staker.Attach(validator.PrivateKey).UpdateDelegatorAutoRenew(queuedID, delegator.Address, false).Receipt(false)
+		receipt, _, err = staker.Attach(hayabusa.Stargate.PrivateKey).UpdateDelegatorAutoRenew(queuedID, delegator.Address, false).Receipt(false)
 		require.NoError(t, err)
 
 		events, err = staker.FilterDelegationUpdatedAutoRenew(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
@@ -266,7 +265,7 @@ func TestStaker(t *testing.T) {
 		require.Equal(t, builtins.MinStake, delegation.Stake)
 
 		// withdraw the delegation
-		receipt, _, err := staker.Attach(delegator.PrivateKey).WithdrawDelegation(queuedID, delegator.Address).Receipt(false)
+		receipt, _, err := staker.Attach(hayabusa.Stargate.PrivateKey).WithdrawDelegation(queuedID, delegator.Address).Receipt(false)
 		require.NoError(t, err)
 
 		events, err := staker.FilterDelegationWithdrawn(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)

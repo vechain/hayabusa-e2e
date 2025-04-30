@@ -17,7 +17,10 @@ permissions:
 
 jobs:
   run-tests:
-    runs-on: 8-core-10-jobs
+    runs-on:
+      - codebuild-Hayabusa-E2E-${{ github.run_id }}-${{ github.run_attempt }}
+      - image:arm-3.0
+      - instance-size:large
 
     strategy:
       matrix:
