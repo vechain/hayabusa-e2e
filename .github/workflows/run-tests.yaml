@@ -20,7 +20,7 @@ jobs:
     runs-on:
       - codebuild-Hayabusa-E2E-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-3.0
-      - instance-size:2xlarge
+      - instance-size:xlarge
 
     strategy:
       matrix:
