@@ -27,7 +27,7 @@ func TestStaker(t *testing.T) {
 		MidStakingPeriod:  8,
 		HighStakingPeriod: 16,
 	}
-	client, cancel, err := hayabusa.StartNetwork(config)
+	client, _, cancel, err := hayabusa.StartNetwork(config)
 	if err != nil {
 		t.Fatal(err)
 	}

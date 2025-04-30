@@ -26,15 +26,17 @@ import (
 )
 
 type Config struct {
-	Nodes             int    // The number of nodes to create
-	MaxBlockProposers uint32 // The number of max block proposers
-	ForkBlock         uint32 // ForkConfig.HAYABUSA
-	TransitionPeriod  uint32 // ForkConfig.HAYABUSA_TP
-	EpochLength       uint32 // epoch-length
-	CooldownPeriod    uint32 // cooldown-period
-	MinStakingPeriod  uint32 // staker-low-staking-period
-	MidStakingPeriod  uint32 // staker-medium-staking-period
-	HighStakingPeriod uint32 // staker-high-staking-period
+	Nodes             int          // The number of nodes to create
+	MaxBlockProposers uint32       // The number of max block proposers
+	ForkBlock         uint32       // ForkConfig.HAYABUSA
+	TransitionPeriod  uint32       // ForkConfig.HAYABUSA_TP
+	EpochLength       uint32       // epoch-length
+	CooldownPeriod    uint32       // cooldown-period
+	MinStakingPeriod  uint32       // staker-low-staking-period
+	MidStakingPeriod  uint32       // staker-medium-staking-period
+	HighStakingPeriod uint32       // staker-high-staking-period
+	StargateAddress   thor.Address // Stargate contract address
+	Verbosity         int          // Verbosity level for the nodes
 }
 
 func NewConfig() *Config {
@@ -51,7 +53,10 @@ func NewConfig() *Config {
 	}
 }
 
-var Stargate = devgenesis.DevAccounts()[9]
+var (
+	Stargate          = devgenesis.DevAccounts()[9]
+	ParamsStargateKey = nameToBytes32("stargate-contract-address")
+)
 
 // Apply the configuration to the genesis file.
 func (h Config) Apply(genesis *genesis.CustomGenesis) {
@@ -94,12 +99,17 @@ func (h Config) Apply(genesis *genesis.CustomGenesis) {
 		paramsIndex = len(genesis.Accounts) - 1
 	}
 	genesis.Accounts[paramsIndex].Storage[nameToBytes32("max-block-proposers")] = uint32ToBytes32(h.MaxBlockProposers, 3)
-	genesis.Accounts[paramsIndex].Storage[nameToBytes32("stargate-contract-address")] = thor.BytesToBytes32(Stargate.Address.Bytes())
+
+	addr := Stargate.Address
+	if !h.StargateAddress.IsZero() {
+		addr = h.StargateAddress
+	}
+	genesis.Accounts[paramsIndex].Storage[ParamsStargateKey] = thor.BytesToBytes32(addr.Bytes())
 }
 
-func StartNetwork(config *Config) (*thorclient.Client, func(), error) {
+func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, func(), error) {
 	if config.Nodes < 2 {
-		return nil, nil, fmt.Errorf("at least 2 nodes are required")
+		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
 	customGenesis := genesisbuilder.New(int(config.MaxBlockProposers)).
 		Overrider(config.Apply).
@@ -115,13 +125,18 @@ func StartNetwork(config *Config) (*thorclient.Client, func(), error) {
 		net = network.NewCustomNetworkWithBranchAndRepo(repo, "release/hayabusa")
 	}
 
+	verbosity := 3
+	if config.Verbosity > 0 {
+		verbosity = config.Verbosity
+	}
+
 	nodes := make([]node.Node, config.Nodes)
 	for i := range config.Nodes {
 		generatedNode := &node.BaseNode{
 			ID:        "Node-" + strconv.Itoa(i),
 			Key:       common.Bytes2Hex(devgenesis.DevAccounts()[i].PrivateKey.D.Bytes()),
 			Genesis:   customGenesis,
-			Verbosity: 3,
+			Verbosity: verbosity,
 		}
 		nodes[i] = generatedNode
 	}
@@ -132,12 +147,12 @@ func StartNetwork(config *Config) (*thorclient.Client, func(), error) {
 	}
 	if err := net.StartWithNetwork(networkCfg); err != nil {
 		net.Stop()
-		return nil, nil, fmt.Errorf("failed to start network: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to start network: %w", err)
 	}
 
 	client := thorclient.New(net.Details().Address)
 
-	return client, func() {
+	return client, net, func() {
 		if err := net.Stop(); err != nil {
 			slog.Error("failed to stop network", "error", err)
 		}
