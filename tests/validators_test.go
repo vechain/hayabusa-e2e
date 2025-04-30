@@ -28,7 +28,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 	}
-	client, cancel, err := hayabusa.StartNetwork(config)
+	client, _, cancel, err := hayabusa.StartNetwork(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 	}
-	client, cancel, err := hayabusa.StartNetwork(config)
+	client, _, cancel, err := hayabusa.StartNetwork(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 	}
-	client, cancel, err := hayabusa.StartNetwork(config)
+	client, _, cancel, err := hayabusa.StartNetwork(config)
 	if err != nil {
 		t.Fatal(err)
 	}
