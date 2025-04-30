@@ -51,6 +51,8 @@ func NewConfig() *Config {
 	}
 }
 
+var Stargate = devgenesis.DevAccounts()[0]
+
 // Apply the configuration to the genesis file.
 func (h Config) Apply(genesis *genesis.CustomGenesis) {
 	genesis.LaunchTime = uint64(time.Now().Unix())
@@ -92,7 +94,7 @@ func (h Config) Apply(genesis *genesis.CustomGenesis) {
 		paramsIndex = len(genesis.Accounts) - 1
 	}
 	genesis.Accounts[paramsIndex].Storage[nameToBytes32("max-block-proposers")] = uint32ToBytes32(h.MaxBlockProposers, 3)
-
+	genesis.Accounts[paramsIndex].Storage[nameToBytes32("stargate-contract-address")] = thor.BytesToBytes32(Stargate.Address.Bytes())
 }
 
 func StartNetwork(config *Config) (*thorclient.Client, func(), error) {
@@ -104,10 +106,13 @@ func StartNetwork(config *Config) (*thorclient.Client, func(), error) {
 		Build()
 
 	repo := "git@github.com:vechain/hayabusa.git"
-	net := network.NewCustomNetworkWithBranchAndRepo(repo, "release/hayabusa")
+	var net *network.CustomNetwork
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
 	if ok {
 		net = network.NewCustomWithRepoAndDownloadPath(repo, workingDir)
+	} else {
+		slog.Warn("THOR_WORKING_DIR not set, using default repo/branch")
+		net = network.NewCustomNetworkWithBranchAndRepo(repo, "release/hayabusa")
 	}
 
 	nodes := make([]node.Node, config.Nodes)
