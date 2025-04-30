@@ -51,7 +51,7 @@ func NewConfig() *Config {
 	}
 }
 
-var Stargate = devgenesis.DevAccounts()[0]
+var Stargate = devgenesis.DevAccounts()[9]
 
 // Apply the configuration to the genesis file.
 func (h Config) Apply(genesis *genesis.CustomGenesis) {
