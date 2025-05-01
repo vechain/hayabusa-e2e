@@ -27,19 +27,22 @@ func Test_AddDelegation(t *testing.T) {
 		t.Logf("stargate address: %s", hayabusa.Stargate.Address)
 		stargateAcc, err := staker.Client().Account(&hayabusa.Stargate.Address)
 		require.NoError(t, err)
-		bytes, err := stargateAcc.Energy.MarshalText()
+		balance := (big.Int)(stargateAcc.Energy)
 		require.NoError(t, err)
-		start := big.NewInt(0).SetBytes(bytes)
+		start := big.NewInt(0).Set(&balance)
+
+		friendly := new(big.Int).Quo(start, big.NewInt(1e18)) // wei to ETH
+		t.Logf("stargate initial energy: %s", friendly)
 
 		for {
 			// get the energy at the current block
 			block, err := ticker.Wait(20 * time.Second)
 			require.NoError(t, err)
-			stargateAcc, err = staker.Client().Account(&hayabusa.Stargate.Address)
+			stargateAcc, err := staker.Client().Account(&hayabusa.Stargate.Address)
 			require.NoError(t, err)
-			bytes, err = stargateAcc.Energy.MarshalText()
+			newBalance := (big.Int)(stargateAcc.Energy)
 			require.NoError(t, err)
-			current := big.NewInt(0).SetBytes(bytes)
+			current := big.NewInt(0).Set(&newBalance)
 
 			// get the total stake in the contract
 			totalLocked, err := staker.TotalStake()
