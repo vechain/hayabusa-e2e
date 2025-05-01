@@ -94,13 +94,10 @@ func genesisAccounts() []thorgenesis.Account {
 		})
 	}
 
-	million := big.NewInt(1000_000)
-	million = million.Mul(million, big.NewInt(1e18))
-
 	accounts = append(accounts, thorgenesis.Account{
 		Address: Stargate.Address,
-		Balance: (*thorgenesis.HexOrDecimal256)(million),
-		Energy:  (*thorgenesis.HexOrDecimal256)(million),
+		Balance: (*thorgenesis.HexOrDecimal256)(tenBillion),
+		Energy:  (*thorgenesis.HexOrDecimal256)(tenBillion),
 		Code:    "0x",
 		Storage: make(map[string]thor.Bytes32),
 	})
