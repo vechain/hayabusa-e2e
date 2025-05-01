@@ -6,106 +6,24 @@ import (
 	"log/slog"
 	"math/big"
 	"os"
-	"slices"
 	"strconv"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/draupnir/genesisbuilder"
 	"github.com/vechain/draupnir/network"
-	"github.com/vechain/hayabusa-e2e/builtins"
 	networkhubNetwork "github.com/vechain/networkhub/network"
 	"github.com/vechain/networkhub/network/node"
-	"github.com/vechain/networkhub/network/node/genesis"
-	"github.com/vechain/thor/v2/builtin"
-	devgenesis "github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/runtime"
+	thorgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 )
 
-type Config struct {
-	Nodes             int          // The number of nodes to create
-	MaxBlockProposers uint32       // The number of max block proposers
-	ForkBlock         uint32       // ForkConfig.HAYABUSA
-	TransitionPeriod  uint32       // ForkConfig.HAYABUSA_TP
-	EpochLength       uint32       // epoch-length
-	CooldownPeriod    uint32       // cooldown-period
-	MinStakingPeriod  uint32       // staker-low-staking-period
-	MidStakingPeriod  uint32       // staker-medium-staking-period
-	HighStakingPeriod uint32       // staker-high-staking-period
-	StargateAddress   thor.Address // Stargate contract address
-	Verbosity         int          // Verbosity level for the nodes
-}
-
-func NewConfig() *Config {
-	return &Config{
-		Nodes:             3,
-		MaxBlockProposers: 3,
-		ForkBlock:         6,
-		TransitionPeriod:  6,
-		EpochLength:       6,
-		CooldownPeriod:    3,
-		MinStakingPeriod:  6,
-		MidStakingPeriod:  30,
-		HighStakingPeriod: 180,
-	}
-}
-
 var (
-	Stargate          = devgenesis.DevAccounts()[9]
+	Stargate          = mustGenerateAccount()
 	ParamsStargateKey = nameToBytes32("stargate-contract-address")
+	ValidatorAccounts = thorgenesis.DevAccounts()
 )
-
-// Apply the configuration to the genesis file.
-func (h Config) Apply(genesis *genesis.CustomGenesis) {
-	genesis.LaunchTime = uint64(time.Now().Unix())
-	genesis.ForkConfig.AddField("HAYABUSA", h.ForkBlock)
-	genesis.ForkConfig.AddField("HAYABUSA_TP", h.TransitionPeriod)
-
-	// staker config - set all values
-	stakerIndex := slices.IndexFunc(genesis.Accounts, func(acc devgenesis.Account) bool {
-		return acc.Address == builtins.StakerAddress
-	})
-	if stakerIndex == -1 {
-		genesis.Accounts = append(genesis.Accounts, devgenesis.Account{
-			Address: builtins.StakerAddress,
-			Storage: map[string]thor.Bytes32{},
-			Code:    hexutil.Encode(runtime.EmptyRuntimeBytecode),
-			Balance: (*devgenesis.HexOrDecimal256)(big.NewInt(0)),
-			Energy:  (*devgenesis.HexOrDecimal256)(big.NewInt(0)),
-		})
-		stakerIndex = len(genesis.Accounts) - 1
-	}
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("epoch-length")] = uint32ToBytes32(h.EpochLength, 6)
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("cooldown-period")] = uint32ToBytes32(h.CooldownPeriod, 6)
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("staker-low-staking-period")] = uint32ToBytes32(h.MinStakingPeriod, 6)
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("staker-medium-staking-period")] = uint32ToBytes32(h.MidStakingPeriod, 30)
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("staker-high-staking-period")] = uint32ToBytes32(h.HighStakingPeriod, 180)
-
-	// params config - set max-block-proposers
-	paramsIndex := slices.IndexFunc(genesis.Accounts, func(acc devgenesis.Account) bool {
-		return acc.Address == builtin.Params.Address
-	})
-	if paramsIndex == -1 {
-		genesis.Accounts = append(genesis.Accounts, devgenesis.Account{
-			Address: builtin.Params.Address,
-			Storage: map[string]thor.Bytes32{},
-			Code:    "",
-			Balance: (*devgenesis.HexOrDecimal256)(big.NewInt(0)),
-			Energy:  (*devgenesis.HexOrDecimal256)(big.NewInt(0)),
-		})
-		paramsIndex = len(genesis.Accounts) - 1
-	}
-	genesis.Accounts[paramsIndex].Storage[nameToBytes32("max-block-proposers")] = uint32ToBytes32(h.MaxBlockProposers, 3)
-
-	addr := Stargate.Address
-	if !h.StargateAddress.IsZero() {
-		addr = h.StargateAddress
-	}
-	genesis.Accounts[paramsIndex].Storage[ParamsStargateKey] = thor.BytesToBytes32(addr.Bytes())
-}
 
 func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, func(), error) {
 	if config.Nodes < 2 {
@@ -113,6 +31,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 	}
 	customGenesis := genesisbuilder.New(int(config.MaxBlockProposers)).
 		Overrider(config.Apply).
+		Accounts(genesisAccounts()).
 		Build()
 
 	repo := "git@github.com:vechain/hayabusa.git"
@@ -134,7 +53,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 	for i := range config.Nodes {
 		generatedNode := &node.BaseNode{
 			ID:        "Node-" + strconv.Itoa(i),
-			Key:       common.Bytes2Hex(devgenesis.DevAccounts()[i].PrivateKey.D.Bytes()),
+			Key:       common.Bytes2Hex(ValidatorAccounts[i].PrivateKey.D.Bytes()),
 			Genesis:   customGenesis,
 			Verbosity: verbosity,
 		}
@@ -159,6 +78,36 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 	}, nil
 }
 
+func genesisAccounts() []thorgenesis.Account {
+	accounts := make([]thorgenesis.Account, 0)
+
+	tenBillion := big.NewInt(10e9)
+	tenBillion = tenBillion.Mul(tenBillion, big.NewInt(1e18))
+
+	for _, account := range ValidatorAccounts {
+		accounts = append(accounts, thorgenesis.Account{
+			Address: account.Address,
+			Balance: (*thorgenesis.HexOrDecimal256)(tenBillion),
+			Energy:  (*thorgenesis.HexOrDecimal256)(tenBillion),
+			Code:    "0x",
+			Storage: make(map[string]thor.Bytes32),
+		})
+	}
+
+	million := big.NewInt(1000_000)
+	million = million.Mul(million, big.NewInt(1e18))
+
+	accounts = append(accounts, thorgenesis.Account{
+		Address: Stargate.Address,
+		Balance: (*thorgenesis.HexOrDecimal256)(million),
+		Energy:  (*thorgenesis.HexOrDecimal256)(million),
+		Code:    "0x",
+		Storage: make(map[string]thor.Bytes32),
+	})
+
+	return accounts
+}
+
 // uint32ToBytes32 converts a uint32 value to a Bytes32 value.
 // If the value is 0, it returns the default value.
 func uint32ToBytes32(value uint32, defaultValue uint32) thor.Bytes32 {
@@ -173,4 +122,16 @@ func uint32ToBytes32(value uint32, defaultValue uint32) thor.Bytes32 {
 
 func nameToBytes32(name string) string {
 	return thor.BytesToBytes32([]byte(name)).String()
+}
+
+func mustGenerateAccount() thorgenesis.DevAccount {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic(fmt.Sprintf("failed to generate key: %v", err))
+	}
+	address := crypto.PubkeyToAddress(key.PublicKey)
+	return thorgenesis.DevAccount{
+		Address:    thor.Address(address),
+		PrivateKey: key,
+	}
 }

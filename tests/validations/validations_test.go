@@ -1,4 +1,4 @@
-package hayabusa
+package validations
 
 import (
 	"crypto/ecdsa"
@@ -12,7 +12,6 @@ import (
 	"github.com/vechain/draupnir/common"
 	"github.com/vechain/hayabusa-e2e/builtins"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
-	thorgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -34,9 +33,9 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	}
 	t.Cleanup(cancel)
 
-	validator1 := thorgenesis.DevAccounts()[1]
-	validator2 := thorgenesis.DevAccounts()[2]
-	validator3 := thorgenesis.DevAccounts()[0]
+	validator1 := hayabusa.ValidatorAccounts[1]
+	validator2 := hayabusa.ValidatorAccounts[2]
+	validator3 := hayabusa.ValidatorAccounts[0]
 
 	block := config.ForkBlock
 	staker := builtins.NewStaker(client, validator1.PrivateKey)
@@ -92,9 +91,9 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	}
 	t.Cleanup(cancel)
 
-	validator1 := thorgenesis.DevAccounts()[0]
-	validator2 := thorgenesis.DevAccounts()[1]
-	validator3 := thorgenesis.DevAccounts()[2]
+	validator1 := hayabusa.ValidatorAccounts[0]
+	validator2 := hayabusa.ValidatorAccounts[1]
+	validator3 := hayabusa.ValidatorAccounts[2]
 
 	staker := builtins.NewStaker(client, validator1.PrivateKey)
 	assert.NoError(t, staker.WaitForFork(config.ForkBlock))
@@ -170,11 +169,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	}
 	t.Cleanup(cancel)
 
-	validator1 := thorgenesis.DevAccounts()[0]
-	validator2 := thorgenesis.DevAccounts()[1]
-	validator3 := thorgenesis.DevAccounts()[2]
-	validator4 := thorgenesis.DevAccounts()[3]
-	validator5 := thorgenesis.DevAccounts()[4]
+	validator1 := hayabusa.ValidatorAccounts[0]
+	validator2 := hayabusa.ValidatorAccounts[1]
+	validator3 := hayabusa.ValidatorAccounts[2]
+	validator4 := hayabusa.ValidatorAccounts[3]
+	validator5 := hayabusa.ValidatorAccounts[4]
 
 	staker := builtins.NewStaker(client, validator1.PrivateKey)
 	assert.NoError(t, staker.WaitForFork(config.ForkBlock))

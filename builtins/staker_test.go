@@ -42,7 +42,7 @@ func TestStaker(t *testing.T) {
 	// add validators
 	senders := &contracts.Senders{}
 	for i := range mbp {
-		validator := devgenesis.DevAccounts()[i]
+		validator := hayabusa.ValidatorAccounts[i]
 		sender := staker.Attach(validator.PrivateKey).AddValidator(validator.Address, builtins.MinStake, config.MinStakingPeriod, true)
 		senders.Add(sender)
 	}
