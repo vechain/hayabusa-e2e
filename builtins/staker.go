@@ -183,6 +183,13 @@ type Validator struct {
 	AutoRenew bool
 }
 
+type GetBlockProposerAndRewardResponse struct {
+	Reward       *big.Int
+	Master       *thor.Address
+	Beneficiary  *thor.Address
+	ValidationID *thor.Bytes32
+}
+
 func (v *Validator) Exists() bool {
 	return v.Endorsor != nil && !v.Endorsor.IsZero() && v.Status != 0
 }
@@ -253,6 +260,25 @@ func (s *Staker) GetWithdraw(validationID thor.Bytes32) (*big.Int, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func (s *Staker) GetBlockProposerAndReward(blockNumber uint32) (*GetBlockProposerAndRewardResponse, error) {
+	var out = make([]any, 4)
+	out[0] = new(*big.Int)
+	out[1] = new(common.Address)
+	out[2] = new(common.Address)
+	out[3] = new(thor.Bytes32)
+	if err := s.contract.CallInto("getBlockProposerAndReward", &out, blockNumber); err != nil {
+		return nil, err
+	}
+	getBlockProposerAndRewardResponse := &GetBlockProposerAndRewardResponse{
+		Reward:       *(out[0].(**big.Int)),
+		Master:       (*thor.Address)(out[1].(*common.Address)),
+		Beneficiary:  (*thor.Address)(out[2].(*common.Address)),
+		ValidationID: out[3].(*thor.Bytes32),
+	}
+
+	return getBlockProposerAndRewardResponse, nil
 }
 
 type Delegator struct {

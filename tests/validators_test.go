@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
@@ -60,16 +61,23 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 	id2 := addValidator(t, staker, validator2.PrivateKey, validator2.Address, false, config.MinStakingPeriod)
 
+	var validatorIDs []thor.Bytes32
 	block += config.TransitionPeriod
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	t.Log("✅ - Both validators are activated")
 
+	validatorIDs = append(validatorIDs, id1)
+	validatorIDs = append(validatorIDs, id2)
+
 	block += config.MinStakingPeriod
 	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, false, config.MinStakingPeriod)
+	validatorIDs = append(validatorIDs, id3)
 	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
+
+	assertBlockRewardAndProposer(t, staker, validatorIDs)
 
 	t.Log("✅ - All three validators are activated")
 }
@@ -95,14 +103,18 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	validator1 := thorgenesis.DevAccounts()[0]
 	validator2 := thorgenesis.DevAccounts()[1]
 	validator3 := thorgenesis.DevAccounts()[2]
+	var validatorIDs []thor.Bytes32
 
 	staker := builtins.NewStaker(client, validator1.PrivateKey)
 	assert.NoError(t, staker.WaitForFork(config.ForkBlock))
 	ticker := common.NewTicker(client)
 
 	id1 := addValidator(t, staker, validator1.PrivateKey, validator1.Address, false, config.MinStakingPeriod)
+	validatorIDs = append(validatorIDs, id1)
 	id2 := addValidator(t, staker, validator2.PrivateKey, validator2.Address, false, config.MinStakingPeriod)
+	validatorIDs = append(validatorIDs, id2)
 	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, true, config.MinStakingPeriod)
+	validatorIDs = append(validatorIDs, id3)
 
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -150,6 +162,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Log("✅ - One validator has exited rest are forbidden because of 2/3 rule")
 
 	validatorWithdraw(t, staker, validator1.PrivateKey, id1)
+	assertBlockRewardAndProposer(t, staker, validatorIDs)
 }
 
 func TestHayabusaQueuedAndThenEnter(t *testing.T) {
@@ -175,6 +188,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	validator3 := thorgenesis.DevAccounts()[2]
 	validator4 := thorgenesis.DevAccounts()[3]
 	validator5 := thorgenesis.DevAccounts()[4]
+	var validatorIDs []thor.Bytes32
 
 	staker := builtins.NewStaker(client, validator1.PrivateKey)
 	assert.NoError(t, staker.WaitForFork(config.ForkBlock))
@@ -184,9 +198,13 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
 	stake = big.NewInt(0).Mul(stake, big.NewInt(26))
 	id1 := addValidator(t, staker, validator1.PrivateKey, validator1.Address, true, config.MinStakingPeriod)
+	validatorIDs = append(validatorIDs, id1)
 	id2 := addValidator(t, staker, validator2.PrivateKey, validator2.Address, true, config.MinStakingPeriod)
+	validatorIDs = append(validatorIDs, id2)
 	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, true, config.MinStakingPeriod)
+	validatorIDs = append(validatorIDs, id3)
 	id4 := addValidator(t, staker, validator4.PrivateKey, validator4.Address, true, config.MinStakingPeriod)
+	validatorIDs = append(validatorIDs, id4)
 
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -208,6 +226,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	t.Log("✅ - Three validators are activated one is queued")
 
 	id5 := addValidatorWithStake(t, staker, validator5.PrivateKey, validator5.Address, false, stake, config.MinStakingPeriod)
+	validatorIDs = append(validatorIDs, id5)
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
@@ -233,6 +252,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id3, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id4, builtins.StatusQueued, block)
 	assertValidatorStatus(t, staker, id5, builtins.StatusQueued, block)
+	assertBlockRewardAndProposer(t, staker, validatorIDs)
 
 	_, validationID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -288,4 +308,65 @@ func assertValidatorStatus(t *testing.T, staker *builtins.Staker, validatorID th
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
+}
+
+func assertBlockRewardAndProposer(t *testing.T, staker *builtins.Staker, validatorIds []thor.Bytes32) {
+	bestBl, err := staker.Client().Block("best")
+	assert.NoError(t, err)
+
+	expectedReward := getExpectedReward(t, staker)
+
+	time.Sleep(10 * time.Second)
+	response, err := staker.GetBlockProposerAndReward(bestBl.Number)
+	assert.NoError(t, err)
+
+	validatorFound := false
+	for _, validatorID := range validatorIds {
+		if validatorID.String() == response.ValidationID.String() {
+			validatorFound = true
+			validator, err := staker.Get(validatorID)
+			assert.NoError(t, err)
+			assert.Equal(t, validator.Master, response.Master)
+			assert.Equal(t, validator.Endorsor, response.Beneficiary)
+			break
+		}
+
+	}
+	assert.True(t, validatorFound)
+	assert.Equal(t, expectedReward, response.Reward)
+}
+
+func getExpectedReward(t *testing.T, staker *builtins.Staker) *big.Int {
+	totalStaked, err := staker.TotalStake()
+	assert.NoError(t, err)
+
+	currentYear := time.Now().Year()
+	isLeap := false
+	if currentYear%4 == 0 {
+		if currentYear%100 == 0 {
+			isLeap = currentYear%400 == 0
+		} else {
+			isLeap = true
+		}
+	}
+
+	bigE18 := big.NewInt(1e18)
+	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
+	sqrtStake.Mul(sqrtStake, bigE18)
+
+	blocksPerYear := big.NewInt(3153600)
+	scalingFactor := big.NewInt(64)
+	targetFactor := big.NewInt(1200)
+
+	if isLeap {
+		blocksPerYear = new(big.Int).Sub(blocksPerYear, big.NewInt(thor.SeederInterval))
+	}
+
+	reward := big.NewInt(1)
+	reward.Mul(reward, targetFactor)
+	reward.Mul(reward, scalingFactor)
+	reward.Mul(reward, sqrtStake)
+	reward.Div(reward, blocksPerYear)
+
+	return reward
 }
