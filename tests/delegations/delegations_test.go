@@ -10,7 +10,6 @@ import (
 	"github.com/vechain/draupnir/contracts"
 	"github.com/vechain/hayabusa-e2e/builtins"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
-	devgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -95,7 +94,7 @@ func newDelegationSetup(t *testing.T) (*builtins.Staker, *hayabusa.Config, [6]th
 	senders := &contracts.Senders{}
 
 	for i := range validationIDs {
-		account := devgenesis.DevAccounts()[i]
+		account := hayabusa.ValidatorAccounts[i]
 		sender := staker.Attach(account.PrivateKey).AddValidator(account.Address, builtins.MinStake, config.MinStakingPeriod, true)
 		senders.Add(sender)
 	}

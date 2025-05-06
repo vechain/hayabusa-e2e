@@ -33,7 +33,7 @@ func TestStaker(t *testing.T) {
 	}
 	t.Cleanup(cancel)
 
-	staker := builtins.NewStaker(client, devgenesis.DevAccounts()[0].PrivateKey)
+	staker := builtins.NewStaker(client, hayabusa.ValidatorAccounts[0].PrivateKey)
 
 	if err := staker.WaitForFork(config.ForkBlock); err != nil {
 		t.Fatalf("failed to wait for fork: %v", err)

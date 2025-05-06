@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	common2 "github.com/vechain/draupnir/common"
 	"github.com/vechain/draupnir/contracts"
-	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 )
@@ -38,7 +37,6 @@ type Staker struct {
 	contract *contracts.GenericWrapper
 	client   *thorclient.Client
 	key      *ecdsa.PrivateKey
-	abi      *abi.ABI
 }
 
 func NewStaker(client *thorclient.Client, key *ecdsa.PrivateKey) *Staker {

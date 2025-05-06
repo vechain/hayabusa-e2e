@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/draupnir/datagen"
 	"github.com/vechain/draupnir/genesisbuilder"
 	"github.com/vechain/draupnir/network"
 	networkhubNetwork "github.com/vechain/networkhub/network"
@@ -20,9 +21,10 @@ import (
 )
 
 var (
-	Stargate          = mustGenerateAccount()
+	ValidatorAccounts = mustGenerateAccounts(101)
+	Stargate          = mustGenerateAccounts(1)[0]
 	ParamsStargateKey = nameToBytes32("stargate-contract-address")
-	ValidatorAccounts = thorgenesis.DevAccounts()
+	Executor          = thorgenesis.DevAccounts()[0] // from genesisbuilder default
 )
 
 func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, func(), error) {
@@ -32,6 +34,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 	customGenesis := genesisbuilder.New(int(config.MaxBlockProposers)).
 		Overrider(config.Apply).
 		Accounts(genesisAccounts()).
+		Authority(authorities()).
 		Build()
 
 	repo := "git@github.com:vechain/hayabusa.git"
@@ -78,29 +81,44 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 	}, nil
 }
 
+func authorities() []thorgenesis.Authority {
+	authorities := make([]thorgenesis.Authority, 0)
+
+	for _, account := range ValidatorAccounts {
+		authorities = append(authorities, thorgenesis.Authority{
+			MasterAddress:   account.Address,
+			EndorsorAddress: account.Address,
+			Identity:        datagen.RandKey(),
+		})
+	}
+
+	return authorities
+}
+
 func genesisAccounts() []thorgenesis.Account {
 	accounts := make([]thorgenesis.Account, 0)
 
 	tenBillion := big.NewInt(10e9)
 	tenBillion = tenBillion.Mul(tenBillion, big.NewInt(1e18))
 
-	for _, account := range ValidatorAccounts {
+	addAccount := func(account thorgenesis.DevAccount, balance *big.Int) {
 		accounts = append(accounts, thorgenesis.Account{
 			Address: account.Address,
-			Balance: (*thorgenesis.HexOrDecimal256)(tenBillion),
-			Energy:  (*thorgenesis.HexOrDecimal256)(tenBillion),
+			Balance: (*thorgenesis.HexOrDecimal256)(balance),
+			Energy:  (*thorgenesis.HexOrDecimal256)(balance),
 			Code:    "0x",
 			Storage: make(map[string]thor.Bytes32),
 		})
 	}
 
-	accounts = append(accounts, thorgenesis.Account{
-		Address: Stargate.Address,
-		Balance: (*thorgenesis.HexOrDecimal256)(tenBillion),
-		Energy:  (*thorgenesis.HexOrDecimal256)(tenBillion),
-		Code:    "0x",
-		Storage: make(map[string]thor.Bytes32),
-	})
+	for _, account := range ValidatorAccounts {
+		addAccount(account, tenBillion)
+	}
+	addAccount(Executor, tenBillion)
+
+	hundredBillion := big.NewInt(100e9)
+	hundredBillion = hundredBillion.Mul(hundredBillion, big.NewInt(1e18))
+	addAccount(Stargate, hundredBillion)
 
 	return accounts
 }
@@ -121,14 +139,20 @@ func nameToBytes32(name string) string {
 	return thor.BytesToBytes32([]byte(name)).String()
 }
 
-func mustGenerateAccount() thorgenesis.DevAccount {
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		panic(fmt.Sprintf("failed to generate key: %v", err))
+func mustGenerateAccounts(amount int) []thorgenesis.DevAccount {
+	accounts := make([]thorgenesis.DevAccount, amount)
+
+	for i := range amount {
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			panic(fmt.Sprintf("failed to generate key: %v", err))
+		}
+		address := crypto.PubkeyToAddress(key.PublicKey)
+		accounts[i] = thorgenesis.DevAccount{
+			Address:    thor.Address(address),
+			PrivateKey: key,
+		}
 	}
-	address := crypto.PubkeyToAddress(key.PublicKey)
-	return thorgenesis.DevAccount{
-		Address:    thor.Address(address),
-		PrivateKey: key,
-	}
+
+	return accounts
 }
