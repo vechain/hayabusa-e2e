@@ -257,13 +257,15 @@ type Delegator struct {
 	Stake      *big.Int
 	Multiplier uint8
 	AutoRenew  bool
+	Locked     bool
 }
 
 func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegator, error) {
-	var out = make([]interface{}, 3)
+	var out = make([]interface{}, 4)
 	out[0] = new(*big.Int)
 	out[1] = new(uint8)
 	out[2] = new(bool)
+	out[3] = new(bool)
 	if err := s.contract.CallInto("getDelegation", &out, delegationID); err != nil {
 		return nil, err
 	}
@@ -271,6 +273,7 @@ func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegator, error) {
 		Stake:      *(out[0].(**big.Int)),
 		Multiplier: *(out[1].(*uint8)),
 		AutoRenew:  *(out[2].(*bool)),
+		Locked:     *(out[3].(*bool)),
 	}
 
 	return delegatorInfo, nil
