@@ -115,14 +115,14 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 		Overrider(config.Apply).
 		Build()
 
-	repo := "https://github.com/vechain/hayabusa"
+	repo := "git@github.com:vechain/hayabusa.git"
 	var net *network.CustomNetwork
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
 	if ok {
 		net = network.NewCustomWithRepoAndDownloadPath(repo, workingDir)
 	} else {
 		slog.Warn("THOR_WORKING_DIR not set, using default repo/branch")
-		net = network.NewCustomNetworkWithBranchAndRepo(repo, "vanja/feat/565-block-reward-method")
+		net = network.NewCustomNetworkWithBranchAndRepo(repo, "release/hayabusa")
 	}
 
 	verbosity := 3

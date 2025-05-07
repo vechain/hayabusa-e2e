@@ -364,32 +364,17 @@
   {
     "inputs": [
       {
-        "internalType": "uint32",
-        "name": "blockNumber",
-        "type": "uint32"
+        "internalType": "bytes32",
+        "name": "validationID",
+        "type": "bytes32"
       }
     ],
-    "name": "getBlockProposerAndReward",
+    "name": "getCompletedPeriods",
     "outputs": [
       {
-        "internalType": "uint256",
+        "internalType": "uint32",
         "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
+        "type": "uint32"
       }
     ],
     "stateMutability": "view",
@@ -424,6 +409,30 @@
         "internalType": "bool",
         "name": "",
         "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "validationID",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "stakingPeriod",
+        "type": "uint32"
+      }
+    ],
+    "name": "getRewards",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",

@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"log/slog"
 	"math/big"
+	"strconv"
 	"testing"
 	"time"
 
@@ -63,6 +64,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 	var validatorIDs []thor.Bytes32
 	block += config.TransitionPeriod
+	periodStart := block
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	t.Log("✅ - Both validators are activated")
@@ -71,13 +73,18 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	validatorIDs = append(validatorIDs, id2)
 
 	block += config.MinStakingPeriod
+	periodEnd := block
 	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, false, config.MinStakingPeriod)
 	validatorIDs = append(validatorIDs, id3)
 	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 
-	assertBlockRewardAndProposer(t, staker, validatorIDs)
+	stake := big.NewInt(1e18)
+	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
+	stake = big.NewInt(0).Mul(stake, big.NewInt(25))
+	totalStake := big.NewInt(0).Mul(stake, big.NewInt(2))
+	assertRewards(t, staker, id1, totalStake, periodStart, periodEnd)
 
 	t.Log("✅ - All three validators are activated")
 }
@@ -123,6 +130,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
+	periodStart := block
 	require.NoError(t, ticker.WaitForBlock(block))
 
 	_, validatorID, err = staker.FirstActive()
@@ -139,9 +147,15 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 
 	// assert validators are on cooldown
 	block += config.MinStakingPeriod
+	periodEnd := block
 	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
+	stake := big.NewInt(1e18)
+	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
+	stake = big.NewInt(0).Mul(stake, big.NewInt(25))
+	totalStake := big.NewInt(0).Mul(stake, big.NewInt(3))
+	assertRewards(t, staker, id1, totalStake, periodStart, periodEnd)
 
 	t.Log("✅ - Non-AutoRenew validators are on cooldown")
 
@@ -162,7 +176,6 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Log("✅ - One validator has exited rest are forbidden because of 2/3 rule")
 
 	validatorWithdraw(t, staker, validator1.PrivateKey, id1)
-	assertBlockRewardAndProposer(t, staker, validatorIDs)
 }
 
 func TestHayabusaQueuedAndThenEnter(t *testing.T) {
@@ -212,6 +225,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
+	periodStart := block
 	require.NoError(t, ticker.WaitForBlock(block))
 
 	_, validatorID, err = staker.FirstActive()
@@ -247,12 +261,18 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	t.Log("✅ - AutoRenew updated")
 
 	block += config.MinStakingPeriod
+	periodEnd := block
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id4, builtins.StatusQueued, block)
 	assertValidatorStatus(t, staker, id5, builtins.StatusQueued, block)
-	assertBlockRewardAndProposer(t, staker, validatorIDs)
+
+	minStake := big.NewInt(1e18)
+	minStake = big.NewInt(0).Mul(minStake, big.NewInt(1e6))
+	minStake = big.NewInt(0).Mul(minStake, big.NewInt(25))
+	totalStake := big.NewInt(0).Mul(minStake, big.NewInt(3))
+	assertRewards(t, staker, id2, totalStake, periodStart, periodEnd)
 
 	_, validationID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -310,36 +330,29 @@ func assertValidatorStatus(t *testing.T, staker *builtins.Staker, validatorID th
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
-func assertBlockRewardAndProposer(t *testing.T, staker *builtins.Staker, validatorIds []thor.Bytes32) {
-	bestBl, err := staker.Client().Block("best")
+func assertRewards(t *testing.T, staker *builtins.Staker, validatorID thor.Bytes32, totalStaked *big.Int, periodStart uint32, periodEnd uint32) {
+
+	expectedReward := getExpectedReward(totalStaked)
+	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
 
-	expectedReward := getExpectedReward(t, staker)
-
-	time.Sleep(10 * time.Second)
-	response, err := staker.GetBlockProposerAndReward(bestBl.Number)
-	assert.NoError(t, err)
-
-	validatorFound := false
-	for _, validatorID := range validatorIds {
-		if validatorID.String() == response.ValidationID.String() {
-			validatorFound = true
-			validator, err := staker.Get(validatorID)
-			assert.NoError(t, err)
-			assert.Equal(t, validator.Master, response.Master)
-			assert.Equal(t, validator.Endorsor, response.Beneficiary)
-			break
+	proposedBlocks := 0
+	for periodStart < periodEnd {
+		block, err := staker.Client().Block(strconv.Itoa(int(periodStart)))
+		assert.NoError(t, err)
+		periodStart = periodStart + 1
+		if block.Signer.String() == validator.Master.String() {
+			proposedBlocks = proposedBlocks + 1
 		}
-
 	}
-	assert.True(t, validatorFound)
-	assert.Equal(t, expectedReward, response.Reward)
+
+	res, err := staker.GetRewards(validatorID, 1)
+	assert.NoError(t, err)
+
+	assert.Equal(t, big.NewInt(0).Mul(expectedReward, big.NewInt(int64(proposedBlocks))).String(), res.String())
 }
 
-func getExpectedReward(t *testing.T, staker *builtins.Staker) *big.Int {
-	totalStaked, err := staker.TotalStake()
-	assert.NoError(t, err)
-
+func getExpectedReward(totalStaked *big.Int) *big.Int {
 	currentYear := time.Now().Year()
 	isLeap := false
 	if currentYear%4 == 0 {
