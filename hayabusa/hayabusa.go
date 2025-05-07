@@ -55,19 +55,20 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 
 	nodes := make([]node.Node, config.Nodes)
 	for i := range config.Nodes {
-		node := &node.BaseNode{
-			ID:        "Node-" + strconv.Itoa(i),
-			Key:       common.Bytes2Hex(ValidatorAccounts[i].PrivateKey.D.Bytes()),
-			Genesis:   customGenesis,
-			Verbosity: verbosity,
+		additionalArgs := map[string]string{
+			"txpool-limit-per-account": "100000",
+			"api-allowed-tracers":      "all",
 		}
-		if i == 0 { // increase logs for 1 node only
-			node.SetAdditionalArgs(map[string]string{
-				"verbosity-staker":         "4",
-				"txpool-limit-per-account": "100000",
-			})
+		if i == 0 { // enable verbose staker logs for 1 node
+			additionalArgs["verbosity-staker"] = "4"
 		}
-		nodes[i] = node
+		nodes[i] = &node.BaseNode{
+			ID:             "Node-" + strconv.Itoa(i),
+			Key:            common.Bytes2Hex(ValidatorAccounts[i].PrivateKey.D.Bytes()),
+			Genesis:        customGenesis,
+			Verbosity:      verbosity,
+			AdditionalArgs: additionalArgs,
+		}
 	}
 	networkCfg := &networkhubNetwork.Network{
 		Environment: "local",

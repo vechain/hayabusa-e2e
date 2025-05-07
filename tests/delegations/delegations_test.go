@@ -2,34 +2,188 @@ package delegations
 
 import (
 	"math/big"
+	"strconv"
 	"testing"
-	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/draupnir/common"
 	"github.com/vechain/draupnir/contracts"
 	"github.com/vechain/hayabusa-e2e/builtins"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 )
 
-func Test_AddDelegation(t *testing.T) {
+func Test_StargateRewards(t *testing.T) {
 	// Setup
-	staker, _, validationIDs := newDelegationSetup(t)
+	staker, config, validationIDs := newDelegationSetup(t)
 
-	totalStake := new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(len(validationIDs))))
+	expectedStake := new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(len(validationIDs))))
 
-	for _, validationID := range validationIDs {
+	for _, validationID := range validationIDs { // evenly distribute delegations among validators
 		senders := &contracts.Senders{}
-		for range 16 {
-			sender := staker.Attach(hayabusa.Stargate.PrivateKey).AddDelegation(validationID, builtins.MinStake, true, 200)
+		for range 10 {
+			sender := staker.AddDelegation(validationID, builtins.MinStake, true, 200)
 			senders.Add(sender)
-			totalStake = totalStake.Add(totalStake, builtins.MinStake)
+			expectedStake = expectedStake.Add(expectedStake, builtins.MinStake)
 		}
-		if _, _, err := senders.Send(false); err != nil {
-			t.Fatalf("failed to send delegation transactions: %v", err)
-		}
+		_, _, err := senders.Send(false)
+		require.NoError(t, err)
 	}
 
-	time.Sleep(10000 * time.Second)
+	ticker := common.NewTicker(staker.Client())
+	best, err := staker.Client().Block("best")
+	require.NoError(t, err)
+	require.NoError(t, ticker.WaitForBlock(best.Number+config.MinStakingPeriod))
+
+	totalStake, err := staker.TotalStake()
+	require.NoError(t, err)
+	assert.Equal(t, expectedStake, totalStake)
+
+	best, err = staker.Client().Block("best")
+	require.NoError(t, err)
+
+	// block N energy
+	acc, err := staker.Client().Account(&hayabusa.Stargate.Address, thorclient.Revision(strconv.Itoa(int(best.Number))))
+	require.NoError(t, err)
+	blockNEnergy := (big.Int)(acc.Energy)
+
+	assert.NoError(t, ticker.WaitForBlock(best.Number+1))
+
+	// block N+1 energy
+	acc, err = staker.Client().Account(&hayabusa.Stargate.Address, thorclient.Revision(strconv.Itoa(int(best.Number+1))))
+	require.NoError(t, err)
+	blockNPlus1Energy := (big.Int)(acc.Energy)
+
+	// assert plus1 is greater than N
+	assert.True(t, blockNPlus1Energy.Cmp(&blockNEnergy) > 0, "block N+1 energy should be greater than block N energy")
+}
+
+func Test_Delegations(t *testing.T) {
+	staker, config, validationIDs := newDelegationSetup(t)
+	ticker := common.NewTicker(staker.Client())
+
+	t.Run("Delegate for 1 period only", func(t *testing.T) {
+		t.Parallel()
+
+		// add the delegation
+		receipt, _, err := staker.AddDelegation(validationIDs[0], builtins.MinStake, false, 100).Receipt(false)
+		require.NoError(t, err)
+		delegationID := receiptToID(receipt)
+		delegation, err := staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.Equal(t, builtins.MinStake, delegation.Stake)
+		assert.Equal(t, uint8(100), delegation.Multiplier)
+		assert.False(t, delegation.AutoRenew)
+
+		// wait for validators current period + 1 staking period
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+
+		// withdraw - should succeed since auto-renew is false
+		receipt, _, err = staker.WithdrawDelegation(delegationID).Receipt(false)
+		require.NoError(t, err)
+
+		delegation, err = staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.True(t, delegation.Stake.Sign() == 0)
+	})
+
+	t.Run("Immediate enable auto-renew", func(t *testing.T) {
+		t.Parallel()
+
+		// add the delegation
+		receipt, _, err := staker.AddDelegation(validationIDs[1], builtins.MinStake, false, 100).Receipt(false)
+		require.NoError(t, err)
+		delegationID := receiptToID(receipt)
+		delegation, err := staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.Equal(t, builtins.MinStake, delegation.Stake)
+		assert.Equal(t, uint8(100), delegation.Multiplier)
+		assert.False(t, delegation.AutoRenew)
+
+		// immediately enable auto-renew
+		receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, true).Receipt(false)
+		require.NoError(t, err)
+		delegation, err = staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.True(t, delegation.AutoRenew)
+
+		// wait for validators current period + 1 staking period
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+
+		// withdraw - should fail since auto-renew is true
+		receipt, _, err = staker.WithdrawDelegation(delegationID).Receipt(true)
+		require.NoError(t, err)
+		assert.True(t, receipt.Reverted)
+		delegation, err = staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.Equal(t, builtins.MinStake, delegation.Stake)
+	})
+
+	t.Run("Delegated with auto-renew", func(t *testing.T) {
+		t.Parallel()
+
+		// add the delegation
+		receipt, _, err := staker.AddDelegation(validationIDs[2], builtins.MinStake, true, 100).Receipt(false)
+		require.NoError(t, err)
+		delegationID := receiptToID(receipt)
+		delegation, err := staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.Equal(t, builtins.MinStake, delegation.Stake)
+		assert.Equal(t, uint8(100), delegation.Multiplier)
+		assert.True(t, delegation.AutoRenew)
+
+		// wait for validators current period + 1 staking period
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+
+		// withdraw - should revert due to auto-renew
+		receipt, _, err = staker.WithdrawDelegation(delegationID).Receipt(true)
+		require.NoError(t, err)
+		assert.True(t, receipt.Reverted)
+		delegation, err = staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.Equal(t, builtins.MinStake, delegation.Stake)
+
+		receipt, _, err = staker.UpdateDelegationAutoRenew(delegationID, false).Receipt(false)
+		require.NoError(t, err)
+
+		// wait for validators current period to end
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
+
+		// withdraw - should succeed since auto-renew is false
+		receipt, _, err = staker.WithdrawDelegation(delegationID).Receipt(false)
+		require.NoError(t, err)
+		delegation, err = staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.True(t, delegation.Stake.Sign() == 0)
+	})
+
+	t.Run("Should not be able call with external account", func(t *testing.T) {
+		t.Parallel()
+		receipt, _, err := staker.AddDelegation(validationIDs[0], builtins.MinStake, false, 100).Receipt(false)
+		require.NoError(t, err)
+		delegationID := receiptToID(receipt)
+
+		// external should not be able to add delegation
+		receipt, _, err = staker.Attach(hayabusa.AdditionalAccounts[0].PrivateKey).AddDelegation(validationIDs[0], builtins.MinStake, false, 100).Receipt(true)
+		require.NoError(t, err)
+		assert.True(t, receipt.Reverted)
+
+		// external should not be able to toggle auto-renew
+		receipt, _, err = staker.Attach(hayabusa.AdditionalAccounts[0].PrivateKey).UpdateDelegationAutoRenew(delegationID, true).Receipt(true)
+		require.NoError(t, err)
+		assert.True(t, receipt.Reverted)
+
+		// wait for delegation to end
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+
+		// external should not be able to withdraw delegation
+		receipt, _, err = staker.Attach(hayabusa.AdditionalAccounts[0].PrivateKey).WithdrawDelegation(delegationID).Receipt(true)
+		require.NoError(t, err)
+		assert.True(t, receipt.Reverted)
+	})
 }
 
 func newDelegationSetup(t *testing.T) (*builtins.Staker, *hayabusa.Config, [6]thor.Bytes32) {
@@ -79,4 +233,9 @@ func newDelegationSetup(t *testing.T) (*builtins.Staker, *hayabusa.Config, [6]th
 		validationIDs[i] = event.ValidationID
 	}
 	return staker, config, validationIDs
+}
+
+func receiptToID(receipt *transactions.Receipt) thor.Bytes32 {
+	// 0 is the event, 1 is the validation ID
+	return receipt.Outputs[0].Events[0].Topics[2]
 }
