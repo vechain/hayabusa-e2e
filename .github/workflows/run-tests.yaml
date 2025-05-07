@@ -11,6 +11,11 @@ on:
         description: 'Branch to test against'
         required: true
         default: 'release/hayabusa'
+  workflow_call:
+    inputs:
+      hayabusa-branch:
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -28,6 +33,7 @@ jobs:
           - builtins
           - tests/validations
           - tests/delegations
+      fail-fast: false
 
     env:
       GOPRIVATE: github.com/vechain/draupnir/*
