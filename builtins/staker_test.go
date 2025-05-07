@@ -33,7 +33,7 @@ func TestStaker(t *testing.T) {
 	}
 	t.Cleanup(cancel)
 
-	staker := builtins.NewStaker(client, devgenesis.DevAccounts()[0].PrivateKey)
+	staker := builtins.NewStaker(client, hayabusa.ValidatorAccounts[0].PrivateKey)
 
 	if err := staker.WaitForFork(config.ForkBlock); err != nil {
 		t.Fatalf("failed to wait for fork: %v", err)
@@ -42,7 +42,7 @@ func TestStaker(t *testing.T) {
 	// add validators
 	senders := &contracts.Senders{}
 	for i := range mbp {
-		validator := devgenesis.DevAccounts()[i]
+		validator := hayabusa.ValidatorAccounts[i]
 		sender := staker.Attach(validator.PrivateKey).AddValidator(validator.Address, builtins.MinStake, config.MinStakingPeriod, true)
 		senders.Add(sender)
 	}
@@ -105,7 +105,7 @@ func TestStaker(t *testing.T) {
 	var validator devgenesis.DevAccount
 
 	t.Run("AddValidator", func(t *testing.T) {
-		validator = devgenesis.DevAccounts()[mbp+1]
+		validator = hayabusa.ValidatorAccounts[5]
 		receipt, _, err := staker.Attach(validator.PrivateKey).AddValidator(validator.Address, builtins.MinStake, config.MinStakingPeriod, false).Receipt(false)
 		require.NoError(t, err)
 
