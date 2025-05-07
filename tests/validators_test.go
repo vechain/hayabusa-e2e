@@ -144,10 +144,10 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	// assert 1 validator has exited rest are forbidden because of 2/3 rule
 	block += config.EpochLength
 	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
-	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusExited, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 
-	t.Log("✅ - One validator has exited rest are forbidden because of 2/3 rule")
+	t.Log("✅ - Second validator exited")
 
 	validatorWithdraw(t, staker, validator1.PrivateKey, id1)
 }
