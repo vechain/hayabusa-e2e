@@ -21,10 +21,11 @@ import (
 )
 
 var (
-	ValidatorAccounts = mustGenerateAccounts(101)
-	Stargate          = mustGenerateAccounts(1)[0]
-	ParamsStargateKey = nameToBytes32("stargate-contract-address")
-	Executor          = thorgenesis.DevAccounts()[0] // from genesisbuilder default
+	ValidatorAccounts  = mustGenerateAccounts(101)
+	Stargate           = mustGenerateAccounts(1)[0]
+	ParamsStargateKey  = nameToBytes32("stargate-contract-address")
+	Executor           = thorgenesis.DevAccounts()[0] // from genesisbuilder default
+	AdditionalAccounts = mustGenerateAccounts(100)
 )
 
 func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, func(), error) {
@@ -54,13 +55,19 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 
 	nodes := make([]node.Node, config.Nodes)
 	for i := range config.Nodes {
-		generatedNode := &node.BaseNode{
+		node := &node.BaseNode{
 			ID:        "Node-" + strconv.Itoa(i),
 			Key:       common.Bytes2Hex(ValidatorAccounts[i].PrivateKey.D.Bytes()),
 			Genesis:   customGenesis,
 			Verbosity: verbosity,
 		}
-		nodes[i] = generatedNode
+		if i == 0 { // increase logs for 1 node only
+			node.SetAdditionalArgs(map[string]string{
+				"verbosity-staker":         "4",
+				"txpool-limit-per-account": "100000",
+			})
+		}
+		nodes[i] = node
 	}
 	networkCfg := &networkhubNetwork.Network{
 		Environment: "local",
@@ -98,8 +105,11 @@ func authorities() []thorgenesis.Authority {
 func genesisAccounts() []thorgenesis.Account {
 	accounts := make([]thorgenesis.Account, 0)
 
-	tenBillion := big.NewInt(10e9)
-	tenBillion = tenBillion.Mul(tenBillion, big.NewInt(1e18))
+	oneEth := big.NewInt(1e18)
+
+	tenBillion := new(big.Int).Mul(oneEth, big.NewInt(10e9))
+	hundredBillion := new(big.Int).Mul(oneEth, big.NewInt(100e9))
+	oneBillion := new(big.Int).Mul(oneEth, big.NewInt(1e9))
 
 	addAccount := func(account thorgenesis.DevAccount, balance *big.Int) {
 		accounts = append(accounts, thorgenesis.Account{
@@ -115,9 +125,10 @@ func genesisAccounts() []thorgenesis.Account {
 		addAccount(account, tenBillion)
 	}
 	addAccount(Executor, tenBillion)
+	for _, account := range AdditionalAccounts {
+		addAccount(account, oneBillion)
+	}
 
-	hundredBillion := big.NewInt(100e9)
-	hundredBillion = hundredBillion.Mul(hundredBillion, big.NewInt(1e18))
 	addAccount(Stargate, hundredBillion)
 
 	return accounts
