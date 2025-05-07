@@ -255,6 +255,22 @@ func (s *Staker) GetWithdraw(validationID thor.Bytes32) (*big.Int, error) {
 	return out, nil
 }
 
+func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, error) {
+	reward := new(big.Int)
+	if err := s.contract.CallInto("getRewards", &reward, validatorID, period); err != nil {
+		return nil, err
+	}
+	return reward, nil
+}
+
+func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (*uint32, error) {
+	completedPeriods := uint32(0)
+	if err := s.contract.CallInto("getCompletedPeriods", &completedPeriods, validatorID); err != nil {
+		return nil, err
+	}
+	return &completedPeriods, nil
+}
+
 type Delegator struct {
 	Stake      *big.Int
 	Multiplier uint8
