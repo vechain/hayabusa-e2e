@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	common2 "github.com/vechain/draupnir/common"
 	"github.com/vechain/draupnir/contracts"
-	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 )
@@ -38,7 +37,6 @@ type Staker struct {
 	contract *contracts.GenericWrapper
 	client   *thorclient.Client
 	key      *ecdsa.PrivateKey
-	abi      *abi.ABI
 }
 
 func NewStaker(client *thorclient.Client, key *ecdsa.PrivateKey) *Staker {
@@ -253,6 +251,22 @@ func (s *Staker) GetWithdraw(validationID thor.Bytes32) (*big.Int, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, error) {
+	reward := new(big.Int)
+	if err := s.contract.CallInto("getRewards", &reward, validatorID, period); err != nil {
+		return nil, err
+	}
+	return reward, nil
+}
+
+func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (*uint32, error) {
+	completedPeriods := uint32(0)
+	if err := s.contract.CallInto("getCompletedPeriods", &completedPeriods, validatorID); err != nil {
+		return nil, err
+	}
+	return &completedPeriods, nil
 }
 
 type Delegator struct {
