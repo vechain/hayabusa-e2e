@@ -24,7 +24,9 @@ contract Stargate {
     IStaker constant public staker = IStaker(address(0x00000000000000000000000000005374616B6572));
 
     event ClaimedRewards(bytes32 indexed validationID, address indexed delegator, uint256 amount, uint32 firstClaimablePeriod, uint32 lastClaimablePeriod);
+    // debugging events below. Helps understand the flow of the contract
     event WeightsPopulated(bytes32 indexed validationID, uint32 stakingPeriod, uint256 weight);
+    event Claiming(bytes32 indexed delegationID, address indexed delegator, uint256 amount, uint32 firstClaimablePeriod, uint32 lastClaimablePeriod, uint32 previouslyPopulatedPeriod, uint32 maxClaimablePeriod);
 
     // delegator address => delegation ID
     mapping(address => bytes32) public delegationIDs;
@@ -101,72 +103,6 @@ contract Stargate {
         reductions[validationID][validatorCompleted + 1] += weight;
     }
 
-    // Helper function to get delegation info
-    function _getDelegationInfo(bytes32 delegationID) internal view returns (
-        bytes32 validationID,
-        uint256 stake,
-        uint32 startPeriod,
-        uint32 endPeriod,
-        uint8 multiplier,
-        bool autoRenew
-    ) {
-        bool active;
-        (validationID, stake, startPeriod, endPeriod, multiplier, autoRenew, active) = staker.getDelegation(delegationID);
-        return (validationID, stake, startPeriod, endPeriod, multiplier, autoRenew);
-    }
-
-    // Helper function to update weights for a validator
-    function _updateWeights(
-        bytes32 validationID,
-        uint32 previouslyPopulatedPeriod,
-        uint32 maxClaimablePeriod
-    ) internal returns (uint32) {
-        for (uint32 i = previouslyPopulatedPeriod + 1; i <= maxClaimablePeriod; i++) {
-            uint256 previousWeight = weights[validationID][i - 1]; // previous round weight
-            uint256 increase = weights[validationID][i]; // for any new delegators
-            uint256 reduction = reductions[validationID][i]; // for any exited delegators
-            uint256 newWeight = previousWeight + increase - reduction;
-            weights[validationID][i] = newWeight;
-//            emit WeightsPopulated(validationID, i, newWeight);
-        }
-        return maxClaimablePeriod;
-    }
-
-    // Helper function to calculate rewards for a single staking period
-    function _calculatePeriodRewards(
-        bytes32 validationID,
-        uint32 stakingPeriod,
-        uint256 delegatorWeight,
-        uint32 previouslyPopulatedPeriod,
-        uint32 maxClaimablePeriod
-    ) internal returns (uint256) {
-        // get the rewards for this period
-        uint256 allDelegatorsRewards = rewards[validationID][stakingPeriod];
-        if (allDelegatorsRewards == 0) {
-            uint256 blockRewards = staker.getRewards(validationID, stakingPeriod);
-            allDelegatorsRewards = blockRewards * 100 / 70;
-            rewards[validationID][stakingPeriod] = allDelegatorsRewards;
-        }
-
-        uint256 allDelegatorsWeight;
-
-        if (previouslyPopulatedPeriod >= stakingPeriod) {
-            // weights for the staking period have previously been populated
-            allDelegatorsWeight = weights[validationID][stakingPeriod];
-        } else {
-            // need to update weights
-            populatedWeights[validationID] = _updateWeights(
-                validationID,
-                previouslyPopulatedPeriod,
-                maxClaimablePeriod
-            );
-            allDelegatorsWeight = weights[validationID][stakingPeriod];
-        }
-
-        return (allDelegatorsRewards * delegatorWeight) / allDelegatorsWeight;
-    }
-
-    event Claiming(bytes32 indexed delegationID, address indexed delegator, uint256 amount, uint32 firstClaimablePeriod, uint32 lastClaimablePeriod, uint32 previouslyPopulatedPeriod, uint32 maxClaimablePeriod);
 
     function getClaimable(address delegator) public returns (uint256, uint32, uint32) {
         bytes32 delegationID = delegationIDs[delegator];
@@ -230,6 +166,76 @@ contract Stargate {
             );
         }
 
+        // debugging
+        emit Claiming(delegationID, msg.sender, totalRewards, firstClaimablePeriod, maxClaimablePeriod, previouslyPopulatedPeriod, maxClaimablePeriod);
+
         return (totalRewards, firstClaimablePeriod, maxClaimablePeriod);
+    }
+
+
+    // Helper function to get delegation info
+    function _getDelegationInfo(bytes32 delegationID) internal view returns (
+        bytes32 validationID,
+        uint256 stake,
+        uint32 startPeriod,
+        uint32 endPeriod,
+        uint8 multiplier,
+        bool autoRenew
+    ) {
+        bool active;
+        (validationID, stake, startPeriod, endPeriod, multiplier, autoRenew, active) = staker.getDelegation(delegationID);
+        return (validationID, stake, startPeriod, endPeriod, multiplier, autoRenew);
+    }
+
+    // Helper function to update weights for a validator
+    function _updateWeights(
+        bytes32 validationID,
+        uint32 previouslyPopulatedPeriod,
+        uint32 maxClaimablePeriod
+    ) internal returns (uint32) {
+        for (uint32 i = previouslyPopulatedPeriod + 1; i <= maxClaimablePeriod; i++) {
+            uint256 previousWeight = weights[validationID][i - 1]; // previous round weight
+            uint256 increase = weights[validationID][i]; // for any new delegators
+            uint256 reduction = reductions[validationID][i]; // for any exited delegators
+            uint256 newWeight = previousWeight + increase - reduction;
+            weights[validationID][i] = newWeight;
+            // debugging
+            emit WeightsPopulated(validationID, i, newWeight);
+        }
+        return maxClaimablePeriod;
+    }
+
+    // Helper function to calculate rewards for a single staking period
+    function _calculatePeriodRewards(
+        bytes32 validationID,
+        uint32 stakingPeriod,
+        uint256 delegatorWeight,
+        uint32 previouslyPopulatedPeriod,
+        uint32 maxClaimablePeriod
+    ) internal returns (uint256) {
+        // get the rewards for this period
+        uint256 allDelegatorsRewards = rewards[validationID][stakingPeriod];
+        if (allDelegatorsRewards == 0) {
+            uint256 blockRewards = staker.getRewards(validationID, stakingPeriod);
+            allDelegatorsRewards = blockRewards * 100 / 70;
+            rewards[validationID][stakingPeriod] = allDelegatorsRewards;
+        }
+
+        uint256 allDelegatorsWeight;
+
+        if (previouslyPopulatedPeriod >= stakingPeriod) {
+            // weights for the staking period have previously been populated
+            allDelegatorsWeight = weights[validationID][stakingPeriod];
+        } else {
+            // need to update weights
+            populatedWeights[validationID] = _updateWeights(
+                validationID,
+                previouslyPopulatedPeriod,
+                maxClaimablePeriod
+            );
+            allDelegatorsWeight = weights[validationID][stakingPeriod];
+        }
+
+        return (allDelegatorsRewards * delegatorWeight) / allDelegatorsWeight;
     }
 }
