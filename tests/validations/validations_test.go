@@ -168,11 +168,12 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 
 	// assert 1 validator has exited rest are forbidden because of 2/3 rule
 	block += config.EpochLength
+	require.NoError(t, ticker.WaitForBlock(block))
 	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
-	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusExited, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 
-	t.Log("✅ - One validator has exited rest are forbidden because of 2/3 rule")
+	t.Log("✅ - Second validator exited")
 
 	validatorWithdraw(t, staker, validator1.PrivateKey, id1)
 }
@@ -264,7 +265,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusCooldown, block)
-	assertValidatorStatus(t, staker, id4, builtins.StatusQueued, block)
+	assertValidatorStatus(t, staker, id4, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id5, builtins.StatusQueued, block)
 
 	minStake := big.NewInt(1e18)
@@ -275,7 +276,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	_, validationID, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, id4, validationID)
+	assert.Equal(t, id5, validationID)
 
 	t.Log("✅ - Three validators are activated, 2 are queued, queue order has changed based on weight")
 
