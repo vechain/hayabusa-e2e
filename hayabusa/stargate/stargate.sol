@@ -34,17 +34,17 @@ contract Stargate {
     // staking round weights (validation ID => staking period => weight)
     mapping(bytes32 => mapping(uint32 => uint256)) public weights;
 
-    // populate weights (validation ID => staking period)
+    // populate weights (validation ID => staking period). ie. which `weights` have been populated
     mapping(bytes32 => uint32) public populatedWeights;
 
     // staking round reductions (validation ID => staking period => reduction in weight)
     // should be used when delegator auto-renew is false, or when the delegation disables auto-renew
     mapping(bytes32 => mapping(uint32 => uint256)) public reductions;
 
-    // staking round claims (delegation ID => last claimed staking period)
+    // staking round claims (delegation ID => last claimed staking period). prevents double claiming
     mapping(bytes32 => uint32) public claims;
 
-    // staking round rewards (validation ID => staking period => reward)
+    // staking round rewards (validation ID => staking period => reward). rewards per validator per staking period
     mapping(bytes32 => mapping(uint32 => uint256)) public rewards;
 
     function addDelegator(bytes32 validationID, bool autoRenew, uint8 multiplier) public payable {
