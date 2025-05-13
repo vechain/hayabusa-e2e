@@ -208,6 +208,7 @@ func TestStaker(t *testing.T) {
 		require.Equal(t, builtins.MinStake, delegation.Stake)
 		require.Equal(t, uint8(100), delegation.Multiplier)
 		require.Equal(t, false, delegation.AutoRenew)
+		require.Equal(t, queuedID, delegation.ValidationID)
 	})
 
 	t.Run("UpdateDelegationAutoRenew", func(t *testing.T) {
