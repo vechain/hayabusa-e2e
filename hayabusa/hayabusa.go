@@ -42,7 +42,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 	var net *network.CustomNetwork
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
 	if ok {
-		net = network.NewCustomWithRepoAndDownloadPath(repo, workingDir, true)
+		net = network.NewCustomWithRepoAndDownloadPath(repo, workingDir, config.Debug)
 	} else {
 		slog.Warn("THOR_WORKING_DIR not set, using default repo/branch")
 		net = network.NewCustomNetworkWithBranchAndRepo(repo, "release/hayabusa")

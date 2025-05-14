@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"slices"
 	"time"
-	
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/hayabusa-e2e/builtins"
 	"github.com/vechain/networkhub/network/node/genesis"
@@ -26,6 +26,7 @@ type Config struct {
 	HighStakingPeriod uint32       // staker-high-staking-period
 	StargateAddress   thor.Address // Stargate contract address
 	Verbosity         int          // Verbosity level for the nodes
+	Debug             bool         // Debug mode for the nodes
 }
 
 // Apply the configuration to the genesis file.
