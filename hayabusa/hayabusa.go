@@ -42,7 +42,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 	var net *network.CustomNetwork
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
 	if ok {
-		net = network.NewCustomWithRepoAndDownloadPath(repo, workingDir)
+		net = network.NewCustomWithRepoAndDownloadPath(repo, workingDir, true)
 	} else {
 		slog.Warn("THOR_WORKING_DIR not set, using default repo/branch")
 		net = network.NewCustomNetworkWithBranchAndRepo(repo, "release/hayabusa")
@@ -80,7 +80,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 		return nil, nil, nil, fmt.Errorf("failed to start network: %w", err)
 	}
 
-	client := thorclient.New(net.Details().Address)
+	client := thorclient.New(nodes[len(nodes)-1].GetHTTPAddr())
 
 	return client, net, func() {
 		if err := net.Stop(); err != nil {
