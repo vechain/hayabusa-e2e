@@ -80,7 +80,8 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 		return nil, nil, nil, fmt.Errorf("failed to start network: %w", err)
 	}
 
-	client := thorclient.New(nodes[len(nodes)-1].GetHTTPAddr())
+	// verbose logging for node 0, use node 1 for http (simulation etc.). Node amount validated on first line of the function
+	client := thorclient.New(nodes[1].GetHTTPAddr())
 
 	return client, net, func() {
 		if err := net.Stop(); err != nil {
