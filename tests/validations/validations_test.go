@@ -44,7 +44,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	assert.NoError(t, staker.WaitForFork(block))
 	ticker := common.NewTicker(client)
 
-	id1 := addValidator(t, staker, validator1.PrivateKey, validator1.Address, true, config.MinStakingPeriod)
+	id1 := addValidator(t, staker, validator1.PrivateKey, validator1.Address, false, config.MinStakingPeriod)
 
 	firstQueued, _, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -73,7 +73,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 	block += config.MinStakingPeriod
 	periodEnd := block
-	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, false, config.MinStakingPeriod)
+	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, true, config.MinStakingPeriod)
 	validatorIDs = append(validatorIDs, id3)
 	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
