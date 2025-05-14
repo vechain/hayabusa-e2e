@@ -53,7 +53,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 		verbosity = config.Verbosity
 	}
 
-	nodes := make([]node.Node, config.Nodes)
+	nodes := make([]node.Config, config.Nodes)
 	for i := range config.Nodes {
 		additionalArgs := map[string]string{
 			"txpool-limit-per-account": "100000",
@@ -80,7 +80,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 		return nil, nil, nil, fmt.Errorf("failed to start network: %w", err)
 	}
 
-	// verbose logging for node 0, use node 1 for http (simulation etc.). Node amount validated on first line of the function
+	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
 	client := thorclient.New(nodes[1].GetHTTPAddr())
 
 	return client, net, func() {
