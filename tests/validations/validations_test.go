@@ -35,9 +35,9 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	}
 	t.Cleanup(cancel)
 
-	validator1 := hayabusa.ValidatorAccounts[1]
-	validator2 := hayabusa.ValidatorAccounts[2]
-	validator3 := hayabusa.ValidatorAccounts[0]
+	validator1 := hayabusa.ValidatorAccounts[0]
+	validator2 := hayabusa.ValidatorAccounts[1]
+	validator3 := hayabusa.ValidatorAccounts[2]
 
 	block := config.ForkBlock
 	staker := builtins.NewStaker(client, validator1.PrivateKey)
@@ -73,7 +73,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 	block += config.MinStakingPeriod
 	periodEnd := block
-	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, false, config.MinStakingPeriod)
+	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, true, config.MinStakingPeriod)
 	validatorIDs = append(validatorIDs, id3)
 	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)

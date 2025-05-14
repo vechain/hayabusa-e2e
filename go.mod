@@ -6,12 +6,16 @@ replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.202
 
 replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.15-0.20241126085506-c74017ec91b2
 
+// un comment to test local versions
+//replace github.com/vechain/networkhub => ../networkhub
+//replace github.com/vechain/draupnir => ../draupnir
+
 require (
 	github.com/cqroot/prompt v0.9.4
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/stretchr/testify v1.10.0
-	github.com/vechain/draupnir v0.0.0-20250507111644-dd486395e0f8
-	github.com/vechain/networkhub v0.0.5-0.20250506134815-12a7d377efbb
+	github.com/vechain/draupnir v0.0.0-20250514102924-d7abd66a94be
+	github.com/vechain/networkhub v0.0.5-0.20250514101809-535ac98526d0
 	github.com/vechain/thor/v2 v2.2.2-0.20250417102501-6267fbb4e26c
 )
 
