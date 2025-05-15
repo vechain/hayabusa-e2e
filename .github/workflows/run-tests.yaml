@@ -50,7 +50,7 @@ jobs:
       - name: Checkout E2E
         uses: actions/checkout@v4
         with:
-          repository: '${{ github.repository }}'
+          repository: vechain/hayabusa-e2e
           path: hayabusa-e2e
           token: ${{ secrets.GHA_REPO_ACCESS }}
 
