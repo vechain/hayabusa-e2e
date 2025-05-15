@@ -179,6 +179,7 @@ type Validator struct {
 	Weight    *big.Int
 	Status    Status
 	AutoRenew bool
+	Online   bool
 }
 
 func (v *Validator) Exists() bool {
@@ -186,13 +187,14 @@ func (v *Validator) Exists() bool {
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
-	var out = make([]interface{}, 6)
+	var out = [7]interface{}{}
 	out[0] = new(common.Address)
 	out[1] = new(common.Address)
 	out[2] = new(*big.Int)
 	out[3] = new(*big.Int)
 	out[4] = new(uint8)
 	out[5] = new(bool)
+	out[6] = new(bool)
 	if err := s.contract.CallInto("get", &out, id); err != nil {
 		return nil, err
 	}
@@ -203,6 +205,7 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 		Weight:    *(out[3].(**big.Int)),
 		Status:    Status(*(out[4].(*uint8))),
 		AutoRenew: *(out[5].(*bool)),
+		Online:    *(out[6].(*bool)),
 	}
 
 	return validator, nil
