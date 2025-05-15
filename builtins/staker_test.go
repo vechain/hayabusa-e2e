@@ -49,7 +49,7 @@ func TestStaker(t *testing.T) {
 	if _, _, err := senders.Send(false); err != nil {
 		t.Fatal(err)
 	}
-	if err := staker.WaitForPOS(config.ForkBlock + config.TransitionPeriod); err != nil {
+	if err := staker.WaitForPOS(config.ForkBlock + config.TransitionPeriod + 1); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
 	}
 
