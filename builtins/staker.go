@@ -111,6 +111,14 @@ func (s *Staker) Attach(key *ecdsa.PrivateKey) *Staker {
 	}
 }
 
+func (s *Staker) Revision(id thor.Bytes32) *Staker {
+	return &Staker{
+		contract: s.contract.Revision(id),
+		client:   s.client,
+		key:      s.key,
+	}
+}
+
 // FirstActive returns the first active validator
 func (s *Staker) FirstActive() (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
@@ -179,7 +187,7 @@ type Validator struct {
 	Weight    *big.Int
 	Status    Status
 	AutoRenew bool
-	Online   bool
+	Online    bool
 }
 
 func (v *Validator) Exists() bool {

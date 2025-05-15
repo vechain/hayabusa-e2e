@@ -50,6 +50,14 @@ func (e *Energy) Attach(key *ecdsa.PrivateKey) *Energy {
 	}
 }
 
+func (e *Energy) Revision(blockID thor.Bytes32) *Energy {
+	return &Energy{
+		contract: e.contract.Revision(blockID),
+		client:   e.client,
+		key:      e.key,
+	}
+}
+
 // Name returns the name of the token
 func (e *Energy) Name() (string, error) {
 	var name string
@@ -79,38 +87,38 @@ func (e *Energy) Decimals() (uint8, error) {
 
 // TotalSupply returns the total token supply
 func (e *Energy) TotalSupply() (*big.Int, error) {
-	var supply big.Int
-	if err := e.contract.CallInto("totalSupply", &supply); err != nil {
+	out := new(big.Int)
+	if err := e.contract.CallInto("totalSupply", &out); err != nil {
 		return nil, err
 	}
-	return &supply, nil
+	return out, nil
 }
 
 // TotalBurned returns the total amount of burned tokens
 func (e *Energy) TotalBurned() (*big.Int, error) {
-	var burned big.Int
-	if err := e.contract.CallInto("totalBurned", &burned); err != nil {
+	out := new(big.Int)
+	if err := e.contract.CallInto("totalBurned", &out); err != nil {
 		return nil, err
 	}
-	return &burned, nil
+	return out, nil
 }
 
 // BalanceOf returns the token balance of the specified address
 func (e *Energy) BalanceOf(owner thor.Address) (*big.Int, error) {
-	var balance big.Int
-	if err := e.contract.CallInto("balanceOf", &balance, owner); err != nil {
+	out := new(big.Int)
+	if err := e.contract.CallInto("balanceOf", &out, owner); err != nil {
 		return nil, err
 	}
-	return &balance, nil
+	return out, nil
 }
 
 // Allowance returns the amount of tokens approved by the owner to be spent by the spender
 func (e *Energy) Allowance(owner, spender thor.Address) (*big.Int, error) {
-	var remaining big.Int
-	if err := e.contract.CallInto("allowance", &remaining, owner, spender); err != nil {
+	out := new(big.Int)
+	if err := e.contract.CallInto("allowance", &out, owner, spender); err != nil {
 		return nil, err
 	}
-	return &remaining, nil
+	return out, nil
 }
 
 // Transfer transfers tokens to the specified address
