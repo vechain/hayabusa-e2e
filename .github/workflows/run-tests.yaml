@@ -11,11 +11,19 @@ on:
         description: 'Branch to test against'
         required: true
         default: 'release/hayabusa'
+      runs-on:
+        description: 'CodeBuild instance name'
+        required: true
+        default: 'codebuild-Hayabusa-E2E'
   workflow_call:
     inputs:
       hayabusa-branch:
         type: string
         required: false
+      runs-on:
+        type: string
+        required: false
+        default: codebuild-Hayabusa-E2E
 
 permissions:
   contents: read
@@ -23,7 +31,7 @@ permissions:
 jobs:
   run-tests:
     runs-on:
-      - codebuild-Hayabusa-E2E-${{ github.run_id }}-${{ github.run_attempt }}
+      - ${{ inputs.runs-on }}-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-3.0
       - instance-size:large # xlarge=32 vCPUs, 64 GiB memory, large=8 vCPUs, 16 GiB memory
 

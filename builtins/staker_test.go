@@ -20,7 +20,7 @@ func TestStaker(t *testing.T) {
 		Nodes:             6,
 		ForkBlock:         0,
 		MaxBlockProposers: mbp,
-		TransitionPeriod:  2,
+		TransitionPeriod:  4,
 		CooldownPeriod:    2,
 		EpochLength:       2,
 		MinStakingPeriod:  2,
@@ -49,7 +49,7 @@ func TestStaker(t *testing.T) {
 	if _, _, err := senders.Send(false); err != nil {
 		t.Fatal(err)
 	}
-	if err := staker.WaitForPOS(config.ForkBlock + config.TransitionPeriod + 1); err != nil {
+	if err := staker.WaitForPOS(config.ForkBlock + config.TransitionPeriod); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
 	}
 
