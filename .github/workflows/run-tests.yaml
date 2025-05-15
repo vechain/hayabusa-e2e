@@ -47,13 +47,14 @@ jobs:
       GOPRIVATE: github.com/vechain/draupnir/*
 
     steps:
-      - name: Checkout code
+      - name: Checkout E2E
         uses: actions/checkout@v4
         with:
           repository: '${{ github.repository }}'
           path: hayabusa-e2e
+          token: ${{ secrets.GHA_REPO_ACCESS }}
 
-      - name: Checkout code
+      - name: Checkout Hayabusa
         uses: actions/checkout@v4
         with:
           repository: vechain/hayabusa
