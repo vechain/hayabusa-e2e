@@ -83,7 +83,7 @@ func TestEnergy(t *testing.T) {
 	lastPOASupply, err := energy.Revision(poaBlock.ID).TotalSupply()
 	require.NoError(t, err)
 
-	hayabusaGrowth := hayabusa.GetExpectedReward(new(big.Int).Mul(builtins.MinStake, big.NewInt(3)))
+	hayabusaGrowth := hayabusa.GetExpectedReward(new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(validators))))
 
 	firstPoSBlock := poaBlock.Number + 1
 	block = config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod // wait for 1 staking period
