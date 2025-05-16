@@ -20,7 +20,7 @@ func TestStaker(t *testing.T) {
 		Nodes:             6,
 		ForkBlock:         0,
 		MaxBlockProposers: mbp,
-		TransitionPeriod:  2,
+		TransitionPeriod:  4,
 		CooldownPeriod:    2,
 		EpochLength:       2,
 		MinStakingPeriod:  2,
