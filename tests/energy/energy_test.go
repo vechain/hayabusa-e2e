@@ -39,9 +39,10 @@ func TestEnergy(t *testing.T) {
 
 	senders := &contracts.Senders{}
 	validators := 3
+	stake := builtins.MinStake
 	for i := 0; i < validators; i++ {
 		acc := hayabusa.ValidatorAccounts[i]
-		sender := staker.Attach(acc.PrivateKey).AddValidator(acc.Address, builtins.MinStake, config.MinStakingPeriod, true)
+		sender := staker.Attach(acc.PrivateKey).AddValidator(acc.Address, stake, config.MinStakingPeriod, true)
 		senders.Add(sender)
 	}
 	_, receipts, err := senders.Send(false)
@@ -71,6 +72,7 @@ func TestEnergy(t *testing.T) {
 
 	require.NoError(t, staker.WaitForPOS(config.ForkBlock+config.TransitionPeriod))
 
+	// check PoA + transition period growth -> Should use legacy growth rate
 	for i := uint32(1); i < config.ForkBlock+config.TransitionPeriod; i++ {
 		increase := new(big.Int).Mul(growth, big.NewInt(int64(i)))
 		expectedSupply := new(big.Int).Add(genesisVTHO, increase)
@@ -83,12 +85,13 @@ func TestEnergy(t *testing.T) {
 	lastPOASupply, err := energy.Revision(poaBlock.ID).TotalSupply()
 	require.NoError(t, err)
 
-	hayabusaGrowth := hayabusa.GetExpectedReward(new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(validators))))
+	hayabusaGrowth := hayabusa.GetExpectedReward(new(big.Int).Mul(stake, big.NewInt(int64(validators))))
 
 	firstPoSBlock := poaBlock.Number + 1
 	block = config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod // wait for 1 staking period
 	require.NoError(t, common.NewTicker(staker.Client()).WaitForBlock(block))
 
+	// check PoS growth -> Should use Hayabusa growth rate
 	for i := firstPoSBlock; i < block; i++ {
 		blockDiff := i - poaBlock.Number
 		increase := new(big.Int).Mul(hayabusaGrowth, big.NewInt(int64(blockDiff)))
