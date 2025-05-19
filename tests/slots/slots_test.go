@@ -40,9 +40,9 @@ func Test_MissedSlot(t *testing.T) {
 		key, err := crypto.HexToECDSA(hexKey)
 		require.NoError(t, err)
 		address := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
-		receipt, _, err := staker.Attach(key).AddValidator(address, stake,config.MinStakingPeriod, true).Receipt(false)
+		receipt, _, err := staker.Attach(key).AddValidator(address, stake, config.MinStakingPeriod, true).Receipt(false)
 		require.NoError(t, err)
-		return receipt.Outputs[0].Events[0].Topics[1]
+		return receipt.Outputs[0].Events[0].Topics[3]
 	}
 
 	// add 2 min stake validators
@@ -66,10 +66,11 @@ func Test_MissedSlot(t *testing.T) {
 	require.NoError(t, network.Nodes()[validator1.GetID()].Stop())
 
 	missedSlot := false
-	for range 20 {
-		best, err := ticker.Wait(1 * time.Minute)
+	// (16 / 18) ^ 60 = 0.00085% chance of this failing
+	for range 60 {
+		best, err := ticker.Wait(5 * time.Minute)
 		require.NoError(t, err)
-		if best.Timestamp - prev.Timestamp > 15 {
+		if best.Timestamp-prev.Timestamp > 15 {
 			missedSlot = true
 			break
 		}
@@ -86,19 +87,14 @@ func Test_MissedSlot(t *testing.T) {
 	require.NoError(t, network.Nodes()[validator1.GetID()].Start())
 
 	// wait for the validator to be back online
-	prev, err = ticker.Wait(25 * time.Second)
-	require.NoError(t, err)
 	online := false
 	for range 20 {
 		best, err := ticker.Wait(25 * time.Second)
 		require.NoError(t, err)
-		t.Log(best.Signer)
-		t.Log(*validation.Master)
 		if best.Signer == *validation.Master {
 			online = true
 			break
 		}
-		prev = best
 	}
 
 	validation, err = staker.Get(validationID)
