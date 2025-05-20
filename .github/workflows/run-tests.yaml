@@ -16,6 +16,10 @@ on:
       hayabusa-branch:
         type: string
         required: false
+      codebuild-name:
+        type: string
+        required: false
+        default: codebuild-Hayabusa-E2E
 
 permissions:
   contents: read
@@ -23,7 +27,7 @@ permissions:
 jobs:
   run-tests:
     runs-on:
-      - codebuild-Hayabusa-E2E-${{ github.run_id }}-${{ github.run_attempt }}
+      - ${{ inputs.codebuild-name || 'codebuild-Hayabusa-E2E' }}-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-3.0
       - instance-size:large # xlarge=32 vCPUs, 64 GiB memory, large=8 vCPUs, 16 GiB memory
 
@@ -39,13 +43,14 @@ jobs:
       GOPRIVATE: github.com/vechain/draupnir/*
 
     steps:
-      - name: Checkout code
+      - name: Checkout E2E
         uses: actions/checkout@v4
         with:
-          repository: '${{ github.repository }}'
+          repository: vechain/hayabusa-e2e
           path: hayabusa-e2e
+          token: ${{ secrets.GHA_REPO_ACCESS }}
 
-      - name: Checkout code
+      - name: Checkout Hayabusa
         uses: actions/checkout@v4
         with:
           repository: vechain/hayabusa

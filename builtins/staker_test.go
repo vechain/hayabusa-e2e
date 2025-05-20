@@ -20,7 +20,7 @@ func TestStaker(t *testing.T) {
 		Nodes:             6,
 		ForkBlock:         0,
 		MaxBlockProposers: mbp,
-		TransitionPeriod:  2,
+		TransitionPeriod:  4,
 		CooldownPeriod:    2,
 		EpochLength:       2,
 		MinStakingPeriod:  2,
@@ -71,7 +71,7 @@ func TestStaker(t *testing.T) {
 		require.Equal(t, builtins.StatusActive, validator.Status)
 		require.True(t, firstActive.AutoRenew)
 		require.Equal(t, validator.Stake, builtins.MinStake)
-		require.Equal(t, validator.Weight, builtins.MinStake)
+		require.Equal(t, validator.Weight, big.NewInt(0).Mul(builtins.MinStake, big.NewInt(2)))
 	})
 
 	t.Run("FirstActive", func(t *testing.T) {
@@ -79,7 +79,7 @@ func TestStaker(t *testing.T) {
 		require.True(t, firstActive.Exists())
 		require.True(t, firstActive.AutoRenew)
 		require.Equal(t, builtins.MinStake, firstActive.Stake)
-		require.Equal(t, builtins.MinStake, firstActive.Weight)
+		require.Equal(t, big.NewInt(0).Mul(builtins.MinStake, big.NewInt(2)), firstActive.Weight)
 		require.Equal(t, builtins.StatusActive, firstActive.Status)
 		require.False(t, firstActive.Endorsor.IsZero())
 
@@ -96,7 +96,7 @@ func TestStaker(t *testing.T) {
 		require.True(t, next.Exists())
 		require.Equal(t, builtins.StatusActive, next.Status)
 		require.Equal(t, builtins.MinStake, next.Stake)
-		require.Equal(t, builtins.MinStake, next.Weight)
+		require.Equal(t, big.NewInt(0).Mul(builtins.MinStake, big.NewInt(2)), next.Weight)
 		require.True(t, next.AutoRenew)
 		require.False(t, next.Endorsor.IsZero())
 	})
@@ -208,6 +208,7 @@ func TestStaker(t *testing.T) {
 		require.Equal(t, builtins.MinStake, delegation.Stake)
 		require.Equal(t, uint8(100), delegation.Multiplier)
 		require.Equal(t, false, delegation.AutoRenew)
+		require.Equal(t, queuedID, delegation.ValidationID)
 	})
 
 	t.Run("UpdateDelegationAutoRenew", func(t *testing.T) {

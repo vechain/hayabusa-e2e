@@ -32,3 +32,6 @@ network/node-*-data/
 package-lock.json
 yarn.lock
 vendor
+debug
+tests/stargate
+hayabusa/stargate

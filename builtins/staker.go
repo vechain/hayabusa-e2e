@@ -179,6 +179,7 @@ type Validator struct {
 	Weight    *big.Int
 	Status    Status
 	AutoRenew bool
+	Online   bool
 }
 
 func (v *Validator) Exists() bool {
@@ -186,13 +187,14 @@ func (v *Validator) Exists() bool {
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
-	var out = make([]interface{}, 6)
+	var out = [7]interface{}{}
 	out[0] = new(common.Address)
 	out[1] = new(common.Address)
 	out[2] = new(*big.Int)
 	out[3] = new(*big.Int)
 	out[4] = new(uint8)
 	out[5] = new(bool)
+	out[6] = new(bool)
 	if err := s.contract.CallInto("get", &out, id); err != nil {
 		return nil, err
 	}
@@ -203,6 +205,7 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 		Weight:    *(out[3].(**big.Int)),
 		Status:    Status(*(out[4].(*uint8))),
 		AutoRenew: *(out[5].(*bool)),
+		Online:    *(out[6].(*bool)),
 	}
 
 	return validator, nil
@@ -269,27 +272,36 @@ func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (*uint32, error) 
 	return &completedPeriods, nil
 }
 
-type Delegator struct {
-	Stake      *big.Int
-	Multiplier uint8
-	AutoRenew  bool
-	Locked     bool
+type Delegation struct {
+	ValidationID thor.Bytes32
+	Stake        *big.Int
+	StartPeriod  uint32
+	EndPeriod    uint32
+	Multiplier   uint8
+	AutoRenew    bool
+	Locked       bool
 }
 
-func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegator, error) {
-	var out = make([]interface{}, 4)
-	out[0] = new(*big.Int)
-	out[1] = new(uint8)
-	out[2] = new(bool)
-	out[3] = new(bool)
+func (s *Staker) GetDelegation(delegationID thor.Bytes32) (*Delegation, error) {
+	var out = make([]interface{}, 7)
+	out[0] = new(common.Hash)
+	out[1] = new(*big.Int)
+	out[2] = new(uint32)
+	out[3] = new(uint32)
+	out[4] = new(uint8)
+	out[5] = new(bool)
+	out[6] = new(bool)
 	if err := s.contract.CallInto("getDelegation", &out, delegationID); err != nil {
 		return nil, err
 	}
-	delegatorInfo := &Delegator{
-		Stake:      *(out[0].(**big.Int)),
-		Multiplier: *(out[1].(*uint8)),
-		AutoRenew:  *(out[2].(*bool)),
-		Locked:     *(out[3].(*bool)),
+	delegatorInfo := &Delegation{
+		ValidationID: thor.Bytes32(out[0].(*common.Hash)[:]),
+		Stake:        *(out[1].(**big.Int)),
+		StartPeriod:  *(out[2].(*uint32)),
+		EndPeriod:    *(out[3].(*uint32)),
+		Multiplier:   *(out[4].(*uint8)),
+		AutoRenew:    *(out[5].(*bool)),
+		Locked:       *(out[6].(*bool)),
 	}
 
 	return delegatorInfo, nil
