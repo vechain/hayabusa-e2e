@@ -38,6 +38,7 @@ jobs:
           - tests/validations
           - tests/delegations
           - tests/slots
+          - tests/stargate
       fail-fast: false
 
     env:
