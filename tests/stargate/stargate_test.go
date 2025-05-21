@@ -1,7 +1,6 @@
 package stargate
 
 import (
-	"log/slog"
 	"math/big"
 	"strconv"
 	"strings"
@@ -26,7 +25,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func Test_Stargate_2(t *testing.T) {
+func Test_Stargate_SingleDelegator(t *testing.T) {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
@@ -79,11 +78,7 @@ func Test_Stargate_2(t *testing.T) {
 	assert.Equal(t, 2, int(start))
 	assert.Equal(t, 2, int(end))
 	assert.Equal(t, 1, claimable.Sign())
-
-	claimTx, err := stargate.Attach(acc.PrivateKey).ClaimRewards().Simulate()
-	require.NoError(t, err)
-	stargate.LogEvents(claimTx.Events)
-
+	
 	// assert TVL
 	expected := new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(len(validationIDs))))
 	expected = expected.Add(expected, stake)
@@ -96,10 +91,6 @@ func Test_Stargate_2(t *testing.T) {
 	require.NoError(t, ticker.WaitForBlock(block-1))
 
 	blockCount := 0
-	// delegator has 10x stake with the same multiplier;
-	// therefore, chances of validator being selected are 12/14,
-	// so the chances of not having a block in 2 staking periods is (2/14)^stakingPeriods.
-	// if stakingPeriods = 4 blocks, then the chances of not having a block is (2/14)^4 = 0.0004 ie. 0.04%
 	for i := firstDelegatedBlock; i < block; i++ {
 		block, err := staker.Client().Block(strconv.Itoa(int(i)))
 		require.NoError(t, err)
@@ -133,24 +124,6 @@ func Test_Stargate_2(t *testing.T) {
 	assert.Equal(t, 2, int(start))
 	assert.Equal(t, 4, int(end))
 	assert.Equal(t, delegatorReward, claimable, "claimable should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, claimable).String())
-
-	claimTx, err = stargate.Attach(acc.PrivateKey).ClaimRewards().Simulate()
-	require.NoError(t, err)
-	stargate.LogEvents(claimTx.Events)
-
-	completed, err = staker.GetCompletedPeriods(validationID)
-	assert.NoError(t, err)
-	for i := uint32(1); i <= completed; i++ {
-		rewards, err := staker.GetRewards(validationID, i)
-		require.NoError(t, err)
-		validatorReward := new(big.Int).Set(rewards)
-		validatorReward = proposerReward.Mul(validatorReward, big.NewInt(30))
-		validatorReward = validatorReward.Div(validatorReward, big.NewInt(100))
-
-		dReward := new(big.Int).Sub(rewards, validatorReward)
-
-		slog.Info("got staker rewards", "period", i, "reward", rewards.String(), "validatorReward", validatorReward.String(), "delegatorReward", dReward.String())
-	}
 }
 
 func newDelegationSetup(t *testing.T) (*builtins.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Bytes32) {

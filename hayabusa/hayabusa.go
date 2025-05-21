@@ -60,10 +60,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 			"api-allowed-tracers":      "all",
 		}
 		if i == 0 { // enable verbose staker logs for 1 node
-			additionalArgs["verbosity-staker"] = "1"
-		}
-		if i > 0 {
-			verbosity = 1
+			additionalArgs["verbosity-staker"] = "4"
 		}
 		nodes[i] = &node.BaseNode{
 			ID:             "Node-" + strconv.Itoa(i),
