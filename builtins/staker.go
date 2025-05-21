@@ -179,7 +179,7 @@ type Validator struct {
 	Weight    *big.Int
 	Status    Status
 	AutoRenew bool
-	Online   bool
+	Online    bool
 }
 
 func (v *Validator) Exists() bool {
@@ -264,12 +264,12 @@ func (s *Staker) GetRewards(validatorID thor.Bytes32, period uint32) (*big.Int, 
 	return reward, nil
 }
 
-func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (*uint32, error) {
+func (s *Staker) GetCompletedPeriods(validatorID thor.Bytes32) (uint32, error) {
 	completedPeriods := uint32(0)
 	if err := s.contract.CallInto("getCompletedPeriods", &completedPeriods, validatorID); err != nil {
-		return nil, err
+		return 0, err
 	}
-	return &completedPeriods, nil
+	return completedPeriods, nil
 }
 
 type Delegation struct {

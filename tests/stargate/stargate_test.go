@@ -3,11 +3,12 @@ package stargate
 import (
 	"log/slog"
 	"math/big"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-	
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
@@ -25,106 +26,145 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func Test_Stargate(t *testing.T) {
-	// Setup
-	_, stargate, _, validationIDs := newDelegationSetup(t)
+func Test_Stargate_2(t *testing.T) {
+	staker, stargate, config, validationIDs := newDelegationSetup(t)
 
-	account := hayabusa.Stargate
-	stargate = stargate.Attach(account.PrivateKey)
-
-	stake := new(big.Int).Mul(builtins.MinStake, big.NewInt(10))
-	receipt, _, err := stargate.AddDelegator(validationIDs[0], true, 250, stake).Receipt(true)
+	validationID := validationIDs[0]
+	ticker := common.NewTicker(staker.Client())
+	validation, err := staker.Get(validationID)
 	require.NoError(t, err)
-	assert.False(t, receipt.Reverted)
 
-	block := receipt.Meta.BlockNumber + 8
-	assert.NoError(t, common.NewTicker(stargate.Client()).WaitForBlock(block))
+	// wait for the validator to complete 1 staking period
+	block := config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod
+	require.NoError(t, ticker.WaitForBlock(block))
+	completed, err := staker.GetCompletedPeriods(validationID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, int(completed))
+
+	// add the delegation
+	acc := hayabusa.AdditionalAccounts[0]
+	stake := new(big.Int).Mul(builtins.MinStake, big.NewInt(10)) // very large stake
+	receipt, _, err := stargate.Attach(acc.PrivateKey).AddDelegator(validationID, true, 200, stake).Receipt(false)
+	require.NoError(t, err)
+	delegationID := receiptToDelegationID(receipt)
+
+	// assert correct start period
+	completed, err = staker.GetCompletedPeriods(validationID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, int(completed))
+	delegation, err := staker.GetDelegation(delegationID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, int(delegation.StartPeriod))
+
+	// assert no claimable periods
+	claimable, start, end, err := stargate.GetClaimable(acc.Address)
+	require.NoError(t, err)
+	assert.Equal(t, 0, claimable.Sign())
+	// start is after end, so no claimable periods
+	assert.Equal(t, 2, int(start))
+	assert.Equal(t, 1, int(end))
+
+	// wait for 1 staking period
+	block += config.MinStakingPeriod
+	require.NoError(t, ticker.WaitForBlock(block))
+
+	// assert validator completed 1 more period
+	completed, err = staker.GetCompletedPeriods(validationID)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, int(completed))
+
+	// assert delegator can claim for that period
+	claimable, start, end, err = stargate.GetClaimable(acc.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, int(start))
+	assert.Equal(t, 2, int(end))
+	assert.Equal(t, 1, claimable.Sign())
+
+	claimTx, err := stargate.Attach(acc.PrivateKey).ClaimRewards().Simulate()
+	require.NoError(t, err)
+	stargate.LogEvents(claimTx.Events)
+
+	// assert TVL
+	expected := new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(len(validationIDs))))
+	expected = expected.Add(expected, stake)
+	lockedVET, err := staker.TotalStake()
+	require.NoError(t, err)
+	assert.Equal(t, expected, lockedVET)
+
+	firstDelegatedBlock := block
+	block += 2 * config.MinStakingPeriod
+	require.NoError(t, ticker.WaitForBlock(block-1))
+
+	blockCount := 0
+	// delegator has 10x stake with the same multiplier;
+	// therefore, chances of validator being selected are 12/14,
+	// so the chances of not having a block in 2 staking periods is (2/14)^stakingPeriods.
+	// if stakingPeriods = 4 blocks, then the chances of not having a block is (2/14)^4 = 0.0004 ie. 0.04%
+	for i := firstDelegatedBlock; i < block; i++ {
+		block, err := staker.Client().Block(strconv.Itoa(int(i)))
+		require.NoError(t, err)
+		if block.Signer == *validation.Master {
+			blockCount++
+		}
+	}
+	blockReward := hayabusa.GetExpectedReward(lockedVET)
+
+	proposerReward := new(big.Int).Set(blockReward)
+	proposerReward = proposerReward.Mul(proposerReward, big.NewInt(30))
+	proposerReward = proposerReward.Div(proposerReward, big.NewInt(100))
+
+	delegatorReward := new(big.Int).Sub(blockReward, proposerReward)
+	delegatorReward = delegatorReward.Mul(delegatorReward, big.NewInt(int64(blockCount)))
 
 	stargateAddr := stargate.Address()
-	energy, err := stargate.Client().Account(&stargateAddr)
+	stargateAcc, err := staker.Client().Account(&stargateAddr)
 	require.NoError(t, err)
-	bal := (big.Int)(energy.Energy)
-	t.Logf("stargate energy: %s", (&bal).String())
+	stargateEnergy := (*big.Int)(&stargateAcc.Energy)
+	assert.Equal(t, delegatorReward, stargateEnergy, "stargate energy should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, stargateEnergy).String())
 
-	claimable, startPeriod, endPeriod, err := stargate.GetClaimable(account.Address)
-	require.NoError(t, err)
-	diff := new(big.Int).Sub(&bal, claimable)
-	t.Logf("claimable: %s, startPeriod: %d, endPeriod: %d, diff: %s", claimable.String(), startPeriod, endPeriod, diff.String())
-
-	receipt, _, err = stargate.ClaimRewards().Receipt(true)
+	// wait for housekeeping on first block of next staking period
+	require.NoError(t, ticker.WaitForBlock(block))
+	completed, err = staker.GetCompletedPeriods(validationID)
 	assert.NoError(t, err)
-	assert.False(t, receipt.Reverted)
+	assert.Equal(t, 4, int(completed))
 
-	populated, err := stargate.FilterWeightsPopulated(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
-	require.NoError(t, err)
-	for _, event := range populated {
-		slog.Info("got weight populated event", "validationID", event.ValidationID.String(), "weight", event.Weight.String(), "period", event.StakingPeriod)
-	}
-
-	claiming, err := stargate.FilterClaiming(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
-	require.NoError(t, err)
-	for _, event := range claiming {
-		slog.Info("got claiming event", "delegationID", event.DelegationID.String(), "delegator", event.Delegator.String(), "amount", event.Amount.String(), "firstClaimablePeriod", event.FirstClaimablePeriod, "lastClaimablePeriod", event.LastClaimablePeriod, "previouslyPopulatedPeriod", event.PreviouslyPopulatedPeriod, "maxClaimablePeriod", event.MaxClaimablePeriod)
-	}
-
-	claims, err := stargate.FilterClaimedRewards(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
-	require.NoError(t, err)
-	for _, event := range claims {
-		slog.Info("got claimed rewards event", "delegator", event.Delegator.String(), "amount", event.Amount.String(), "first", event.FirstClaimablePeriod, "last", event.LastClaimablePeriod, "validationID", event.ValidationID.String())
-	}
-
-	t.Logf("✅ - performed first claim")
-
-	assert.NoError(t, common.NewTicker(stargate.Client()).WaitForBlock(receipt.Meta.BlockNumber+2))
-
-	claimable, startPeriod, endPeriod, err = stargate.GetClaimable(account.Address)
-	require.NoError(t, err)
-	diff = new(big.Int).Sub(&bal, claimable)
-	t.Logf("claimable: %s, startPeriod: %d, endPeriod: %d, diff: %s", claimable.String(), startPeriod, endPeriod, diff.String())
-
-	receipt, _, err = stargate.ClaimRewards().Receipt(true)
+	claimable, start, end, err = stargate.GetClaimable(acc.Address)
 	assert.NoError(t, err)
-	assert.False(t, receipt.Reverted)
+	assert.Equal(t, 2, int(start))
+	assert.Equal(t, 4, int(end))
+	assert.Equal(t, delegatorReward, claimable, "claimable should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, claimable).String())
 
-	energy, err = stargate.Client().Account(&stargateAddr)
+	claimTx, err = stargate.Attach(acc.PrivateKey).ClaimRewards().Simulate()
 	require.NoError(t, err)
-	bal = (big.Int)(energy.Energy)
-	t.Logf("stargate energy: %s", (&bal).String())
+	stargate.LogEvents(claimTx.Events)
 
-	populated, err = stargate.FilterWeightsPopulated(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
-	require.NoError(t, err)
-	for _, event := range populated {
-		slog.Info("got weight populated event", "validationID", event.ValidationID.String(), "weight", event.Weight.String(), "period", event.StakingPeriod)
+	completed, err = staker.GetCompletedPeriods(validationID)
+	assert.NoError(t, err)
+	for i := uint32(1); i <= completed; i++ {
+		rewards, err := staker.GetRewards(validationID, i)
+		require.NoError(t, err)
+		validatorReward := new(big.Int).Set(rewards)
+		validatorReward = proposerReward.Mul(validatorReward, big.NewInt(30))
+		validatorReward = validatorReward.Div(validatorReward, big.NewInt(100))
+
+		dReward := new(big.Int).Sub(rewards, validatorReward)
+
+		slog.Info("got staker rewards", "period", i, "reward", rewards.String(), "validatorReward", validatorReward.String(), "delegatorReward", dReward.String())
 	}
-
-	claiming, err = stargate.FilterClaiming(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
-	require.NoError(t, err)
-	for _, event := range claiming {
-		slog.Info("got claiming event", "delegationID", event.DelegationID.String(), "delegator", event.Delegator.String(), "amount", event.Amount.String(), "firstClaimablePeriod", event.FirstClaimablePeriod, "lastClaimablePeriod", event.LastClaimablePeriod, "previouslyPopulatedPeriod", event.PreviouslyPopulatedPeriod, "maxClaimablePeriod", event.MaxClaimablePeriod)
-	}
-
-	claims, err = stargate.FilterClaimedRewards(receipt.Meta.BlockNumber, receipt.Meta.BlockNumber)
-	require.NoError(t, err)
-	for _, event := range claims {
-		slog.Info("got claimed rewards event", "delegator", event.Delegator.String(), "amount", event.Amount.String(), "first", event.FirstClaimablePeriod, "last", event.LastClaimablePeriod, "validationID", event.ValidationID.String())
-	}
-
-	t.Logf("✅ - performed secod claim")
 }
 
-func newDelegationSetup(t *testing.T) (*builtins.Staker, *stargate.Stargate, *hayabusa.Config, [6]thor.Bytes32) {
+func newDelegationSetup(t *testing.T) (*builtins.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Bytes32) {
 	t.Helper()
 	config := &hayabusa.Config{
-		Nodes:             6,
-		MaxBlockProposers: 6,
+		Nodes:             3,
+		MaxBlockProposers: 3,
 		ForkBlock:         0,
-		TransitionPeriod:  4,
-		EpochLength:       2,
-		CooldownPeriod:    2,
-		MinStakingPeriod:  2,
+		TransitionPeriod:  8,
+		EpochLength:       4,
+		CooldownPeriod:    4,
+		MinStakingPeriod:  4,
 		MidStakingPeriod:  12,
-		HighStakingPeriod: 259200,
-		Verbosity:         1,
+		HighStakingPeriod: 24,
 	}
 	client, _, cancel, err := hayabusa.StartNetwork(config)
 	if err != nil {
@@ -147,7 +187,7 @@ func newDelegationSetup(t *testing.T) (*builtins.Staker, *stargate.Stargate, *ha
 		t.Fatalf("failed to wait for fork: %v", err)
 	}
 
-	validationIDs := [6]thor.Bytes32{}
+	validationIDs := [3]thor.Bytes32{}
 	senders := &contracts.Senders{}
 
 	for i := range validationIDs {
@@ -156,18 +196,15 @@ func newDelegationSetup(t *testing.T) (*builtins.Staker, *stargate.Stargate, *ha
 		senders.Add(sender)
 	}
 
-	if _, _, err := senders.Send(false); err != nil {
+	if _, receipts, err := senders.Send(false); err != nil {
 		t.Fatal(err)
+	} else {
+		for i := range config.MaxBlockProposers {
+			validationIDs[i] = receiptToID(receipts[i])
+		}
 	}
 	if err := staker.WaitForPOS(config.ForkBlock + config.TransitionPeriod); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
-	}
-	events, err := staker.FilterValidatorQueued(0, 1000)
-	if err != nil {
-		t.Fatalf("failed to filter validator queued: %v", err)
-	}
-	for i, event := range events {
-		validationIDs[i] = event.ValidationID
 	}
 
 	wg.Wait()
@@ -244,6 +281,9 @@ func setStargate(t *testing.T, staker *builtins.Staker) *stargate.Stargate {
 }
 
 func receiptToID(receipt *transactions.Receipt) thor.Bytes32 {
-	// 0 is the event, 1 is the validation ID
+	return receipt.Outputs[0].Events[0].Topics[3]
+}
+
+func receiptToDelegationID(receipt *transactions.Receipt) thor.Bytes32 {
 	return receipt.Outputs[0].Events[0].Topics[2]
 }

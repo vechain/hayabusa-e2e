@@ -8,7 +8,7 @@ replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.1
 
 // uncomment to test local versions
 //replace github.com/vechain/networkhub => ../networkhub
-//replace github.com/vechain/draupnir => ../draupnir
+replace github.com/vechain/draupnir => ../draupnir
 
 require (
 	github.com/cqroot/prompt v0.9.4

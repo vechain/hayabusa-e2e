@@ -1,10 +1,14 @@
 package stargate
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"math/big"
+
+	"github.com/vechain/thor/v2/api/transactions"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -84,6 +88,10 @@ func (s *Stargate) GetClaimable(delegator thor.Address) (*big.Int, uint32, uint3
 	out[0] = new(*big.Int)
 	out[1] = new(uint32)
 	out[2] = new(uint32)
+
+	if err := s.contract.CallInto("getClaimable", &out, delegator); err != nil {
+		return nil, 0, 0, err
+	}
 
 	if err := s.contract.CallInto("getClaimable", &out, delegator); err != nil {
 		return nil, 0, 0, err
@@ -223,41 +231,41 @@ func (s *Stargate) FilterClaimedRewards(from, to uint32) ([]ClaimedRewardsEvent,
 	return out, nil
 }
 
-// ClaimingEvent represents a Claiming event
-type ClaimingEvent struct {
+// Rename ClaimingEvent to ClaimParamsEvent and update fields
+type ClaimParamsEvent struct {
 	DelegationID              thor.Bytes32
 	Delegator                 thor.Address
-	Amount                    *big.Int
 	FirstClaimablePeriod      uint32
 	LastClaimablePeriod       uint32
 	PreviouslyPopulatedPeriod uint32
 	MaxClaimablePeriod        uint32
+	DelegatorWeight           *big.Int
 }
 
-// FilterClaiming filters Claiming events
-func (s *Stargate) FilterClaiming(from, to uint32) ([]ClaimingEvent, error) {
-	event, ok := s.contract.ABI().Events["Claiming"]
+// Rename FilterClaiming to FilterClaimParams
+func (s *Stargate) FilterClaimParams(from, to uint32) ([]ClaimParamsEvent, error) {
+	event, ok := s.contract.ABI().Events["ClaimParams"]
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("Claiming", from, to)
+	raw, err := s.contract.FilterEvents("ClaimParams", from, to)
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]ClaimingEvent, len(raw))
+	out := make([]ClaimParamsEvent, len(raw))
 	for i, log := range raw {
-		delegationID := thor.Bytes32(log.Topics[1][:])     // indexed
-		delegator := thor.BytesToAddress(log.Topics[2][:]) // indexed
+		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
 
 		// non-indexed
-		data := make([]interface{}, 5)
-		data[0] = new(*big.Int)
+		data := make([]interface{}, 6)
+		data[0] = new(common.Address)
 		data[1] = new(uint32)
 		data[2] = new(uint32)
 		data[3] = new(uint32)
 		data[4] = new(uint32)
+		data[5] = new(*big.Int)
 
 		bytes, err := hexutil.Decode(log.Data)
 		if err != nil {
@@ -268,28 +276,78 @@ func (s *Stargate) FilterClaiming(from, to uint32) ([]ClaimingEvent, error) {
 			return nil, err
 		}
 
-		out[i] = ClaimingEvent{
+		out[i] = ClaimParamsEvent{
 			DelegationID:              delegationID,
-			Delegator:                 delegator,
-			Amount:                    *(data[0].(**big.Int)),
+			Delegator:                 (thor.Address)(*(data[0].(*common.Address))),
 			FirstClaimablePeriod:      *(data[1].(*uint32)),
 			LastClaimablePeriod:       *(data[2].(*uint32)),
 			PreviouslyPopulatedPeriod: *(data[3].(*uint32)),
 			MaxClaimablePeriod:        *(data[4].(*uint32)),
+			DelegatorWeight:           *(data[5].(**big.Int)),
 		}
 	}
 
 	return out, nil
 }
 
-// WeightsPopulatedEvent represents a WeightsPopulated event
-type WeightsPopulatedEvent struct {
-	ValidationID  thor.Bytes32
-	StakingPeriod uint32
-	Weight        *big.Int
+// ClaimOutputsEvent represents a ClaimOutputs event
+type ClaimOutputsEvent struct {
+	DelegationID thor.Bytes32
+	Delegator    thor.Address
+	TotalRewards *big.Int
 }
 
-// FilterWeightsPopulated filters WeightsPopulated events
+// FilterClaimOutputs filters ClaimOutputs events
+func (s *Stargate) FilterClaimOutputs(from, to uint32) ([]ClaimOutputsEvent, error) {
+	event, ok := s.contract.ABI().Events["ClaimOutputs"]
+	if !ok {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	raw, err := s.contract.FilterEvents("ClaimOutputs", from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]ClaimOutputsEvent, len(raw))
+	for i, log := range raw {
+		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
+
+		// non-indexed
+		data := make([]interface{}, 2)
+		data[0] = new(common.Address)
+		data[1] = new(*big.Int)
+
+		bytes, err := hexutil.Decode(log.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+			return nil, err
+		}
+
+		out[i] = ClaimOutputsEvent{
+			DelegationID: delegationID,
+			Delegator:    (thor.Address)(*(data[0].(*common.Address))),
+			TotalRewards: *(data[1].(**big.Int)),
+		}
+	}
+
+	return out, nil
+}
+
+// Update WeightsPopulatedEvent to match ABI
+type WeightsPopulatedEvent struct {
+	ValidationID   thor.Bytes32
+	StakingPeriod  uint32
+	PreviousWeight *big.Int
+	Increase       *big.Int
+	Reduction      *big.Int
+	NewWeight      *big.Int
+}
+
+// Update FilterWeightsPopulated to match ABI
 func (s *Stargate) FilterWeightsPopulated(from, to uint32) ([]WeightsPopulatedEvent, error) {
 	event, ok := s.contract.ABI().Events["WeightsPopulated"]
 	if !ok {
@@ -306,9 +364,12 @@ func (s *Stargate) FilterWeightsPopulated(from, to uint32) ([]WeightsPopulatedEv
 		validationID := thor.Bytes32(log.Topics[1][:]) // indexed
 
 		// non-indexed
-		data := make([]interface{}, 2)
+		data := make([]interface{}, 5)
 		data[0] = new(uint32)
 		data[1] = new(*big.Int)
+		data[2] = new(*big.Int)
+		data[3] = new(*big.Int)
+		data[4] = new(*big.Int)
 
 		bytes, err := hexutil.Decode(log.Data)
 		if err != nil {
@@ -320,11 +381,303 @@ func (s *Stargate) FilterWeightsPopulated(from, to uint32) ([]WeightsPopulatedEv
 		}
 
 		out[i] = WeightsPopulatedEvent{
-			ValidationID:  validationID,
-			StakingPeriod: *(data[0].(*uint32)),
-			Weight:        *(data[1].(**big.Int)),
+			ValidationID:   validationID,
+			StakingPeriod:  *(data[0].(*uint32)),
+			PreviousWeight: *(data[1].(**big.Int)),
+			Increase:       *(data[2].(**big.Int)),
+			Reduction:      *(data[3].(**big.Int)),
+			NewWeight:      *(data[4].(**big.Int)),
 		}
 	}
 
 	return out, nil
+}
+
+type RewardsPopulatedEvent struct {
+	ValidationID         thor.Bytes32
+	StakingPeriod        uint32
+	BlockRewards         *big.Int
+	AllDelegatorsRewards *big.Int
+	ProposerRewards      *big.Int
+}
+
+// FilterRewardsPopulated filters RewardsPopulated events
+func (s *Stargate) FilterRewardsPopulated(from, to uint32) ([]RewardsPopulatedEvent, error) {
+	event, ok := s.contract.ABI().Events["RewardsPopulated"]
+	if !ok {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	raw, err := s.contract.FilterEvents("RewardsPopulated", from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]RewardsPopulatedEvent, len(raw))
+	for i, log := range raw {
+		validationID := thor.Bytes32(log.Topics[1][:]) // indexed
+
+		// non-indexed
+		data := make([]interface{}, 4)
+		data[0] = new(uint32)
+		data[1] = new(*big.Int)
+		data[2] = new(*big.Int)
+		data[3] = new(*big.Int)
+
+		bytes, err := hexutil.Decode(log.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+			return nil, err
+		}
+
+		out[i] = RewardsPopulatedEvent{
+			ValidationID:         validationID,
+			StakingPeriod:        *(data[0].(*uint32)),
+			BlockRewards:         *(data[1].(**big.Int)),
+			AllDelegatorsRewards: *(data[2].(**big.Int)),
+			ProposerRewards:      *(data[3].(**big.Int)),
+		}
+	}
+
+	return out, nil
+}
+
+type RewardsCalculatedEvent struct {
+	ValidationID         thor.Bytes32
+	StakingPeriod        uint32
+	Rewards              *big.Int
+	AllDelegatorsWeight  *big.Int
+	AllDelegatorsRewards *big.Int
+}
+
+// FilterRewardsCalculated filters RewardsCalculated events
+func (s *Stargate) FilterRewardsCalculated(from, to uint32) ([]RewardsCalculatedEvent, error) {
+	event, ok := s.contract.ABI().Events["RewardsCalculated"]
+	if !ok {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	raw, err := s.contract.FilterEvents("RewardsCalculated", from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]RewardsCalculatedEvent, len(raw))
+	for i, log := range raw {
+		validationID := thor.Bytes32(log.Topics[1][:]) // indexed
+
+		// non-indexed
+		data := make([]interface{}, 4)
+		data[0] = new(uint32)
+		data[1] = new(*big.Int)
+		data[2] = new(*big.Int)
+		data[3] = new(*big.Int)
+
+		bytes, err := hexutil.Decode(log.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := event.Inputs.Unpack(&data, bytes); err != nil {
+			return nil, err
+		}
+
+		out[i] = RewardsCalculatedEvent{
+			ValidationID:         validationID,
+			StakingPeriod:        *(data[0].(*uint32)),
+			Rewards:              *(data[1].(**big.Int)),
+			AllDelegatorsWeight:  *(data[2].(**big.Int)),
+			AllDelegatorsRewards: *(data[3].(**big.Int)),
+		}
+	}
+
+	return out, nil
+}
+
+func (s *Stargate) LogEvents(events []*transactions.Event) {
+	for _, ev := range events {
+		for name, abi := range s.contract.ABI().Events {
+			if bytes.Equal(ev.Topics[0].Bytes(), abi.Id().Bytes()) {
+				slog.Info("found event", "name", name)
+
+				if name == "ClaimedRewards" {
+					//validationID := thor.Bytes32(ev.Topics[1][:])     // indexed
+					//delegator := thor.BytesToAddress(ev.Topics[2][:]) // indexed
+
+					// non-indexed
+					data := make([]interface{}, 3)
+					data[0] = new(*big.Int)
+					data[1] = new(uint32)
+					data[2] = new(uint32)
+
+					bytes, err := hexutil.Decode(ev.Data)
+					if err != nil {
+						slog.Error("failed to decode event data", "error", err)
+						continue
+					}
+					if err := abi.Inputs.Unpack(&data, bytes); err != nil {
+						slog.Error("failed to unpack event data", "error", err)
+						continue
+					}
+
+					slog.Info("ClaimedRewards event",
+						//"validationID", validationID,
+						//"delegator", delegator,
+						"amount", *(data[0].(**big.Int)),
+						"firstClaimablePeriod", *(data[1].(*uint32)),
+						"lastClaimablePeriod", *(data[2].(*uint32)),
+					)
+				}
+
+				if name == "ClaimParams" {
+					//delegationID := thor.Bytes32(ev.Topics[1][:]) // indexed
+
+					// non-indexed
+					data := make([]interface{}, 6)
+					data[0] = new(common.Address)
+					data[1] = new(uint32)
+					data[2] = new(uint32)
+					data[3] = new(uint32)
+					data[4] = new(uint32)
+					data[5] = new(*big.Int)
+
+					bytes, err := hexutil.Decode(ev.Data)
+					if err != nil {
+						slog.Error("failed to decode event data", "error", err)
+						continue
+					}
+					if err := abi.Inputs.Unpack(&data, bytes); err != nil {
+						slog.Error("failed to unpack event data", "error", err)
+						continue
+					}
+
+					slog.Info("ClaimParams event",
+						//"delegationID", delegationID,
+						//"delegator", *(data[0].(*common.Address)),
+						"firstClaimablePeriod", *(data[1].(*uint32)),
+						"lastClaimablePeriod", *(data[2].(*uint32)),
+						"previouslyPopulatedPeriod", *(data[3].(*uint32)),
+						"maxClaimablePeriod", *(data[4].(*uint32)),
+						"delegatorWeight", *(data[5].(**big.Int)),
+					)
+				}
+
+				if name == "ClaimOutputs" {
+					//delegationID := thor.Bytes32(ev.Topics[1][:]) // indexed
+
+					// non-indexed
+					data := make([]interface{}, 2)
+					data[0] = new(common.Address)
+					data[1] = new(*big.Int)
+
+					bytes, err := hexutil.Decode(ev.Data)
+					if err != nil {
+						slog.Error("failed to decode event data", "error", err)
+						continue
+					}
+					if err := abi.Inputs.Unpack(&data, bytes); err != nil {
+						slog.Error("failed to unpack event data", "error", err)
+						continue
+					}
+
+					slog.Info("ClaimOutputs event",
+						//"delegationID", delegationID,
+						"delegator", *(data[0].(*common.Address)),
+						"totalRewards", *(data[1].(**big.Int)),
+					)
+				}
+
+				if name == "WeightsPopulated" {
+					//validationID := thor.Bytes32(ev.Topics[1][:]) // indexed
+
+					// non-indexed
+					data := make([]interface{}, 5)
+					data[0] = new(uint32)
+					data[1] = new(*big.Int)
+					data[2] = new(*big.Int)
+					data[3] = new(*big.Int)
+					data[4] = new(*big.Int)
+
+					bytes, err := hexutil.Decode(ev.Data)
+					if err != nil {
+						slog.Error("failed to decode event data", "error", err)
+						continue
+					}
+					if err := abi.Inputs.Unpack(&data, bytes); err != nil {
+						slog.Error("failed to unpack event data", "error", err)
+						continue
+					}
+
+					slog.Info("WeightsPopulated event",
+						//"validationID", validationID,
+						"stakingPeriod", *(data[0].(*uint32)),
+						"previousWeight", *(data[1].(**big.Int)),
+						"increase", *(data[2].(**big.Int)),
+						"reduction", *(data[3].(**big.Int)),
+						"newWeight", *(data[4].(**big.Int)),
+					)
+				}
+
+				if name == "RewardsPopulated" {
+					//validationID := thor.Bytes32(ev.Topics[1][:]) // indexed
+
+					// non-indexed
+					data := make([]interface{}, 4)
+					data[0] = new(uint32)
+					data[1] = new(*big.Int)
+					data[2] = new(*big.Int)
+					data[3] = new(*big.Int)
+
+					bytes, err := hexutil.Decode(ev.Data)
+					if err != nil {
+						slog.Error("failed to decode event data", "error", err)
+						continue
+					}
+					if err := abi.Inputs.Unpack(&data, bytes); err != nil {
+						slog.Error("failed to unpack event data", "error", err)
+						continue
+					}
+
+					slog.Info("RewardsPopulated event",
+						//"validationID", validationID,
+						"stakingPeriod", *(data[0].(*uint32)),
+						"blockRewards", *(data[1].(**big.Int)),
+						"allDelegatorsRewards", *(data[2].(**big.Int)),
+						"proposerRewards", *(data[3].(**big.Int)),
+					)
+				}
+
+				if name == "RewardsCalculated" {
+					//validationID := thor.Bytes32(ev.Topics[1][:]) // indexed
+
+					// non-indexed
+					data := make([]interface{}, 4)
+					data[0] = new(uint32)
+					data[1] = new(*big.Int)
+					data[2] = new(*big.Int)
+					data[3] = new(*big.Int)
+
+					bytes, err := hexutil.Decode(ev.Data)
+					if err != nil {
+						slog.Error("failed to decode event data", "error", err)
+						continue
+					}
+					if err := abi.Inputs.Unpack(&data, bytes); err != nil {
+						slog.Error("failed to unpack event data", "error", err)
+						continue
+					}
+
+					slog.Info("RewardsCalculated event",
+						"stakingPeriod", *(data[0].(*uint32)),
+						"rewards", *(data[1].(**big.Int)),
+						"allDelegatorsWeight", *(data[2].(**big.Int)),
+						"allDelegatorsRewards", *(data[3].(**big.Int)),
+					)
+				}
+			}
+		}
+	}
 }
