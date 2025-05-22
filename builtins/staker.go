@@ -23,7 +23,6 @@ const (
 	StatusUnknown Status = iota
 	StatusQueued
 	StatusActive
-	StatusCooldown
 	StatusExited
 )
 
@@ -179,7 +178,7 @@ type Validator struct {
 	Weight    *big.Int
 	Status    Status
 	AutoRenew bool
-	Online   bool
+	Online    bool
 }
 
 func (v *Validator) Exists() bool {

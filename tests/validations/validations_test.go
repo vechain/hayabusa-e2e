@@ -75,8 +75,8 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	periodEnd := block
 	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, true, config.MinStakingPeriod)
 	validatorIDs = append(validatorIDs, id3)
-	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
-	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 
 	stake := big.NewInt(1e18)
@@ -147,8 +147,8 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	// assert validators are on cooldown
 	block += config.MinStakingPeriod
 	periodEnd := block
-	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
-	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 	stake := big.NewInt(1e18)
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
@@ -159,14 +159,14 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Log("✅ - Non-AutoRenew validators are on cooldown")
 
 	// assert 1 validator has exited
-	block += config.CooldownPeriod
+	block += config.EpochLength
 	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
-	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusExited, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 
 	t.Log("✅ - One validator has exited")
 
-	// assert 1 validator has exited rest are forbidden because of 2/3 rule
+	// assert 1 validator remains
 	block += config.EpochLength
 	require.NoError(t, ticker.WaitForBlock(block))
 	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
@@ -264,7 +264,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	periodEnd := block
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
-	assertValidatorStatus(t, staker, id3, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id3, builtins.StatusExited, block)
 	assertValidatorStatus(t, staker, id4, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id5, builtins.StatusQueued, block)
 
