@@ -17,6 +17,78 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+func TestHayabusaAddNonPoAValidator(t *testing.T) {
+	config := &hayabusa.Config{
+		Nodes:             6,
+		MaxBlockProposers: 3,
+		ForkBlock:         2,
+		TransitionPeriod:  2,
+		EpochLength:       2,
+		CooldownPeriod:    2,
+		MinStakingPeriod:  2,
+		MidStakingPeriod:  12,
+		HighStakingPeriod: 259200,
+	}
+	client, _, cancel, err := hayabusa.StartNetwork(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cancel)
+
+	validator1NonPoA := hayabusa.AdditionalAccounts[0]
+	validator1PoA := hayabusa.ValidatorAccounts[0]
+	validator2PoA := hayabusa.ValidatorAccounts[1]
+
+	staker := builtins.NewStaker(client, validator1NonPoA.PrivateKey)
+
+	block := config.ForkBlock
+	assert.NoError(t, staker.WaitForFork(block))
+
+	stake := big.NewInt(1e18)
+	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
+	stake = big.NewInt(0).Mul(stake, big.NewInt(25))
+
+	firstStake := big.NewInt(0).Mul(stake, big.NewInt(2))
+
+	sender := staker.Attach(validator1NonPoA.PrivateKey).AddValidator(validator1NonPoA.Address, firstStake, config.MinStakingPeriod, false)
+	receipt, _, err := sender.Receipt(true)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+	t.Log("✅ - Not a PoA candidate refused to join")
+
+	staker = builtins.NewStaker(client, validator1PoA.PrivateKey)
+	id1 := addValidator(t, staker, validator1PoA.PrivateKey, validator1PoA.Address, true, config.MinStakingPeriod)
+
+	firstQueued, _, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, firstQueued.Endorsor, &validator1PoA.Address)
+	t.Log("✅ - Queued validator OK")
+
+	staker = builtins.NewStaker(client, validator2PoA.PrivateKey)
+	id2 := addValidator(t, staker, validator2PoA.PrivateKey, validator2PoA.Address, true, config.MinStakingPeriod)
+	assertValidatorStatus(t, staker, id2, builtins.StatusQueued, block)
+
+	t.Log("✅ - Queued validator OK")
+
+	currentBlock, err := client.Block("best")
+	assert.NoError(t, err)
+
+	block = currentBlock.Number
+	block += config.TransitionPeriod
+	ticker := common.NewTicker(client)
+	assert.NoError(t, ticker.WaitForBlock(block))
+
+	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
+
+	staker = builtins.NewStaker(client, validator1NonPoA.PrivateKey)
+	id3 := addValidator(t, staker, validator1NonPoA.PrivateKey, validator1NonPoA.Address, false, config.MinStakingPeriod)
+	assertValidatorStatus(t, staker, id3, builtins.StatusQueued, block)
+	t.Log("✅ - Not a PoA candidate joined")
+
+	t.Log("✅ - All 3 validators joined")
+}
+
 func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	config := &hayabusa.Config{
 		Nodes:             6,
