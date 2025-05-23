@@ -254,7 +254,7 @@ func TestStaker(t *testing.T) {
 	t.Run("Withdraw", func(t *testing.T) {
 		withdrawAmount, err := staker.GetWithdraw(queuedID)
 		require.NoError(t, err)
-		require.Equal(t, builtins.MinStake, withdrawAmount)
+		require.Equal(t, new(big.Int).Mul(builtins.MinStake, big.NewInt(2)), withdrawAmount)
 
 		// withdraw the validator
 		receipt, _, err := staker.Attach(validator.PrivateKey).Withdraw(queuedID).Receipt(false)
