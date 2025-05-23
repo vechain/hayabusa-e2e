@@ -133,8 +133,10 @@ func TestStaker(t *testing.T) {
 	t.Run("TotalQueued", func(t *testing.T) {
 		queuedStake, queuedWeight, err := staker.QueuedStake()
 		require.NoError(t, err)
-		require.Equal(t, big.NewInt(0), queuedStake)
-		require.Equal(t, big.NewInt(0), queuedWeight)
+		stake := big.NewInt(0).Mul(big.NewInt(1e18), big.NewInt(25))
+		stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
+		require.Equal(t, stake, queuedStake)
+		require.Equal(t, big.NewInt(0).Mul(stake, big.NewInt(2)), queuedWeight)
 	})
 
 	t.Run("IncreaseStake", func(t *testing.T) {
