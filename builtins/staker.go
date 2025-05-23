@@ -155,20 +155,24 @@ func (s *Staker) Next(id thor.Bytes32) (*Validator, thor.Bytes32, error) {
 	return v, next, err
 }
 
-func (s *Staker) TotalStake() (*big.Int, error) {
-	out := new(big.Int)
+func (s *Staker) TotalStake() (*big.Int, *big.Int, error) {
+	var out = [2]interface{}{}
+	out[0] = new(*big.Int)
+	out[1] = new(*big.Int)
 	if err := s.contract.CallInto("totalStake", &out); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return out, nil
+	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
 }
 
-func (s *Staker) QueuedStake() (*big.Int, error) {
-	out := new(big.Int)
+func (s *Staker) QueuedStake() (*big.Int, *big.Int, error) {
+	var out = [2]interface{}{}
+	out[0] = new(*big.Int)
+	out[1] = new(*big.Int)
 	if err := s.contract.CallInto("queuedStake", &out); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return out, nil
+	return *(out[0].(**big.Int)), *(out[1].(**big.Int)), nil
 }
 
 type Validator struct {
@@ -179,6 +183,7 @@ type Validator struct {
 	Status    Status
 	AutoRenew bool
 	Online    bool
+	Period    uint32
 }
 
 func (v *Validator) Exists() bool {
@@ -186,7 +191,7 @@ func (v *Validator) Exists() bool {
 }
 
 func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
-	var out = [7]interface{}{}
+	var out = [8]interface{}{}
 	out[0] = new(common.Address)
 	out[1] = new(common.Address)
 	out[2] = new(*big.Int)
@@ -194,6 +199,7 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 	out[4] = new(uint8)
 	out[5] = new(bool)
 	out[6] = new(bool)
+	out[7] = new(uint32)
 	if err := s.contract.CallInto("get", &out, id); err != nil {
 		return nil, err
 	}
@@ -205,6 +211,7 @@ func (s *Staker) Get(id thor.Bytes32) (*Validator, error) {
 		Status:    Status(*(out[4].(*uint8))),
 		AutoRenew: *(out[5].(*bool)),
 		Online:    *(out[6].(*bool)),
+		Period:    *(out[7].(*uint32)),
 	}
 
 	return validator, nil

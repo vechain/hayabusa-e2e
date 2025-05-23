@@ -38,9 +38,10 @@ func Test_StargateRewards(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ticker.WaitForBlock(best.Number+config.MinStakingPeriod))
 
-	totalStake, err := staker.TotalStake()
+	totalStake, totalWeight, err := staker.TotalStake()
 	require.NoError(t, err)
 	assert.Equal(t, expectedStake, totalStake)
+	assert.Equal(t, big.NewInt(0).Mul(expectedStake, big.NewInt(2)), totalWeight)
 
 	best, err = staker.Client().Block("best")
 	require.NoError(t, err)
