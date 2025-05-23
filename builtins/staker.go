@@ -23,7 +23,6 @@ const (
 	StatusUnknown Status = iota
 	StatusQueued
 	StatusActive
-	StatusCooldown
 	StatusExited
 )
 
