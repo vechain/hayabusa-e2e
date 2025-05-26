@@ -101,8 +101,8 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	blockReward := hayabusa.GetExpectedReward(lockedVET)
 
 	proposerReward := new(big.Int).Set(blockReward)
-	proposerReward = proposerReward.Mul(proposerReward, big.NewInt(30))
-	proposerReward = proposerReward.Div(proposerReward, big.NewInt(100))
+	proposerReward = proposerReward.Mul(proposerReward, big.NewInt(3))
+	proposerReward = proposerReward.Div(proposerReward, big.NewInt(10))
 
 	delegatorReward := new(big.Int).Sub(blockReward, proposerReward)
 	delegatorReward = delegatorReward.Mul(delegatorReward, big.NewInt(int64(blockCount)))

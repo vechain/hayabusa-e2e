@@ -153,12 +153,12 @@ contract Stargate {
             maxClaimablePeriod = endPeriod;
         }
         emit ClaimParams(delegationID, msg.sender,  firstClaimablePeriod, maxClaimablePeriod, claims[delegationID], maxClaimablePeriod, delegatorWeight);
-
-        claims[delegationID] = maxClaimablePeriod;
-
+        
         if (maxClaimablePeriod == 0 || firstClaimablePeriod > maxClaimablePeriod) {
             return (0, firstClaimablePeriod, maxClaimablePeriod);
         }
+
+        claims[delegationID] = maxClaimablePeriod;
 
         uint256 totalRewards = 0;
 
