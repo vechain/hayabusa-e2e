@@ -59,6 +59,12 @@ func main() {
 	client := thorclient.New(networkURL)
 	fmt.Printf("Successfully connected to network at %s\n", networkURL)
 
+	authEntries, err := fetchAuthorities(client)
+	if err != nil {
+		fmt.Printf("Error fetching authorities: %v\n", err)
+		os.Exit(1)
+	}
+
 	staker := builtins.NewStaker(client, validators[0].PrivateKey)
 
 	if err := staker.WaitForFork(uint32(forkBlock)); err != nil {
@@ -70,9 +76,14 @@ func main() {
 	senders := contracts.Senders{}
 	for i := range len(validators) {
 		acc := validators[i]
+		node, ok := authEntries[acc.Address]
+		if !ok {
+			fmt.Printf("Validator %d (%s) is not an authority node, skipping registration\n", i, acc.Address)
+			continue
+		}
 		fmt.Printf("Preparing validator %d: %s\n", i, acc.Address)
 
-		sender := staker.Attach(acc.PrivateKey).AddValidator(acc.Address, builtins.MinStake, minStakingPeriod, true)
+		sender := staker.Attach(acc.PrivateKey).AddValidator(node.master, builtins.MinStake, minStakingPeriod, true)
 		senders.Add(sender)
 	}
 
@@ -130,4 +141,41 @@ func parseValidatorKeys(privateKeysStr string) ([]Validator, error) {
 	}
 
 	return validators, nil
+}
+
+type nodeEntry struct {
+	master thor.Address
+	entry  *builtins.AuthorityNode
+}
+
+// fetchAuthorities retrieves all authority nodes from the blockchain and returns them as a map.
+// The map key is the endorsor address.
+func fetchAuthorities(client *thorclient.Client) (map[thor.Address]nodeEntry, error) {
+	contract := builtins.NewAuthority(client, nil)
+
+	prev, err := contract.First()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get first authority: %w", err)
+	}
+
+	entries := make(map[thor.Address]nodeEntry)
+
+	for !prev.IsZero() {
+		node, err := contract.Get(prev)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get authority node %s: %w", prev.String(), err)
+		}
+
+		entries[node.Endorsor] = nodeEntry{
+			master: prev,
+			entry:  node,
+		}
+
+		prev, err = contract.Next(prev)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next authority after %s: %w", prev.String(), err)
+		}
+	}
+
+	return entries, nil
 }
