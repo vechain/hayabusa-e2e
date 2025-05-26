@@ -17,6 +17,78 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+func TestHayabusaAddNonPoAValidator(t *testing.T) {
+	config := &hayabusa.Config{
+		Nodes:             6,
+		MaxBlockProposers: 3,
+		ForkBlock:         2,
+		TransitionPeriod:  2,
+		EpochLength:       2,
+		CooldownPeriod:    2,
+		MinStakingPeriod:  2,
+		MidStakingPeriod:  12,
+		HighStakingPeriod: 259200,
+	}
+	client, _, cancel, err := hayabusa.StartNetwork(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cancel)
+
+	validator1NonPoA := hayabusa.AdditionalAccounts[0]
+	validator1PoA := hayabusa.ValidatorAccounts[0]
+	validator2PoA := hayabusa.ValidatorAccounts[1]
+
+	staker := builtins.NewStaker(client, validator1NonPoA.PrivateKey)
+
+	block := config.ForkBlock
+	assert.NoError(t, staker.WaitForFork(block))
+
+	stake := big.NewInt(1e18)
+	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
+	stake = big.NewInt(0).Mul(stake, big.NewInt(25))
+
+	firstStake := big.NewInt(0).Mul(stake, big.NewInt(2))
+
+	sender := staker.Attach(validator1NonPoA.PrivateKey).AddValidator(validator1NonPoA.Address, firstStake, config.MinStakingPeriod, false)
+	receipt, _, err := sender.Receipt(true)
+	assert.NoError(t, err)
+	assert.True(t, receipt.Reverted)
+	t.Log("✅ - Not a PoA candidate refused to join")
+
+	staker = builtins.NewStaker(client, validator1PoA.PrivateKey)
+	id1 := addValidator(t, staker, validator1PoA.PrivateKey, validator1PoA.Address, true, config.MinStakingPeriod)
+
+	firstQueued, _, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, firstQueued.Endorsor, &validator1PoA.Address)
+	t.Log("✅ - Queued validator OK")
+
+	staker = builtins.NewStaker(client, validator2PoA.PrivateKey)
+	id2 := addValidator(t, staker, validator2PoA.PrivateKey, validator2PoA.Address, true, config.MinStakingPeriod)
+	assertValidatorStatus(t, staker, id2, builtins.StatusQueued, block)
+
+	t.Log("✅ - Queued validator OK")
+
+	currentBlock, err := client.Block("best")
+	assert.NoError(t, err)
+
+	block = currentBlock.Number
+	block += config.TransitionPeriod
+	ticker := common.NewTicker(client)
+	assert.NoError(t, ticker.WaitForBlock(block))
+
+	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
+
+	staker = builtins.NewStaker(client, validator1NonPoA.PrivateKey)
+	id3 := addValidator(t, staker, validator1NonPoA.PrivateKey, validator1NonPoA.Address, false, config.MinStakingPeriod)
+	assertValidatorStatus(t, staker, id3, builtins.StatusQueued, block)
+	t.Log("✅ - Not a PoA candidate joined")
+
+	t.Log("✅ - All 3 validators joined")
+}
+
 func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	config := &hayabusa.Config{
 		Nodes:             6,
@@ -75,8 +147,8 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	periodEnd := block
 	id3 := addValidator(t, staker, validator3.PrivateKey, validator3.Address, true, config.MinStakingPeriod)
 	validatorIDs = append(validatorIDs, id3)
-	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
-	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 
 	stake := big.NewInt(1e18)
@@ -142,13 +214,18 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 
+	// assert validators staking periods
+	assertValidatorStakingPeriod(t, staker, id1, config.MinStakingPeriod)
+	assertValidatorStakingPeriod(t, staker, id2, config.MinStakingPeriod)
+	assertValidatorStakingPeriod(t, staker, id3, config.MinStakingPeriod)
+
 	t.Log("✅ - All three validators are activated")
 
 	// assert validators are on cooldown
 	block += config.MinStakingPeriod
 	periodEnd := block
-	assertValidatorStatus(t, staker, id1, builtins.StatusCooldown, block)
-	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 	stake := big.NewInt(1e18)
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
@@ -159,14 +236,14 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Log("✅ - Non-AutoRenew validators are on cooldown")
 
 	// assert 1 validator has exited
-	block += config.CooldownPeriod
+	block += config.EpochLength
 	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
-	assertValidatorStatus(t, staker, id2, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id2, builtins.StatusExited, block)
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 
 	t.Log("✅ - One validator has exited")
 
-	// assert 1 validator has exited rest are forbidden because of 2/3 rule
+	// assert 1 validator remains
 	block += config.EpochLength
 	require.NoError(t, ticker.WaitForBlock(block))
 	assertValidatorStatus(t, staker, id1, builtins.StatusExited, block)
@@ -239,6 +316,16 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id4, builtins.StatusQueued, block)
 	t.Log("✅ - Three validators are activated one is queued")
 
+	validatorStake := big.NewInt(1e18)
+	validatorStake = big.NewInt(0).Mul(validatorStake, big.NewInt(1e6))
+	validatorStake = big.NewInt(0).Mul(validatorStake, big.NewInt(25))
+	total, totalWeight, err := staker.TotalStake()
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), total)
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(6)), totalWeight)
+	queued, queuedWeight, err := staker.QueuedStake()
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(1)), queued)
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(2)), queuedWeight)
+
 	id5 := addValidatorWithStake(t, staker, validator5.PrivateKey, validator5.Address, false, stake, config.MinStakingPeriod)
 	validatorIDs = append(validatorIDs, id5)
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
@@ -246,6 +333,15 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id3, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id4, builtins.StatusQueued, block)
 	assertValidatorStatus(t, staker, id5, builtins.StatusQueued, block)
+
+	total, totalWeight, err = staker.TotalStake()
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), total)
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(6)), totalWeight)
+	queued, queuedWeight, err = staker.QueuedStake()
+
+	queuedStk := big.NewInt(0).Add(validatorStake, stake)
+	assert.Equal(t, queuedStk, queued)
+	assert.Equal(t, big.NewInt(0).Mul(queuedStk, big.NewInt(2)), queuedWeight)
 
 	_, validatorID, err = staker.FirstQueued()
 	assert.NoError(t, err)
@@ -264,7 +360,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	periodEnd := block
 	assertValidatorStatus(t, staker, id1, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtins.StatusActive, block)
-	assertValidatorStatus(t, staker, id3, builtins.StatusCooldown, block)
+	assertValidatorStatus(t, staker, id3, builtins.StatusExited, block)
 	assertValidatorStatus(t, staker, id4, builtins.StatusActive, block)
 	assertValidatorStatus(t, staker, id5, builtins.StatusQueued, block)
 
@@ -328,6 +424,12 @@ func assertValidatorStatus(t *testing.T, staker *builtins.Staker, validatorID th
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
+}
+
+func assertValidatorStakingPeriod(t *testing.T, staker *builtins.Staker, validatorID thor.Bytes32, expectedPeriod uint32) {
+	validator, err := staker.Get(validatorID)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedPeriod, validator.Period)
 }
 
 func assertRewards(t *testing.T, staker *builtins.Staker, validatorID thor.Bytes32, totalStaked *big.Int, periodStart uint32, periodEnd uint32) {
