@@ -55,11 +55,6 @@ func TestEnergy(t *testing.T) {
 		genesisVTHO = genesisVTHO.Add(genesisVTHO, (*big.Int)(acc.Energy))
 	}
 
-	growth := new(big.Int).SetUint64(10)
-	growth.Mul(growth, genesisVET)
-	growth.Mul(growth, thor.EnergyGrowthRate)
-	growth.Div(growth, big.NewInt(1e18))
-
 	assertSupply := func(blockNum uint32, expectedSupply *big.Int) {
 		block, err := client.Block(strconv.FormatUint(uint64(blockNum), 10))
 		require.NoError(t, err)
@@ -72,10 +67,20 @@ func TestEnergy(t *testing.T) {
 
 	require.NoError(t, staker.WaitForPOS(config.ForkBlock+config.TransitionPeriod))
 
+	genesisBlock, err := client.Block("0")
+	require.NoError(t, err)
+
 	// check PoA + transition period growth -> Should use legacy growth rate
 	for i := uint32(1); i < config.ForkBlock+config.TransitionPeriod; i++ {
-		increase := new(big.Int).Mul(growth, big.NewInt(int64(i)))
-		expectedSupply := new(big.Int).Add(genesisVTHO, increase)
+		currentBlock, err := client.Block(strconv.FormatUint(uint64(i), 10))
+		require.NoError(t, err)
+
+		growth := new(big.Int).SetUint64(currentBlock.Timestamp - genesisBlock.Timestamp)
+		growth.Mul(growth, genesisVET)
+		growth.Mul(growth, thor.EnergyGrowthRate)
+		growth.Div(growth, big.NewInt(1e18))
+
+		expectedSupply := new(big.Int).Add(genesisVTHO, growth)
 		assertSupply(i, expectedSupply)
 	}
 	t.Logf("✅ - PoA & Transition Period growth is as expected")
