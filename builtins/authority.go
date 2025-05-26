@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	_ "embed"
 	"fmt"
+	"github.com/vechain/thor/v2/builtin"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/draupnir/contracts"
@@ -14,8 +15,6 @@ import (
 //go:embed authority_abi.json
 var AuthorityABI []byte
 
-var AuthorityAddress = thor.BytesToAddress([]byte("Authority"))
-
 type Authority struct {
 	contract *contracts.GenericWrapper
 	client   *thorclient.Client
@@ -23,7 +22,7 @@ type Authority struct {
 }
 
 func NewAuthority(client *thorclient.Client, key *ecdsa.PrivateKey) *Authority {
-	base, err := contracts.NewGenericWrapper(client, key, AuthorityABI, AuthorityAddress)
+	base, err := contracts.NewGenericWrapper(client, key, AuthorityABI, builtin.Authority.Address)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create authority contract: %v", err))
 	}

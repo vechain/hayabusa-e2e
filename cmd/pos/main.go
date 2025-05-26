@@ -103,6 +103,20 @@ func main() {
 	}
 
 	fmt.Printf("✅ Successfully registered %d of 10 validators - PoS is now active\n", len(validators))
+
+	best, err := client.Block("0")
+	if err != nil {
+		fmt.Printf("Error fetching best block: %v\n", err)
+		os.Exit(1)
+	}
+
+	err = staker.WaitForPOS(best.Number + 180)
+	if err != nil {
+		fmt.Printf("Error waiting for PoS activation: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("✅ PoS is now active, all validators registered successfully")
 }
 
 type Validator struct {
@@ -112,10 +126,6 @@ type Validator struct {
 
 func parseValidatorKeys(privateKeysStr string) ([]Validator, error) {
 	privateKeysList := strings.Split(privateKeysStr, ",")
-	// At the moment we have 10 validators from poa, then at least 7 need to be registered as pos validators
-	if len(privateKeysList) < 7 {
-		return nil, fmt.Errorf("VALIDATOR_PRIVATE_KEYS environment variable must contain at least 7 private keys")
-	}
 	validators := make([]Validator, 0, len(privateKeysList))
 
 	for i, keyStr := range privateKeysList {
@@ -151,7 +161,11 @@ type nodeEntry struct {
 // fetchAuthorities retrieves all authority nodes from the blockchain and returns them as a map.
 // The map key is the endorsor address.
 func fetchAuthorities(client *thorclient.Client) (map[thor.Address]nodeEntry, error) {
-	contract := builtins.NewAuthority(client, nil)
+	tempCaller, err := crypto.GenerateKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate temporary key: %w", err)
+	}
+	contract := builtins.NewAuthority(client, tempCaller)
 
 	prev, err := contract.First()
 	if err != nil {
