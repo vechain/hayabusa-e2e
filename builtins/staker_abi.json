@@ -356,6 +356,16 @@
         "internalType": "bool",
         "name": "",
         "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint32",
+        "name": "",
+        "type": "uint32"
       }
     ],
     "stateMutability": "view",
@@ -512,6 +522,11 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -521,6 +536,11 @@
     "inputs": [],
     "name": "totalStake",
     "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
       {
         "internalType": "uint256",
         "name": "",

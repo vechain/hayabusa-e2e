@@ -37,6 +37,7 @@ jobs:
           - builtins
           - tests/validations
           - tests/delegations
+          - tests/slots
           - tests/energy
       fail-fast: false
 
