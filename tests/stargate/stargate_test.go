@@ -78,11 +78,11 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	assert.Equal(t, 2, int(start))
 	assert.Equal(t, 2, int(end))
 	assert.Equal(t, 1, claimable.Sign())
-	
+
 	// assert TVL
 	expected := new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(len(validationIDs))))
 	expected = expected.Add(expected, stake)
-	lockedVET, err := staker.TotalStake()
+	lockedVET, _, err := staker.TotalStake()
 	require.NoError(t, err)
 	assert.Equal(t, expected, lockedVET)
 
