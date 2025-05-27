@@ -57,13 +57,12 @@ jobs:
           path: hayabusa-e2e
           token: ${{ secrets.GHA_REPO_ACCESS }}
 
-      - name: Checkout Hayabusa
+      - name: Checkout Thor
         uses: actions/checkout@v4
         with:
-          repository: vechain/hayabusa
-          path: hayabusa
-          token: ${{ secrets.GHA_REPO_ACCESS }}
-          ref: ${{ inputs.hayabusa-branch }}
+          repository: vechain/thor
+          path: thor
+          ref: release/hayabusa
 
       - name: Install Go
         uses: actions/setup-go@v5
@@ -78,4 +77,4 @@ jobs:
         run: go test -v -failfast -timeout 3600s ./${{ matrix.packages }}
         working-directory: ${{ github.workspace }}/hayabusa-e2e
         env:
-          THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa
+          THOR_WORKING_DIR: ${{ github.workspace }}/thor
