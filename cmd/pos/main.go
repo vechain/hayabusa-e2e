@@ -57,15 +57,19 @@ func main() {
 		}
 	}
 	client := thorclient.New(networkURL)
-	fmt.Printf("Successfully connected to network at %s\n", networkURL)
+
+	staker := builtins.NewStaker(client, validators[0].PrivateKey)
+	_, first, _ := staker.FirstActive()
+	if !first.IsZero() {
+		fmt.Println("✅ PoS is already active, exiting")
+		os.Exit(0)
+	}
 
 	authEntries, err := fetchAuthorities(client)
 	if err != nil {
 		fmt.Printf("Error fetching authorities: %v\n", err)
 		os.Exit(1)
 	}
-
-	staker := builtins.NewStaker(client, validators[0].PrivateKey)
 
 	if err := staker.WaitForFork(uint32(forkBlock)); err != nil {
 		fmt.Printf("Error waiting for fork: %v\n", err)
@@ -187,7 +191,7 @@ func fetchAuthorities(client *thorclient.Client) (map[thor.Address]nodeEntry, er
 
 		prev, err = contract.Next(prev)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get next authority after %s: %w", prev.String(), err)
+			return nil, fmt.Errorf("failed to get next authority: %w", err)
 		}
 	}
 
