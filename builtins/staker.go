@@ -110,7 +110,7 @@ func (s *Staker) Attach(key *ecdsa.PrivateKey) *Staker {
 	}
 }
 
-func (s *Staker) Revision(id thor.Bytes32) *Staker {
+func (s *Staker) Revision(id string) *Staker {
 	return &Staker{
 		contract: s.contract.Revision(id),
 		client:   s.client,

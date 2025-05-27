@@ -56,10 +56,7 @@ func TestEnergy(t *testing.T) {
 	}
 
 	assertSupply := func(blockNum uint32, expectedSupply *big.Int) {
-		block, err := client.Block(strconv.FormatUint(uint64(blockNum), 10))
-		require.NoError(t, err)
-
-		supply, err := energy.Revision(block.ID).TotalSupply()
+		supply, err := energy.Revision(strconv.FormatUint(uint64(blockNum), 10)).TotalSupply()
 		require.NoError(t, err)
 
 		require.Equal(t, expectedSupply.Cmp(supply), 0, "block %d: expected %s, got %s", blockNum, expectedSupply.String(), supply.String())
@@ -85,20 +82,19 @@ func TestEnergy(t *testing.T) {
 	}
 	t.Logf("✅ - PoA & Transition Period growth is as expected")
 	block := config.ForkBlock + config.TransitionPeriod - 1 // last PoA block
-	poaBlock, err := client.Block(strconv.FormatUint(uint64(block), 10))
-	require.NoError(t, err)
-	lastPOASupply, err := energy.Revision(poaBlock.ID).TotalSupply()
+	poaBlock := block
+	lastPOASupply, err := energy.Revision(strconv.FormatUint(uint64(block), 10)).TotalSupply()
 	require.NoError(t, err)
 
 	hayabusaGrowth := hayabusa.GetExpectedReward(new(big.Int).Mul(stake, big.NewInt(int64(validators))))
 
-	firstPoSBlock := poaBlock.Number + 1
+	firstPoSBlock := poaBlock + 1
 	block = config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod // wait for 1 staking period
 	require.NoError(t, common.NewTicker(staker.Client()).WaitForBlock(block))
 
 	// check PoS growth -> Should use Hayabusa growth rate
 	for i := firstPoSBlock; i < block; i++ {
-		blockDiff := i - poaBlock.Number
+		blockDiff := i - poaBlock
 		increase := new(big.Int).Mul(hayabusaGrowth, big.NewInt(int64(blockDiff)))
 		expectedSupply := new(big.Int).Add(lastPOASupply, increase)
 		assertSupply(i, expectedSupply)

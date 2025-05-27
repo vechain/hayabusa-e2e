@@ -50,7 +50,7 @@ func (e *Energy) Attach(key *ecdsa.PrivateKey) *Energy {
 	}
 }
 
-func (e *Energy) Revision(blockID thor.Bytes32) *Energy {
+func (e *Energy) Revision(blockID string) *Energy {
 	return &Energy{
 		contract: e.contract.Revision(blockID),
 		client:   e.client,
