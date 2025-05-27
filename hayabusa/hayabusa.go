@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/draupnir/network"
 	networkhubNetwork "github.com/vechain/networkhub/network"
 	"github.com/vechain/networkhub/network/node"
+	"github.com/vechain/networkhub/network/node/genesis"
 	thorgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -28,16 +29,18 @@ var (
 	AdditionalAccounts = mustGenerateAccounts(100)
 )
 
-func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, func(), error) {
-	if config.Nodes < 2 {
-		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
-	}
-	customGenesis := genesisbuilder.New(int(config.MaxBlockProposers)).
+func Genesis(config *Config) *genesis.CustomGenesis {
+	return genesisbuilder.New(int(config.MaxBlockProposers)).
 		Overrider(config.Apply).
 		Accounts(genesisAccounts()).
 		Authority(authorities()).
 		Build()
+}
 
+func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, func(), error) {
+	if config.Nodes < 2 {
+		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
+	}
 	repo := "git@github.com:vechain/hayabusa.git"
 	var net *network.CustomNetwork
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
@@ -53,6 +56,7 @@ func StartNetwork(config *Config) (*thorclient.Client, *network.CustomNetwork, f
 		verbosity = config.Verbosity
 	}
 
+	customGenesis := Genesis(config)
 	nodes := make([]node.Config, config.Nodes)
 	for i := range config.Nodes {
 		additionalArgs := map[string]string{

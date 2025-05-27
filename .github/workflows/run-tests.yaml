@@ -21,6 +21,11 @@ on:
         required: false
         default: codebuild-Hayabusa-E2E
 
+
+concurrency:
+  cancel-in-progress: true
+  group: run-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+
 permissions:
   contents: read
 
@@ -38,6 +43,7 @@ jobs:
           - tests/validations
           - tests/delegations
           - tests/slots
+          - tests/energy
       fail-fast: false
 
     env:

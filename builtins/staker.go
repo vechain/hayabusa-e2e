@@ -110,6 +110,14 @@ func (s *Staker) Attach(key *ecdsa.PrivateKey) *Staker {
 	}
 }
 
+func (s *Staker) Revision(id string) *Staker {
+	return &Staker{
+		contract: s.contract.Revision(id),
+		client:   s.client,
+		key:      s.key,
+	}
+}
+
 // FirstActive returns the first active validator
 func (s *Staker) FirstActive() (*Validator, thor.Bytes32, error) {
 	out := new(common.Hash)
