@@ -1,6 +1,7 @@
 package stargate
 
 import (
+	"github.com/vechain/thor/v2/thorclient/bind"
 	"math/big"
 	"strconv"
 	"strings"
@@ -12,16 +13,15 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/draupnir/common"
-	"github.com/vechain/draupnir/contracts"
-	"github.com/vechain/draupnir/datagen"
-	"github.com/vechain/hayabusa-e2e/builtins"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/hayabusa/stargate"
+	"github.com/vechain/hayabusa-e2e/testutil"
+	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/transactions"
-	thorgenesis "github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/builtin"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -29,7 +29,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
-	ticker := common.NewTicker(staker.Client())
+	ticker := utils.NewTicker(staker.Raw().Client())
 	validation, err := staker.Get(validationID)
 	require.NoError(t, err)
 
@@ -38,25 +38,25 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	require.NoError(t, ticker.WaitForBlock(block))
 	completed, err := staker.GetCompletedPeriods(validationID)
 	require.NoError(t, err)
-	assert.Equal(t, 1, int(completed))
+	assert.Equal(t, 1, int(*completed))
 
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
-	stake := new(big.Int).Mul(builtins.MinStake, big.NewInt(10)) // very large stake
-	receipt, _, err := stargate.Attach(acc.PrivateKey).AddDelegator(validationID, true, 200, stake).Receipt(false)
+	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(10)) // very large stake
+	receipt, _, err := stargate.AddDelegator(acc, validationID, true, 200, stake).Receipt(testutil.TxContext(t), testutil.TxOptions())
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(receipt)
 
 	// assert correct start period
 	completed, err = staker.GetCompletedPeriods(validationID)
 	require.NoError(t, err)
-	assert.Equal(t, 1, int(completed))
+	assert.Equal(t, 1, int(*completed))
 	delegation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	assert.Equal(t, 2, int(delegation.StartPeriod))
 
 	// assert no claimable periods
-	claimable, start, end, err := stargate.GetClaimable(acc.Address)
+	claimable, start, end, err := stargate.GetClaimable(acc.Address())
 	require.NoError(t, err)
 	assert.Equal(t, 0, claimable.Sign())
 	// start is after end, so no claimable periods
@@ -70,17 +70,17 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	// assert validator completed 1 more period
 	completed, err = staker.GetCompletedPeriods(validationID)
 	assert.NoError(t, err)
-	assert.Equal(t, 2, int(completed))
+	assert.Equal(t, 2, int(*completed))
 
 	// assert delegator can claim for that period
-	claimable, start, end, err = stargate.GetClaimable(acc.Address)
+	claimable, start, end, err = stargate.GetClaimable(acc.Address())
 	assert.NoError(t, err)
 	assert.Equal(t, 2, int(start))
 	assert.Equal(t, 2, int(end))
 	assert.Equal(t, 1, claimable.Sign())
 
 	// assert TVL
-	expected := new(big.Int).Mul(builtins.MinStake, big.NewInt(int64(len(validationIDs))))
+	expected := new(big.Int).Mul(builtin.MinStake(), big.NewInt(int64(len(validationIDs))))
 	expected = expected.Add(expected, stake)
 	lockedVET, _, err := staker.TotalStake()
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 
 	blockCount := 0
 	for i := firstDelegatedBlock; i < block; i++ {
-		block, err := staker.Client().Block(strconv.Itoa(int(i)))
+		block, err := staker.Raw().Client().GetBlock(strconv.Itoa(int(i)))
 		require.NoError(t, err)
 		if block.Signer == *validation.Master {
 			blockCount++
@@ -108,7 +108,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	delegatorReward = delegatorReward.Mul(delegatorReward, big.NewInt(int64(blockCount)))
 
 	stargateAddr := stargate.Address()
-	stargateAcc, err := staker.Client().Account(&stargateAddr)
+	stargateAcc, err := staker.Raw().Client().GetAccount(&stargateAddr, "best")
 	require.NoError(t, err)
 	stargateEnergy := (*big.Int)(&stargateAcc.Energy)
 	assert.Equal(t, delegatorReward, stargateEnergy, "stargate energy should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, stargateEnergy).String())
@@ -117,16 +117,16 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	require.NoError(t, ticker.WaitForBlock(block))
 	completed, err = staker.GetCompletedPeriods(validationID)
 	assert.NoError(t, err)
-	assert.Equal(t, 4, int(completed))
+	assert.Equal(t, 4, int(*completed))
 
-	claimable, start, end, err = stargate.GetClaimable(acc.Address)
+	claimable, start, end, err = stargate.GetClaimable(acc.Address())
 	assert.NoError(t, err)
 	assert.Equal(t, 2, int(start))
 	assert.Equal(t, 4, int(end))
 	assert.Equal(t, delegatorReward, claimable, "claimable should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, claimable).String())
 }
 
-func newDelegationSetup(t *testing.T) (*builtins.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Bytes32) {
+func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Bytes32) {
 	t.Helper()
 	config := &hayabusa.Config{
 		Nodes:             3,
@@ -145,7 +145,8 @@ func newDelegationSetup(t *testing.T) (*builtins.Staker, *stargate.Stargate, *ha
 	}
 	t.Cleanup(cancel)
 
-	staker := builtins.NewStaker(client, hayabusa.Stargate.PrivateKey)
+	staker, err := builtin.NewStaker(client)
+	require.NoError(t, err)
 
 	var stargate *stargate.Stargate
 	wg := &sync.WaitGroup{}
@@ -156,27 +157,27 @@ func newDelegationSetup(t *testing.T) (*builtins.Staker, *stargate.Stargate, *ha
 		stargate = setStargate(t, staker)
 	}()
 
-	if err := staker.WaitForFork(config.ForkBlock); err != nil {
+	if err := utils.WaitForFork(staker, config.ForkBlock); err != nil {
 		t.Fatalf("failed to wait for fork: %v", err)
 	}
 
 	validationIDs := [3]thor.Bytes32{}
-	senders := &contracts.Senders{}
+	senders := &bind.Senders{}
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.Attach(account.PrivateKey).AddValidator(account.Address, builtins.MinStake, config.MinStakingPeriod, true)
+		sender := staker.AddValidator(account, account.Address(), builtin.MinStake(), config.MinStakingPeriod, true)
 		senders.Add(sender)
 	}
 
-	if _, receipts, err := senders.Send(false); err != nil {
+	if receipts, _, err := senders.Send(testutil.TxContext(t), testutil.TxOptions()); err != nil {
 		t.Fatal(err)
 	} else {
 		for i := range config.MaxBlockProposers {
 			validationIDs[i] = receiptToID(receipts[i])
 		}
 	}
-	if err := staker.WaitForPOS(config.ForkBlock + config.TransitionPeriod); err != nil {
+	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
 	}
 
@@ -185,9 +186,10 @@ func newDelegationSetup(t *testing.T) (*builtins.Staker, *stargate.Stargate, *ha
 	return staker, stargate, config, validationIDs
 }
 
-func setStargate(t *testing.T, staker *builtins.Staker) *stargate.Stargate {
-	chainTag, err := staker.Client().ChainTag()
+func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
+	genesis, err := staker.Raw().Client().GetBlock("0")
 	require.NoError(t, err)
+	chainTag := genesis.ID[31]
 
 	acc := hayabusa.AdditionalAccounts[0]
 
@@ -202,14 +204,15 @@ func setStargate(t *testing.T, staker *builtins.Staker) *stargate.Stargate {
 	trx := new(tx.Builder).
 		Clause(clause).
 		Gas(40_000_000).
-		Nonce(datagen.RandUInt64()).
+		Nonce(datagen.RandUint64()).
 		ChainTag(chainTag).
 		Expiration(10000).
 		GasPriceCoef(255).
 		Build()
 
-	inpsection, err := staker.Client().InspectClauses(&accounts.BatchCallData{
-		Caller: &acc.Address,
+	caller := acc.Address()
+	inpsection, err := staker.Raw().Client().InspectClauses(&accounts.BatchCallData{
+		Caller: &caller,
 		Clauses: []accounts.Clause{
 			{
 				Data:  "0x" + bytecode,
@@ -217,17 +220,22 @@ func setStargate(t *testing.T, staker *builtins.Staker) *stargate.Stargate {
 				To:    trx.Clauses()[0].To(),
 			},
 		},
-	})
+	}, "best")
 	require.NoError(t, err)
 	require.Equal(t, 1, len(inpsection))
 
-	trx = tx.MustSign(trx, hayabusa.Stargate.PrivateKey)
-	res, err := staker.Client().SendTransaction(trx)
+	trx, err = hayabusa.Stargate.SignTransaction(trx)
+	require.NoError(t, err)
+	rlpTx, err := trx.MarshalBinary()
+	if err != nil {
+		t.Fatalf("unable to encode transaction - %v", err)
+	}
+	res, err := staker.Raw().Client().SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
 	require.NoError(t, err)
 
 	var receipt *transactions.Receipt
 	for range 30 {
-		receipt, err = staker.Client().TransactionReceipt(res.ID)
+		receipt, err = staker.Raw().Client().GetTransactionReceipt(res.ID, "")
 		if err == nil && receipt != nil {
 			break
 		}
@@ -237,18 +245,15 @@ func setStargate(t *testing.T, staker *builtins.Staker) *stargate.Stargate {
 
 	contractAddr := receipt.Outputs[0].ContractAddress
 
-	stargate := stargate.NewStargate(staker.Client(), *contractAddr, acc.PrivateKey)
+	stargate := stargate.NewStargate(staker.Raw().Client(), *contractAddr)
 
-	executor, err := builtins.NewExecutor(staker.Client(), acc.PrivateKey)
+	params, err := builtin.NewParams(staker.Raw().Client())
 	require.NoError(t, err)
-	params, err := builtins.NewParams(staker.Client(), acc.PrivateKey)
+	key := thor.BytesToBytes32([]byte("stargate-contract-address"))
+	value := new(big.Int).SetBytes(contractAddr[:])
+	receipt, _, err = params.Set(hayabusa.Executor, key, value).Receipt(testutil.TxContext(t), testutil.TxOptions())
 	require.NoError(t, err)
-	addrBig := new(big.Int).SetBytes(contractAddr[:])
-	tx, err := params.Set(thor.BytesToBytes32([]byte("stargate-contract-address")), addrBig).Build()
-	require.NoError(t, err)
-	to := tx.Clauses()[0].To()
-	err = executor.Update(*to, tx.Clauses()[0].Data(), []thorgenesis.DevAccount{hayabusa.Executor})
-	require.NoError(t, err)
+	require.False(t, receipt.Reverted, "receipt should not be reverted")
 
 	return stargate
 }

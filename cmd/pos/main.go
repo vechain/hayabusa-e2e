@@ -1,17 +1,20 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/vechain/hayabusa-e2e/utils"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/draupnir/contracts"
-	"github.com/vechain/hayabusa-e2e/builtins"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/builtin"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 func main() {
@@ -56,9 +59,9 @@ func main() {
 			minStakingPeriod = uint32(val)
 		}
 	}
-	client := thorclient.New(networkURL)
+	client := httpclient.New(networkURL)
 
-	staker := builtins.NewStaker(client, validators[0].PrivateKey)
+	staker, err := builtin.NewStaker(client)
 	_, first, _ := staker.FirstActive()
 	if !first.IsZero() {
 		fmt.Println("✅ PoS is already active, exiting")
@@ -71,13 +74,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := staker.WaitForFork(uint32(forkBlock)); err != nil {
+	if err := utils.WaitForFork(staker, uint32(forkBlock)); err != nil {
 		fmt.Printf("Error waiting for fork: %v\n", err)
 		os.Exit(1)
 	}
 
 	fmt.Println("Start sending transactions to register validators")
-	senders := contracts.Senders{}
+	senders := bind.Senders{}
 	for i := range len(validators) {
 		acc := validators[i]
 		node, ok := authEntries[acc.Address]
@@ -87,34 +90,38 @@ func main() {
 		}
 		fmt.Printf("Preparing validator %d: %s\n", i, acc.Address)
 
-		sender := staker.Attach(acc.PrivateKey).AddValidator(node.master, builtins.MinStake, minStakingPeriod, true)
+		signer := (*bind.PrivateKeySigner)(acc.PrivateKey)
+
+		sender := staker.AddValidator(signer, node.master, builtin.MinStake(), minStakingPeriod, true)
 		senders.Add(sender)
 	}
 
 	fmt.Println("Sending transactions...")
-	txIDs, receipts, err := senders.Send(false)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	receipts, txs, err := senders.Send(ctx, testutil.TxOptions())
 	if err != nil {
 		fmt.Printf("Error sending transactions: %v\n", err)
 		os.Exit(1)
 	}
 
-	for i, txID := range txIDs {
+	for i, tx := range txs {
 		if receipts[i] != nil && receipts[i].Reverted {
-			fmt.Printf("❌ Validator %d: TX %s (reverted)\n", i, txID)
+			fmt.Printf("❌ Validator %d: TX %s (reverted)\n", i, tx)
 		} else {
-			fmt.Printf("✅ Validator %d: TX %s\n", i, txID)
+			fmt.Printf("✅ Validator %d: TX %s\n", i, tx)
 		}
 	}
 
 	fmt.Printf("✅ Successfully registered %d of 10 validators - PoS is now active\n", len(validators))
 
-	best, err := client.Block("0")
+	best, err := client.GetBlock("0")
 	if err != nil {
 		fmt.Printf("Error fetching best block: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = staker.WaitForPOS(best.Number + 180)
+	err = utils.WaitForPOS(staker, best.Number+180)
 	if err != nil {
 		fmt.Printf("Error waiting for PoS activation: %v\n", err)
 		os.Exit(1)
@@ -159,17 +166,16 @@ func parseValidatorKeys(privateKeysStr string) ([]Validator, error) {
 
 type nodeEntry struct {
 	master thor.Address
-	entry  *builtins.AuthorityNode
+	entry  *builtin.AuthorityNode
 }
 
 // fetchAuthorities retrieves all authority nodes from the blockchain and returns them as a map.
 // The map key is the endorsor address.
-func fetchAuthorities(client *thorclient.Client) (map[thor.Address]nodeEntry, error) {
-	tempCaller, err := crypto.GenerateKey()
+func fetchAuthorities(client *httpclient.Client) (map[thor.Address]nodeEntry, error) {
+	contract, err := builtin.NewAuthority(client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate temporary key: %w", err)
+		return nil, fmt.Errorf("failed to create authority contract: %w", err)
 	}
-	contract := builtins.NewAuthority(client, tempCaller)
 
 	prev, err := contract.First()
 	if err != nil {

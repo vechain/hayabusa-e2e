@@ -1,16 +1,17 @@
 package stargate
 
 import (
-	"crypto/ecdsa"
 	_ "embed"
 	"fmt"
+	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/draupnir/contracts"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
 )
 
 //go:embed Stargate.abi
@@ -21,41 +22,23 @@ var Bin string
 
 // Stargate represents a wrapper to interact with the Stargate contract
 type Stargate struct {
-	contract *contracts.GenericWrapper
-	client   *thorclient.Client
-	key      *ecdsa.PrivateKey
+	contract *bind.Caller
 }
 
 // NewStargate creates a new instance of the Stargate contract wrapper
-func NewStargate(client *thorclient.Client, addr thor.Address, key *ecdsa.PrivateKey) *Stargate {
-	base, err := contracts.NewGenericWrapper(client, key, ABI, addr)
+func NewStargate(client *httpclient.Client, addr thor.Address) *Stargate {
+	base, err := bind.NewCaller(client, ABI, addr)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create stargate contract: %v", err))
 	}
 	return &Stargate{
 		contract: base,
-		client:   client,
-		key:      key,
 	}
-}
-
-// Client returns the Thor client
-func (s *Stargate) Client() *thorclient.Client {
-	return s.client
 }
 
 // Address returns the address of the contract
 func (s *Stargate) Address() thor.Address {
 	return s.contract.Address()
-}
-
-// Attach creates a new instance of the Stargate contract with a different key
-func (s *Stargate) Attach(key *ecdsa.PrivateKey) *Stargate {
-	return &Stargate{
-		contract: s.contract.Attach(key),
-		client:   s.client,
-		key:      key,
-	}
 }
 
 // ---- Getter Methods ----
@@ -153,23 +136,23 @@ func (s *Stargate) Weights(validationID thor.Bytes32, period uint32) (*big.Int, 
 // ---- Transaction Methods ----
 
 // AddDelegator adds a delegator to a validation ID
-func (s *Stargate) AddDelegator(validationID thor.Bytes32, autoRenew bool, multiplier uint8, amount *big.Int) *contracts.Sender {
-	return s.contract.SendWithVET(amount, "addDelegator", validationID, autoRenew, multiplier)
+func (s *Stargate) AddDelegator(signer bind.Signer, validationID thor.Bytes32, autoRenew bool, multiplier uint8, amount *big.Int) *bind.Sender {
+	return s.contract.Attach(signer).SenderWithVET(amount, "addDelegator", validationID, autoRenew, multiplier)
 }
 
 // ClaimRewards claims rewards for the sender
-func (s *Stargate) ClaimRewards() *contracts.Sender {
-	return s.contract.Send("claimRewards")
+func (s *Stargate) ClaimRewards(signer bind.Signer) *bind.Sender {
+	return s.contract.Attach(signer).Sender("claimRewards")
 }
 
 // DisableAutoRenew disables auto renewal for the sender's delegation
-func (s *Stargate) DisableAutoRenew() *contracts.Sender {
-	return s.contract.Send("disableAutoRenew")
+func (s *Stargate) DisableAutoRenew(signer bind.Signer) *bind.Sender {
+	return s.contract.Attach(signer).Sender("disableAutoRenew")
 }
 
 // EnableAutoRenew enables auto renewal for the sender's delegation
-func (s *Stargate) EnableAutoRenew() *contracts.Sender {
-	return s.contract.Send("enableAutoRenew")
+func (s *Stargate) EnableAutoRenew(signer bind.Signer) *bind.Sender {
+	return s.contract.Attach(signer).Sender("enableAutoRenew")
 }
 
 // ---- Event Filterers ----
@@ -190,7 +173,13 @@ func (s *Stargate) FilterClaimedRewards(from, to uint32) ([]ClaimedRewardsEvent,
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("ClaimedRewards", from, to)
+	from64 := uint64(from)
+	to64 := uint64(to)
+	rnge := &events.Range{
+		From: &from64,
+		To:   &to64,
+	}
+	raw, err := s.contract.FilterEvents("ClaimedRewards", rnge, nil, logdb.ASC)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +234,13 @@ func (s *Stargate) FilterClaimParams(from, to uint32) ([]ClaimParamsEvent, error
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("ClaimParams", from, to)
+	from64 := uint64(from)
+	to64 := uint64(to)
+	rnge := &events.Range{
+		From: &from64,
+		To:   &to64,
+	}
+	raw, err := s.contract.FilterEvents("ClaimParams", rnge, nil, logdb.ASC)
 	if err != nil {
 		return nil, err
 	}
@@ -299,8 +294,14 @@ func (s *Stargate) FilterClaimOutputs(from, to uint32) ([]ClaimOutputsEvent, err
 	if !ok {
 		return nil, fmt.Errorf("event not found")
 	}
+	from64 := uint64(from)
+	to64 := uint64(to)
+	rnge := &events.Range{
+		From: &from64,
+		To:   &to64,
+	}
 
-	raw, err := s.contract.FilterEvents("ClaimOutputs", from, to)
+	raw, err := s.contract.FilterEvents("ClaimOutputs", rnge, nil, logdb.ASC)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +351,13 @@ func (s *Stargate) FilterWeightsPopulated(from, to uint32) ([]WeightsPopulatedEv
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("WeightsPopulated", from, to)
+	from64 := uint64(from)
+	to64 := uint64(to)
+	rnge := &events.Range{
+		From: &from64,
+		To:   &to64,
+	}
+	raw, err := s.contract.FilterEvents("WeightsPopulated", rnge, nil, logdb.ASC)
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +411,13 @@ func (s *Stargate) FilterRewardsPopulated(from, to uint32) ([]RewardsPopulatedEv
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("RewardsPopulated", from, to)
+	from64 := uint64(from)
+	to64 := uint64(to)
+	rnge := &events.Range{
+		From: &from64,
+		To:   &to64,
+	}
+	raw, err := s.contract.FilterEvents("RewardsPopulated", rnge, nil, logdb.ASC)
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +469,13 @@ func (s *Stargate) FilterRewardsCalculated(from, to uint32) ([]RewardsCalculated
 		return nil, fmt.Errorf("event not found")
 	}
 
-	raw, err := s.contract.FilterEvents("RewardsCalculated", from, to)
+	from64 := uint64(from)
+	to64 := uint64(to)
+	rnge := &events.Range{
+		From: &from64,
+		To:   &to64,
+	}
+	raw, err := s.contract.FilterEvents("RewardsCalculated", rnge, nil, logdb.ASC)
 	if err != nil {
 		return nil, err
 	}

@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/hayabusa-e2e/builtins"
-	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/hayabusa-e2e/utils"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -13,8 +11,11 @@ import (
 
 	"github.com/cqroot/prompt"
 	"github.com/cqroot/prompt/input"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
 func main() {
@@ -37,7 +38,11 @@ func main() {
 	}
 	defer cancel()
 
-	staker := builtins.NewStaker(client, genesis.DevAccounts()[0].PrivateKey)
+	staker, err := builtin.NewStaker(client)
+	if err != nil {
+		fmt.Println("  - Error creating staker:", err)
+		return
+	}
 
 	fmt.Println(" ✅ - Network started successfully")
 	for i, acc := range genesis.DevAccounts() {
@@ -62,7 +67,7 @@ func main() {
 
 	fmt.Println("")
 	fmt.Println("🌐 - Network URL: ", net.Details().Address)
-	fmt.Println("📭 - Staker Address: ", staker.Address())
+	fmt.Println("📭 - Staker Address: ", staker.Raw().Address())
 	res, err := prompt.New().Ask("Stargate Address:").Input("0xf077b491b355E64048cE21E3A6Fc4751eEeA77fa", input.WithValidateFunc(func(s string) error {
 		_, err := thor.ParseAddress(s)
 		return err
@@ -81,7 +86,7 @@ func main() {
 	fmt.Println("✅ - Stargate address updated successfully")
 
 	fmt.Println("\n🕐 Waiting for POS to become active... expected at block ", config.ForkBlock+config.TransitionPeriod)
-	if err := staker.WaitForPOS(config.ForkBlock + config.TransitionPeriod); err != nil {
+	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		fmt.Println("  - Error waiting for PoS:", err)
 		return
 	}
