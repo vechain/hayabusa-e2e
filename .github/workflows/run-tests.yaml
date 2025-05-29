@@ -39,15 +39,11 @@ jobs:
     strategy:
       matrix:
         packages:
-          - builtins
           - tests/validations
           - tests/delegations
           - tests/slots
           - tests/energy
       fail-fast: false
-
-    env:
-      GOPRIVATE: github.com/vechain/draupnir/*
 
     steps:
       - name: Checkout E2E
@@ -57,25 +53,20 @@ jobs:
           path: hayabusa-e2e
           token: ${{ secrets.GHA_REPO_ACCESS }}
 
-      - name: Checkout Hayabusa
+      - name: Checkout Thor
         uses: actions/checkout@v4
         with:
-          repository: vechain/hayabusa
-          path: hayabusa
-          token: ${{ secrets.GHA_REPO_ACCESS }}
-          ref: ${{ inputs.hayabusa-branch }}
+          repository: vechain/thor
+          path: thor
+          ref: ${{ inputs.hayabusa-branch || 'release/hayabusa' }}
 
       - name: Install Go
         uses: actions/setup-go@v5
         with:
           go-version: 1.24.x
 
-      - name: Configure git for private modules
-        run: |
-          git config --global url."https://${{ secrets.GHA_REPO_ACCESS }}@github.com/".insteadOf "https://github.com/"
-
       - name: Test
         run: go test -v -failfast -timeout 3600s ./${{ matrix.packages }}
         working-directory: ${{ github.workspace }}/hayabusa-e2e
         env:
-          THOR_WORKING_DIR: ${{ github.workspace }}/hayabusa
+          THOR_WORKING_DIR: ${{ github.workspace }}/thor

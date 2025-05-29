@@ -1,16 +1,18 @@
 package slots
 
 import (
+	"github.com/vechain/hayabusa-e2e/testutil"
+	"github.com/vechain/thor/v2/thorclient/bind"
 	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/draupnir/common"
-	"github.com/vechain/hayabusa-e2e/builtins"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
 func Test_MissedSlot(t *testing.T) {
@@ -30,7 +32,8 @@ func Test_MissedSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(cancel)
-	staker := builtins.NewStaker(client, hayabusa.ValidatorAccounts[0].PrivateKey)
+	staker, err := builtin.NewStaker(client)
+	require.NoError(t, err)
 
 	validator1 := network.Details().NetworkCfg.Nodes[0]
 	validator2 := network.Details().NetworkCfg.Nodes[1]
@@ -39,14 +42,15 @@ func Test_MissedSlot(t *testing.T) {
 	mustAddValidator := func(hexKey string, stake *big.Int) thor.Bytes32 {
 		key, err := crypto.HexToECDSA(hexKey)
 		require.NoError(t, err)
+		signer := (*bind.PrivateKeySigner)(key)
 		address := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
-		receipt, _, err := staker.Attach(key).AddValidator(address, stake, config.MinStakingPeriod, true).Receipt(false)
+		receipt, _, err := staker.AddValidator(signer, address, stake, config.MinStakingPeriod, true).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		return receipt.Outputs[0].Events[0].Topics[3]
 	}
 
 	// add 2 min stake validators
-	stake := new(big.Int).Set(builtins.MinStake)
+	stake := new(big.Int).Set(builtin.MinStake())
 	mustAddValidator(validator2.GetKey(), stake)
 	mustAddValidator(validator3.GetKey(), stake)
 
@@ -56,7 +60,7 @@ func Test_MissedSlot(t *testing.T) {
 
 	// wait for PoS
 	block := config.ForkBlock + config.TransitionPeriod
-	ticker := common.NewTicker(staker.Client())
+	ticker := utils.NewTicker(staker.Raw().Client())
 	require.NoError(t, ticker.WaitForBlock(block))
 
 	// wait for a missed slot
