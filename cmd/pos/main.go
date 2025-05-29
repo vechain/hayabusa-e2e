@@ -99,7 +99,7 @@ func main() {
 	fmt.Println("Sending transactions...")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	receipts, txs, err := senders.Send(ctx, &bind.TxOptions{})
+	receipts, txs, err := senders.Send(ctx, testutil.TxOptions())
 	if err != nil {
 		fmt.Printf("Error sending transactions: %v\n", err)
 		os.Exit(1)

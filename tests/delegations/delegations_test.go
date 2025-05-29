@@ -34,7 +34,7 @@ func Test_StargateRewards(t *testing.T) {
 			expectedStake = expectedStake.Add(expectedStake, builtin.MinStake())
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		_, _, err := senders.Send(ctx, &bind.TxOptions{})
+		_, _, err := senders.Send(ctx, testutil.TxOptions())
 		cancel()
 		require.NoError(t, err)
 	}
@@ -76,7 +76,7 @@ func Test_Delegations(t *testing.T) {
 		t.Parallel()
 
 		// add the delegation
-		receipt, _, err := staker.AddDelegation(hayabusa.Stargate, validationIDs[0], builtin.MinStake(), false, 100).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err := staker.AddDelegation(hayabusa.Stargate, validationIDs[0], builtin.MinStake(), false, 100).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		delegationID := receiptToID(receipt)
 		delegation, err := staker.GetDelegation(delegationID)
@@ -89,7 +89,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
 		// withdraw - should succeed since auto-renew is false
-		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 
 		delegation, err = staker.GetDelegation(delegationID)
@@ -101,7 +101,7 @@ func Test_Delegations(t *testing.T) {
 		t.Parallel()
 
 		// add the delegation
-		receipt, _, err := staker.AddDelegation(hayabusa.Stargate, validationIDs[1], builtin.MinStake(), false, 100).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err := staker.AddDelegation(hayabusa.Stargate, validationIDs[1], builtin.MinStake(), false, 100).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		delegationID := receiptToID(receipt)
 		delegation, err := staker.GetDelegation(delegationID)
@@ -111,7 +111,7 @@ func Test_Delegations(t *testing.T) {
 		assert.False(t, delegation.AutoRenew)
 
 		// immediately enable auto-renew
-		receipt, _, err = staker.UpdateDelegationAutoRenew(hayabusa.Stargate, delegationID, true).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err = staker.UpdateDelegationAutoRenew(hayabusa.Stargate, delegationID, true).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		delegation, err = staker.GetDelegation(delegationID)
 		require.NoError(t, err)
@@ -121,7 +121,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
 		// withdraw - should fail since auto-renew is true
-		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		assert.True(t, receipt.Reverted)
 		delegation, err = staker.GetDelegation(delegationID)
@@ -133,7 +133,7 @@ func Test_Delegations(t *testing.T) {
 		t.Parallel()
 
 		// add the delegation
-		receipt, _, err := staker.AddDelegation(hayabusa.Stargate, validationIDs[2], builtin.MinStake(), true, 100).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err := staker.AddDelegation(hayabusa.Stargate, validationIDs[2], builtin.MinStake(), true, 100).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		delegationID := receiptToID(receipt)
 		delegation, err := staker.GetDelegation(delegationID)
@@ -146,21 +146,21 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
 		// withdraw - should revert due to auto-renew
-		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		assert.True(t, receipt.Reverted)
 		delegation, err = staker.GetDelegation(delegationID)
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation.Stake)
 
-		receipt, _, err = staker.UpdateDelegationAutoRenew(hayabusa.Stargate, delegationID, false).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err = staker.UpdateDelegationAutoRenew(hayabusa.Stargate, delegationID, false).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 
 		// wait for validators current period to end
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 		// withdraw - should succeed since auto-renew is false
-		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		delegation, err = staker.GetDelegation(delegationID)
 		require.NoError(t, err)
@@ -169,17 +169,17 @@ func Test_Delegations(t *testing.T) {
 
 	t.Run("Should not be able call with external account", func(t *testing.T) {
 		t.Parallel()
-		receipt, _, err := staker.AddDelegation(hayabusa.Stargate, validationIDs[0], builtin.MinStake(), false, 100).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err := staker.AddDelegation(hayabusa.Stargate, validationIDs[0], builtin.MinStake(), false, 100).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		delegationID := receiptToID(receipt)
 
 		// external should not be able to add delegation
-		receipt, _, err = staker.AddDelegation(hayabusa.AdditionalAccounts[0], validationIDs[0], builtin.MinStake(), false, 100).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err = staker.AddDelegation(hayabusa.AdditionalAccounts[0], validationIDs[0], builtin.MinStake(), false, 100).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		assert.True(t, receipt.Reverted)
 
 		// external should not be able to toggle auto-renew
-		receipt, _, err = staker.UpdateDelegationAutoRenew(hayabusa.AdditionalAccounts[0], delegationID, true).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err = staker.UpdateDelegationAutoRenew(hayabusa.AdditionalAccounts[0], delegationID, true).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		assert.True(t, receipt.Reverted)
 
@@ -187,7 +187,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
 		// external should not be able to withdraw delegation
-		receipt, _, err = staker.WithdrawDelegation(hayabusa.AdditionalAccounts[0], delegationID).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+		receipt, _, err = staker.WithdrawDelegation(hayabusa.AdditionalAccounts[0], delegationID).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
 		assert.True(t, receipt.Reverted)
 	})
@@ -232,7 +232,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 
-	if _, _, err := senders.Send(ctx, &bind.TxOptions{}); err != nil {
+	if _, _, err := senders.Send(ctx, testutil.TxOptions()); err != nil {
 		t.Fatal(err)
 	}
 	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {

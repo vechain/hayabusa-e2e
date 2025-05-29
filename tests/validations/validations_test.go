@@ -350,7 +350,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assert.Equal(t, id4, validatorID)
 	t.Log("✅ - Three validators are activated, 2 are queued, queue order has changed based on weight")
 
-	receipt, _, err := staker.UpdateAutoRenew(validator3, id3, false).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+	receipt, _, err := staker.UpdateAutoRenew(validator3, id3, false).Receipt(testutil.TxContext(t), testutil.TxOptions())
 	assert.NoError(t, err)
 	require.False(t, receipt.Reverted, "Transaction should not be reverted")
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
@@ -391,7 +391,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 func addValidatorWithStake(t *testing.T, staker *builtin.Staker, signer bind.Signer, autoRenew bool, stake *big.Int, period uint32) thor.Bytes32 {
 	sender := staker.AddValidator(signer, signer.Address(), stake, period, autoRenew)
-	receipt, _, err := sender.Receipt(testutil.TxContext(t), &bind.TxOptions{})
+	receipt, _, err := sender.Receipt(testutil.TxContext(t), testutil.TxOptions())
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted, "Transaction should not be reverted")
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
@@ -413,7 +413,7 @@ func addValidator(t *testing.T, staker *builtin.Staker, signer bind.Signer, auto
 }
 
 func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Bytes32) {
-	receipt, _, err := staker.Withdraw(signer, validatorID).Receipt(testutil.TxContext(t), &bind.TxOptions{})
+	receipt, _, err := staker.Withdraw(signer, validatorID).Receipt(testutil.TxContext(t), testutil.TxOptions())
 	assert.NoError(t, err)
 	require.False(t, receipt.Reverted, "Transaction should not be reverted")
 	addr := signer.Address()

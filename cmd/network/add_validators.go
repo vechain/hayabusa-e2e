@@ -26,7 +26,7 @@ func addValidators(staker *builtin.Staker, config *hayabusa.Config) error {
 	defer cancel()
 
 	fmt.Println("⏳ Add Validator transactions sent, waiting for confirmation...")
-	_, _, err := senders.Send(ctx, &bind.TxOptions{})
+	_, _, err := senders.Send(ctx, testutil.TxOptions())
 	if err != nil {
 		fmt.Println("  - Error sending transactions:", err)
 		return err

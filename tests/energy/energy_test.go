@@ -48,7 +48,7 @@ func TestEnergy(t *testing.T) {
 		sender := staker.AddValidator(acc, acc.Address(), stake, config.MinStakingPeriod, true)
 		senders.Add(sender)
 	}
-	receipts, _, err := senders.Send(testutil.TxContext(t), &bind.TxOptions{})
+	receipts, _, err := senders.Send(testutil.TxContext(t), testutil.TxOptions())
 	require.NoError(t, err)
 
 	genesisVET := big.NewInt(0)
