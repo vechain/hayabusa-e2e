@@ -51,6 +51,7 @@ jobs:
         with:
           repository: vechain/hayabusa-e2e
           path: hayabusa-e2e
+          token: ${{ github.token }}
 
       - name: Checkout Thor
         uses: actions/checkout@v4
@@ -58,6 +59,7 @@ jobs:
           repository: vechain/thor
           path: thor
           ref: ${{ inputs.hayabusa-branch || 'release/hayabusa' }}
+          token: ${{ github.token }}
 
       - name: Install Go
         uses: actions/setup-go@v5
