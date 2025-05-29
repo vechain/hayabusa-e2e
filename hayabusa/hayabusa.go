@@ -4,23 +4,24 @@ import (
 	"crypto/rand"
 	_ "embed"
 	"github.com/vechain/networkhub/environments"
+	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"time"
 
 	"fmt"
+	"github.com/vechain/thor/v2/thorclient/bind"
 	"log/slog"
 	"math/big"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/draupnir/datagen"
 	"github.com/vechain/networkhub/entrypoint/client"
 	"github.com/vechain/networkhub/genesisbuilder"
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/network/node/genesis"
 	"github.com/vechain/networkhub/thorbuilder"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
 
 	networkhubNetwork "github.com/vechain/networkhub/network"
 	thorgenesis "github.com/vechain/thor/v2/genesis"
@@ -30,7 +31,7 @@ var (
 	ValidatorAccounts  = mustGenerateAccounts(101)
 	Stargate           = mustGenerateAccounts(1)[0]
 	ParamsStargateKey  = nameToBytes32("stargate-contract-address")
-	Executor           = thorgenesis.DevAccounts()[0] // from genesisbuilder default
+	Executor           = (*bind.PrivateKeySigner)(thorgenesis.DevAccounts()[0].PrivateKey)
 	AdditionalAccounts = mustGenerateAccounts(100)
 )
 
@@ -42,11 +43,12 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 		Build()
 }
 
-func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, func(), error) {
+func StartNetwork(config *Config) (*httpclient.Client, environments.Actions, func(), error) {
 	if config.Nodes < 2 {
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
-	repo := "git@github.com:vechain/hayabusa.git"
+	repo := "git@github.com:vechain/thor.git"
+
 	// reimplement this logic
 	// workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
 	//if ok {
@@ -79,7 +81,7 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 		}
 		nodes[i] = &node.BaseNode{
 			ID:             "Node-" + strconv.Itoa(i),
-			Key:            common.Bytes2Hex(ValidatorAccounts[i].PrivateKey.D.Bytes()),
+			Key:            common.Bytes2Hex(ValidatorAccounts[i].D.Bytes()),
 			Genesis:        customGenesis,
 			Verbosity:      verbosity,
 			AdditionalArgs: additionalArgs,
@@ -116,7 +118,7 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 	}
 
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
-	client := thorclient.New(nodes[1].GetHTTPAddr())
+	client := httpclient.New(nodes[1].GetHTTPAddr())
 
 	return client, hayabusaNetwork, func() {
 		if err := hayabusaNetwork.StopNetwork(); err != nil {
@@ -130,9 +132,9 @@ func authorities() []thorgenesis.Authority {
 
 	for _, account := range ValidatorAccounts {
 		authorities = append(authorities, thorgenesis.Authority{
-			MasterAddress:   account.Address,
-			EndorsorAddress: account.Address,
-			Identity:        datagen.RandKey(),
+			MasterAddress:   account.Address(),
+			EndorsorAddress: account.Address(),
+			Identity:        datagen.RandomHash(),
 		})
 	}
 
@@ -148,9 +150,9 @@ func genesisAccounts() []thorgenesis.Account {
 	hundredBillion := new(big.Int).Mul(oneEth, big.NewInt(100e9))
 	oneBillion := new(big.Int).Mul(oneEth, big.NewInt(1e9))
 
-	addAccount := func(account thorgenesis.DevAccount, balance *big.Int) {
+	addAccount := func(account bind.Signer, balance *big.Int) {
 		accounts = append(accounts, thorgenesis.Account{
-			Address: account.Address,
+			Address: account.Address(),
 			Balance: (*thorgenesis.HexOrDecimal256)(balance),
 			Energy:  (*thorgenesis.HexOrDecimal256)(balance),
 			Code:    "0x",
@@ -187,19 +189,15 @@ func nameToBytes32(name string) string {
 	return thor.BytesToBytes32([]byte(name)).String()
 }
 
-func mustGenerateAccounts(amount int) []thorgenesis.DevAccount {
-	accounts := make([]thorgenesis.DevAccount, amount)
+func mustGenerateAccounts(amount int) []*bind.PrivateKeySigner {
+	accounts := make([]*bind.PrivateKeySigner, amount)
 
 	for i := range amount {
 		key, err := crypto.GenerateKey()
 		if err != nil {
 			panic(fmt.Sprintf("failed to generate key: %v", err))
 		}
-		address := crypto.PubkeyToAddress(key.PublicKey)
-		accounts[i] = thorgenesis.DevAccount{
-			Address:    thor.Address(address),
-			PrivateKey: key,
-		}
+		accounts[i] = (*bind.PrivateKeySigner)(key)
 	}
 
 	return accounts
