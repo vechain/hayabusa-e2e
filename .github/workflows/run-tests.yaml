@@ -7,13 +7,13 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      hayabusa-branch:
+      thor-branch:
         description: 'Branch to test against'
         required: true
         default: 'release/hayabusa'
   workflow_call:
     inputs:
-      hayabusa-branch:
+      thor-branch:
         type: string
         required: false
       codebuild-name:
@@ -51,14 +51,13 @@ jobs:
         with:
           repository: vechain/hayabusa-e2e
           path: hayabusa-e2e
-          token: ${{ secrets.GHA_REPO_ACCESS }}
 
       - name: Checkout Thor
         uses: actions/checkout@v4
         with:
           repository: vechain/thor
           path: thor
-          ref: ${{ inputs.hayabusa-branch || 'release/hayabusa' }}
+          ref: ${{ inputs.thor-branch || 'release/hayabusa' }}
 
       - name: Install Go
         uses: actions/setup-go@v5
