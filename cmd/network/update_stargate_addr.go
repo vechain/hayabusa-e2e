@@ -7,18 +7,18 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
 	big2 "math/big"
 )
 
-func setStargateAddr(client *thorclient.Client, stargate thor.Address) error {
+func setStargateAddr(client *httpclient.Client, stargate thor.Address) error {
 	executor := genesis.DevAccounts()[0]
-
-	chainTag, err := client.ChainTag()
+	genesis, err := client.GetBlock("0")
 	if err != nil {
-		return fmt.Errorf("failed to get chain tag: %w", err)
+		return fmt.Errorf("failed to get genesis block: %w", err)
 	}
+	chainTag := genesis.ID[31]
 
 	// set params call data
 	paramsMethod, ok := builtin.Params.ABI.MethodByName("set")

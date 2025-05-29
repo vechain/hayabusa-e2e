@@ -1,14 +1,13 @@
 package hayabusa
 
 import (
+	"github.com/vechain/thor/v2/builtin"
 	"math/big"
 	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/hayabusa-e2e/builtins"
 	"github.com/vechain/networkhub/network/node/genesis"
-	"github.com/vechain/thor/v2/builtin"
 	devgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/thor"
@@ -37,11 +36,11 @@ func (h Config) Apply(genesis *genesis.CustomGenesis) {
 
 	// staker config - set all values
 	stakerIndex := slices.IndexFunc(genesis.Accounts, func(acc devgenesis.Account) bool {
-		return acc.Address == builtins.StakerAddress
+		return acc.Address == builtin.Staker.Address
 	})
 	if stakerIndex == -1 {
 		genesis.Accounts = append(genesis.Accounts, devgenesis.Account{
-			Address: builtins.StakerAddress,
+			Address: builtin.Staker.Address,
 			Storage: map[string]thor.Bytes32{},
 			Code:    hexutil.Encode(runtime.EmptyRuntimeBytecode),
 			Balance: (*devgenesis.HexOrDecimal256)(big.NewInt(0)),
@@ -71,7 +70,7 @@ func (h Config) Apply(genesis *genesis.CustomGenesis) {
 	}
 	genesis.Accounts[paramsIndex].Storage[nameToBytes32("max-block-proposers")] = uint32ToBytes32(h.MaxBlockProposers, 3)
 
-	addr := Stargate.Address
+	addr := Stargate.Address()
 	if !h.StargateAddress.IsZero() {
 		addr = h.StargateAddress
 	}
