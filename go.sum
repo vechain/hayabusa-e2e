@@ -214,8 +214,8 @@ github.com/vechain/goleveldb v1.0.1-0.20220809091043-51eb019c8655 h1:CbHcWpCi7wO
 github.com/vechain/goleveldb v1.0.1-0.20220809091043-51eb019c8655/go.mod h1:RRCYJbIwD5jmqPI9XoAFR0OcDxqUctll6zUj/+B4S48=
 github.com/vechain/networkhub v0.0.5-0.20250515080726-612e02a94ab5 h1:4Dsti3ntCWTAtwXzaJda7Ojykqd2HSljgPxAULKozFA=
 github.com/vechain/networkhub v0.0.5-0.20250515080726-612e02a94ab5/go.mod h1:eKVUaHh3O3bFDGESAwyQQMy+mkrb4jHE7W1z/YRFySI=
-github.com/vechain/thor/v2 v2.2.3-0.20250529084158-10802a0c5772 h1:RcgclDkMnmyI7pHFHiRSX5VNIHfmj6W3bxJcjBn2CcM=
-github.com/vechain/thor/v2 v2.2.3-0.20250529084158-10802a0c5772/go.mod h1:mcenP39u5NH8CdoJaUwcn3LGuzsorspDzTOFskVQaz4=
+github.com/vechain/thor/v2 v2.2.3-0.20250529120017-2abbad1d9c9e h1:7JXt3FuW1SZ2Kaw9Kazi2i1n/lMJRJjwuDu5LvSfHqU=
+github.com/vechain/thor/v2 v2.2.3-0.20250529120017-2abbad1d9c9e/go.mod h1:mcenP39u5NH8CdoJaUwcn3LGuzsorspDzTOFskVQaz4=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 go.opentelemetry.io/auto/sdk v1.1.0 h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=

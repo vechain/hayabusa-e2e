@@ -14,7 +14,7 @@ require (
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/stretchr/testify v1.10.0
 	github.com/vechain/networkhub v0.0.5-0.20250515080726-612e02a94ab5
-	github.com/vechain/thor/v2 v2.2.3-0.20250529084158-10802a0c5772
+	github.com/vechain/thor/v2 v2.2.3-0.20250529120017-2abbad1d9c9e
 )
 
 require (
