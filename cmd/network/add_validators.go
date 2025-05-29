@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thorclient/bind"

@@ -3,16 +3,16 @@ package hayabusa
 import (
 	"crypto/rand"
 	_ "embed"
-	"github.com/vechain/networkhub/environments"
-	"github.com/vechain/thor/v2/test/datagen"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
-	"time"
-
 	"fmt"
-	"github.com/vechain/thor/v2/thorclient/bind"
 	"log/slog"
 	"math/big"
 	"strconv"
+	"time"
+
+	"github.com/vechain/networkhub/environments"
+	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
