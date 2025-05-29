@@ -186,7 +186,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
-	require.NoError(t, utils.WaitForPOS(staker, config.ForkBlock))
+	require.NoError(t, utils.WaitForFork(staker, config.ForkBlock))
 	ticker := utils.NewTicker(client)
 
 	id1 := addValidator(t, staker, validator1, false, config.MinStakingPeriod)
