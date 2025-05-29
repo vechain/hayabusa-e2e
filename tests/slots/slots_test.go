@@ -29,12 +29,14 @@ func Test_MissedSlot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Cleanup(cancel)
+
 	staker := builtins.NewStaker(client, hayabusa.ValidatorAccounts[0].PrivateKey)
 
-	validator1 := network.Details().NetworkCfg.Nodes[0]
-	validator2 := network.Details().NetworkCfg.Nodes[1]
-	validator3 := network.Details().NetworkCfg.Nodes[2]
+	validator1 := network.Config().Nodes[0]
+	validator2 := network.Config().Nodes[1]
+	validator3 := network.Config().Nodes[2]
 
 	mustAddValidator := func(hexKey string, stake *big.Int) thor.Bytes32 {
 		key, err := crypto.HexToECDSA(hexKey)
