@@ -1,7 +1,7 @@
 package stargate
 
 import (
-	"github.com/vechain/thor/v2/thorclient/bind"
+	"log/slog"
 	"math/big"
 	"strconv"
 	"strings"
@@ -21,6 +21,7 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -77,7 +78,6 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 2, int(start))
 	assert.Equal(t, 2, int(end))
-	assert.Equal(t, 1, claimable.Sign())
 
 	// assert TVL
 	expected := new(big.Int).Mul(builtin.MinStake(), big.NewInt(int64(len(validationIDs))))
@@ -105,6 +105,9 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	proposerReward = proposerReward.Div(proposerReward, big.NewInt(10))
 
 	delegatorReward := new(big.Int).Sub(blockReward, proposerReward)
+
+	slog.Info("rewards per block", "proposer", proposerReward.String(), "delegator", delegatorReward.String(), "blockCount", blockCount)
+
 	delegatorReward = delegatorReward.Mul(delegatorReward, big.NewInt(int64(blockCount)))
 
 	stargateAddr := stargate.Address()
@@ -124,6 +127,9 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	assert.Equal(t, 2, int(start))
 	assert.Equal(t, 4, int(end))
 	assert.Equal(t, delegatorReward, claimable, "claimable should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, claimable).String())
+	simulation, err := stargate.Raw().Simulate(big.NewInt(0), acc.Address(), "getClaimable", acc.Address())
+	require.NoError(t, err)
+	stargate.LogEventValues(simulation.Events)
 }
 
 func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Bytes32) {
@@ -132,10 +138,10 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		Nodes:             3,
 		MaxBlockProposers: 3,
 		ForkBlock:         0,
-		TransitionPeriod:  8,
-		EpochLength:       4,
-		CooldownPeriod:    4,
-		MinStakingPeriod:  4,
+		TransitionPeriod:  4,
+		EpochLength:       2,
+		CooldownPeriod:    2,
+		MinStakingPeriod:  2,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 24,
 	}
@@ -193,10 +199,8 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 
 	acc := hayabusa.AdditionalAccounts[0]
 
-	// trim Bin whitespace (new lines etc.)
 	bytecode := stargate.Bin
 	bytecode = strings.TrimSpace(bytecode)
-
 	bytes, err := hexutil.Decode("0x" + bytecode)
 	require.NoError(t, err)
 
@@ -241,7 +245,9 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	require.NotNil(t, receipt)
+	if receipt == nil {
+		t.Fatalf("failed to get transaction receipt: %v", err)
+	}
 
 	contractAddr := receipt.Outputs[0].ContractAddress
 

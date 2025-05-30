@@ -3,15 +3,17 @@ package stargate
 import (
 	_ "embed"
 	"fmt"
-	"github.com/vechain/thor/v2/api/events"
-	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
+	"github.com/vechain/thor/v2/api/transactions"
+	"log/slog"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 //go:embed Stargate.abi
@@ -34,6 +36,11 @@ func NewStargate(client *httpclient.Client, addr thor.Address) *Stargate {
 	return &Stargate{
 		contract: base,
 	}
+}
+
+// Raw returns the underlying caller for direct interactions
+func (s *Stargate) Raw() *bind.Caller {
+	return s.contract
 }
 
 // Address returns the address of the contract
@@ -510,4 +517,193 @@ func (s *Stargate) FilterRewardsCalculated(from, to uint32) ([]RewardsCalculated
 	}
 
 	return out, nil
+}
+
+func (s *Stargate) LogEventValues(events []*transactions.Event) {
+	for _, event := range events {
+		name := ""
+		for _, abiEvent := range s.contract.ABI().Events {
+			if event.Topics[0].String() == abiEvent.Id().String() {
+				name = abiEvent.Name
+				break
+			}
+		}
+
+		if name == "" {
+			fmt.Printf("Unknown event: %s\n", event.Topics[0].String())
+			continue
+		}
+
+		switch name {
+		case "ClaimedRewards":
+			//validationID := thor.Bytes32(event.Topics[1][:])     // indexed
+			//delegator := thor.BytesToAddress(event.Topics[2][:]) // indexed
+
+			// non-indexed
+			data := make([]interface{}, 3)
+			data[0] = new(*big.Int)
+			data[1] = new(uint32)
+			data[2] = new(uint32)
+
+			bytes, err := hexutil.Decode(event.Data)
+			if err != nil {
+				fmt.Printf("Error decoding ClaimedRewards event data: %v\n", err)
+				continue
+			}
+			if err := s.contract.ABI().Events["ClaimedRewards"].Inputs.Unpack(&data, bytes); err != nil {
+				fmt.Printf("Error unpacking ClaimedRewards event data: %v\n", err)
+				continue
+			}
+
+			slog.Info("ClaimedRewards Event",
+				//"validationID", validationID,
+				//"delegator", delegator,
+				"amount", *(data[0].(**big.Int)),
+				"firstClaimablePeriod", *(data[1].(*uint32)),
+				"lastClaimablePeriod", *(data[2].(*uint32)),
+			)
+		case "ClaimParams":
+			//delegationID := thor.Bytes32(event.Topics[1][:]) // indexed
+
+			// non-indexed
+			data := make([]interface{}, 6)
+			data[0] = new(common.Address)
+			data[1] = new(uint32)
+			data[2] = new(uint32)
+			data[3] = new(uint32)
+			data[4] = new(uint32)
+			data[5] = new(*big.Int)
+
+			bytes, err := hexutil.Decode(event.Data)
+			if err != nil {
+				fmt.Printf("Error decoding ClaimParams event data: %v\n", err)
+				continue
+			}
+			if err := s.contract.ABI().Events["ClaimParams"].Inputs.Unpack(&data, bytes); err != nil {
+				fmt.Printf("Error unpacking ClaimParams event data: %v\n", err)
+				continue
+			}
+
+			slog.Info("ClaimParams Event",
+				//"delegationID", delegationID,
+				//"delegator", thor.Address(*(data[0].(*common.Address))),
+				"firstClaimablePeriod", *(data[1].(*uint32)),
+				"lastClaimablePeriod", *(data[2].(*uint32)),
+				"previouslyPopulatedPeriod", *(data[3].(*uint32)),
+				"maxClaimablePeriod", *(data[4].(*uint32)),
+				"delegatorWeight", *(data[5].(**big.Int)),
+			)
+
+		case "ClaimOutputs":
+			//delegationID := thor.Bytes32(event.Topics[1][:]) // indexed
+			// non-indexed
+			data := make([]interface{}, 2)
+			data[0] = new(common.Address)
+			data[1] = new(*big.Int)
+
+			bytes, err := hexutil.Decode(event.Data)
+			if err != nil {
+				fmt.Printf("Error decoding ClaimOutputs event data: %v\n", err)
+				continue
+			}
+
+			if err := s.contract.ABI().Events["ClaimOutputs"].Inputs.Unpack(&data, bytes); err != nil {
+				fmt.Printf("Error unpacking ClaimOutputs event data: %v\n", err)
+				continue
+			}
+
+			slog.Info("ClaimOutputs Event",
+				//"delegationID", delegationID,
+				//"delegator", thor.Address(*(data[0].(*common.Address))),
+				"totalRewards", *(data[1].(**big.Int)),
+			)
+
+		case "WeightsPopulated":
+			//validationID := thor.Bytes32(event.Topics[1][:]) // indexed
+			// non-indexed
+			data := make([]interface{}, 5)
+			data[0] = new(uint32)
+			data[1] = new(*big.Int)
+			data[2] = new(*big.Int)
+			data[3] = new(*big.Int)
+			data[4] = new(*big.Int)
+			bytes, err := hexutil.Decode(event.Data)
+			if err != nil {
+				fmt.Printf("Error decoding WeightsPopulated event data: %v\n", err)
+				continue
+			}
+
+			if err := s.contract.ABI().Events["WeightsPopulated"].Inputs.Unpack(&data, bytes); err != nil {
+				fmt.Printf("Error unpacking WeightsPopulated event data: %v\n", err)
+				continue
+			}
+
+			slog.Info("WeightsPopulated Event",
+				//"validationID", validationID,
+				"stakingPeriod", *(data[0].(*uint32)),
+				"previousWeight", *(data[1].(**big.Int)),
+				"increase", *(data[2].(**big.Int)),
+				"reduction", *(data[3].(**big.Int)),
+				"newWeight", *(data[4].(**big.Int)),
+			)
+
+		case "RewardsPopulated":
+			//validationID := thor.Bytes32(event.Topics[1][:]) // indexed
+			// non-indexed
+			data := make([]interface{}, 4)
+			data[0] = new(uint32)
+			data[1] = new(*big.Int)
+			data[2] = new(*big.Int)
+			data[3] = new(*big.Int)
+			bytes, err := hexutil.Decode(event.Data)
+			if err != nil {
+				fmt.Printf("Error decoding RewardsPopulated event data: %v\n", err)
+				continue
+			}
+
+			if err := s.contract.ABI().Events["RewardsPopulated"].Inputs.Unpack(&data, bytes); err != nil {
+				fmt.Printf("Error unpacking RewardsPopulated event data: %v\n", err)
+				continue
+			}
+
+			slog.Info("RewardsPopulated Event",
+				//"validationID", validationID,
+				"stakingPeriod", *(data[0].(*uint32)),
+				"blockRewards", *(data[1].(**big.Int)),
+				"allDelegatorsRewards", *(data[2].(**big.Int)),
+				"proposerRewards", *(data[3].(**big.Int)),
+			)
+
+		case "RewardsCalculated":
+			//validationID := thor.Bytes32(event.Topics[1][:]) // indexed
+			// non-indexed
+			data := make([]interface{}, 4)
+			data[0] = new(uint32)
+			data[1] = new(*big.Int)
+			data[2] = new(*big.Int)
+			data[3] = new(*big.Int)
+			bytes, err := hexutil.Decode(event.Data)
+			if err != nil {
+				fmt.Printf("Error decoding RewardsCalculated event data: %v\n", err)
+				continue
+			}
+			if err := s.contract.ABI().Events["RewardsCalculated"].Inputs.Unpack(&data, bytes); err != nil {
+				fmt.Printf("Error unpacking RewardsCalculated event data: %v\n", err)
+				continue
+			}
+
+			slog.Info("RewardsCalculated Event",
+				//"validationID", validationID,
+				"stakingPeriod", *(data[0].(*uint32)),
+				"rewards", *(data[1].(**big.Int)),
+				"allDelegatorsWeight", *(data[2].(**big.Int)),
+				"allDelegatorsRewards", *(data[3].(**big.Int)),
+			)
+
+		default:
+			slog.Warn("Unknown Stargate event",
+				"name", name,
+				"topics", event.Topics)
+		}
+	}
 }

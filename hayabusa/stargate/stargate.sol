@@ -145,13 +145,14 @@ contract Stargate {
             firstClaimablePeriod++;
         }
 
-        uint256 delegatorWeight = (stake * multiplier) / 100;
-
         // max claimable period = minOf (validation completed periods, delegation end period)
         uint32 maxClaimablePeriod = staker.getCompletedPeriods(validationID);
         if (endPeriod < maxClaimablePeriod) {
             maxClaimablePeriod = endPeriod;
         }
+        
+        uint256 delegatorWeight = (stake * multiplier) / 100;
+
         emit ClaimParams(delegationID, msg.sender,  firstClaimablePeriod, maxClaimablePeriod, claims[delegationID], maxClaimablePeriod, delegatorWeight);
         
         if (maxClaimablePeriod == 0 || firstClaimablePeriod > maxClaimablePeriod) {

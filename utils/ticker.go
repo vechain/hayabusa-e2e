@@ -76,7 +76,7 @@ func (t *Ticker) WaitForBlock(blockNumber uint32) error {
 			if err != nil && !errors.Is(err, common.ErrNotFound) {
 				return fmt.Errorf("unexpected error getting block: %w", err)
 			}
-			time.Sleep(3 * time.Second)
+			time.Sleep(1 * time.Second)
 			slog.Warn("waiting for block...", "block", blockNumber, "timeout", time.Until(time.Unix(int64(expectedTime), 0).Add(2*time.Second)))
 		}
 	}

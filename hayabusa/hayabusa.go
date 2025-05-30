@@ -31,10 +31,19 @@ var (
 )
 
 func Genesis(config *Config) *genesis.CustomGenesis {
+	executor := Executor.Address()
 	return genesisbuilder.New(int(config.MaxBlockProposers)).
 		Overrider(config.Apply).
 		Accounts(genesisAccounts()).
 		Authority(authorities()).
+		Executor(thorgenesis.Executor{
+			Approvers: make([]thorgenesis.Approver, 0),
+		}).
+		Params(
+			thorgenesis.Params{
+				ExecutorAddress: &executor,
+			},
+		).
 		Build()
 }
 
