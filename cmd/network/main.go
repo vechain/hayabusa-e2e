@@ -66,7 +66,7 @@ func main() {
 	}
 
 	fmt.Println("")
-	fmt.Println("🌐 - Network URL: ", net.Details().Address)
+	fmt.Println("🌐 - Network URL: ", net.Config().Nodes[0].GetAPIAddr())
 	fmt.Println("📭 - Staker Address: ", staker.Raw().Address())
 	res, err := prompt.New().Ask("Stargate Address:").Input("0xf077b491b355E64048cE21E3A6Fc4751eEeA77fa", input.WithValidateFunc(func(s string) error {
 		_, err := thor.ParseAddress(s)
@@ -98,7 +98,7 @@ func main() {
 	}
 	var killDevpal func()
 	if res == "y" {
-		killDevpal, err = startDevPal(net.Details().Address)
+		killDevpal, err = startDevPal(net.Config().Nodes[0].GetAPIAddr())
 		if err != nil {
 			fmt.Println("  - Error starting devpal:", err)
 			return

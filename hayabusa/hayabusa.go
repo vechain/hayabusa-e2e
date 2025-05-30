@@ -1,25 +1,31 @@
 package hayabusa
 
 import (
+	"crypto/rand"
 	_ "embed"
 	"fmt"
 	"log/slog"
 	"math/big"
 	"os"
 	"strconv"
+	"time"
+
+	"github.com/vechain/networkhub/environments"
+	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/hayabusa-e2e/genesisbuilder"
-	"github.com/vechain/hayabusa-e2e/network"
-	networkhubNetwork "github.com/vechain/networkhub/network"
+	"github.com/vechain/networkhub/entrypoint/client"
+	"github.com/vechain/networkhub/genesisbuilder"
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/network/node/genesis"
-	thorgenesis "github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/test/datagen"
+	"github.com/vechain/networkhub/thorbuilder"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
+
+	networkhubNetwork "github.com/vechain/networkhub/network"
+	thorgenesis "github.com/vechain/thor/v2/genesis"
 )
 
 var (
@@ -47,18 +53,31 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 		Build()
 }
 
-func StartNetwork(config *Config) (*httpclient.Client, *network.CustomNetwork, func(), error) {
+func StartNetwork(config *Config) (*httpclient.Client, environments.Actions, func(), error) {
 	if config.Nodes < 2 {
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
 	repo := "git@github.com:vechain/thor.git"
-	var net *network.CustomNetwork
+
+	// reimplement this logic
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
+	var thorBuilder *thorbuilder.Config
 	if ok {
-		net = network.NewCustomWithRepoAndDownloadPath(repo, workingDir, config.Debug)
+		thorBuilder = &thorbuilder.Config{
+			BuildConfig: &thorbuilder.BuildConfig{
+				ExistingPath: workingDir,
+				DebugBuild:   true,
+			},
+		}
 	} else {
 		slog.Warn("THOR_WORKING_DIR not set, using default repo/branch")
-		net = network.NewCustomNetworkWithBranchAndRepo(repo, "release/hayabusa")
+		thorBuilder = &thorbuilder.Config{
+			DownloadConfig: &thorbuilder.DownloadConfig{
+				RepoUrl:    repo,
+				Branch:     "release/hayabusa",
+				IsReusable: true,
+			},
+		}
 	}
 
 	verbosity := 3
@@ -68,6 +87,7 @@ func StartNetwork(config *Config) (*httpclient.Client, *network.CustomNetwork, f
 
 	customGenesis := Genesis(config)
 	nodes := make([]node.Config, config.Nodes)
+	used := make(map[int]bool)
 	for i := range config.Nodes {
 		additionalArgs := map[string]string{
 			"txpool-limit-per-account": "100000",
@@ -82,23 +102,43 @@ func StartNetwork(config *Config) (*httpclient.Client, *network.CustomNetwork, f
 			Genesis:        customGenesis,
 			Verbosity:      verbosity,
 			AdditionalArgs: additionalArgs,
+			APIAddr:        fmt.Sprintf("127.0.0.1:%d", rndPort(used)),
+			P2PListenPort:  rndPort(used),
 		}
 	}
 	networkCfg := &networkhubNetwork.Network{
 		Environment: "local",
-		ID:          "test-id",
+		BaseID:      "test-id",
 		Nodes:       nodes,
+		ThorBuilder: thorBuilder,
 	}
-	if err := net.StartWithNetwork(networkCfg); err != nil {
-		net.Stop()
-		return nil, nil, nil, fmt.Errorf("failed to start network: %w", err)
+
+	networkHub := client.New()
+	networkID, err := networkHub.Config(networkCfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	hayabusaNetwork, err := networkHub.GetNetwork(networkID.ID())
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	err = hayabusaNetwork.StartNetwork()
+	if err != nil {
+		hayabusaNetwork.StopNetwork()
+		return nil, nil, nil, err
+	}
+
+	if err = networkCfg.HealthCheck(0, 20*time.Second); err != nil {
+		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
 
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
 	client := httpclient.New(nodes[1].GetHTTPAddr())
 
-	return client, net, func() {
-		if err := net.Stop(); err != nil {
+	return client, hayabusaNetwork, func() {
+		if err := hayabusaNetwork.StopNetwork(); err != nil {
 			slog.Error("failed to stop network", "error", err)
 		}
 	}, nil
@@ -182,4 +222,24 @@ func mustParseKeys(hexKeys []string) []*bind.PrivateKeySigner {
 	}
 
 	return keys
+}
+
+func rndPort(used map[int]bool) int {
+	const (
+		minPort = 49152
+		maxPort = 65535
+	)
+	for {
+		buf := make([]byte, 2)
+		// Ignoring the error for brevity—not recommended in production code!
+		_, _ = rand.Read(buf)
+
+		// Convert 2 bytes to a 16-bit number, then mod by the range size.
+		n := int(buf[0])<<8 | int(buf[1])
+		port := minPort + (n % (maxPort - minPort + 1))
+		if _, ok := used[port]; !ok {
+			used[port] = true
+			return port
+		}
+	}
 }
