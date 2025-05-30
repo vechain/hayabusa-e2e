@@ -150,7 +150,7 @@ contract Stargate {
         if (endPeriod < maxClaimablePeriod) {
             maxClaimablePeriod = endPeriod;
         }
-        
+
         uint256 delegatorWeight = (stake * multiplier) / 100;
 
         emit ClaimParams(delegationID, msg.sender,  firstClaimablePeriod, maxClaimablePeriod, claims[delegationID], maxClaimablePeriod, delegatorWeight);
@@ -216,6 +216,10 @@ contract Stargate {
         uint256 increase = weights[validationID][stakingPeriod]; // for any new delegators
         uint256 reduction = reductions[validationID][stakingPeriod]; // for any exited delegators
         uint256 newWeight = previousWeight + increase - reduction;
+        if (newWeight == 0) {
+            // no delegators for this staking period
+            return;
+        }
         weights[validationID][stakingPeriod] = newWeight;
         // debugging
         emit WeightsPopulated(validationID, stakingPeriod, previousWeight, increase, reduction, newWeight);
@@ -227,6 +231,10 @@ contract Stargate {
         bytes32 validationID,
         uint32 stakingPeriod
     ) internal {
+        if (weights[validationID][stakingPeriod] == 0) {
+            // no delegators for this staking period
+            return;
+        }
         uint256 blockRewards = staker.getRewards(validationID, stakingPeriod);
         uint256 proposerRewards = (blockRewards * 3) / 10;
         uint256 allDelegatorsRewards = blockRewards - proposerRewards;
@@ -243,6 +251,11 @@ contract Stargate {
         uint256 delegatorWeight
     ) internal returns (uint256) {
         uint256 allDelegatorsWeight = weights[validationID][stakingPeriod];
+        if (allDelegatorsWeight == 0) {
+            // no delegators for this staking period
+            emit RewardsCalculated(validationID, stakingPeriod, 0, 0, 0);
+            return 0;
+        }
         uint256 allDelegatorsRewards = rewards[validationID][stakingPeriod];
         uint256 result =  (allDelegatorsRewards * delegatorWeight) / allDelegatorsWeight;
         emit RewardsCalculated(validationID, stakingPeriod, result, allDelegatorsWeight, allDelegatorsRewards);

@@ -3,13 +3,13 @@ package stargate
 import (
 	_ "embed"
 	"fmt"
-	"github.com/vechain/thor/v2/api/transactions"
 	"log/slog"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -164,7 +164,16 @@ func (s *Stargate) EnableAutoRenew(signer bind.Signer) *bind.Sender {
 
 // ---- Event Filterers ----
 
-// ClaimedRewardsEvent represents a ClaimedRewards event
+func (s *Stargate) filterEvents(name string, from, to uint32) ([]events.FilteredEvent, error) {
+	from64 := uint64(from)
+	to64 := uint64(to)
+	rnge := &events.Range{
+		From: &from64,
+		To:   &to64,
+	}
+	return s.contract.FilterEvents(name, rnge, nil, logdb.ASC)
+}
+
 type ClaimedRewardsEvent struct {
 	ValidationID         thor.Bytes32
 	Delegator            thor.Address
@@ -173,57 +182,50 @@ type ClaimedRewardsEvent struct {
 	LastClaimablePeriod  uint32
 }
 
-// FilterClaimedRewards filters ClaimedRewards events
-func (s *Stargate) FilterClaimedRewards(from, to uint32) ([]ClaimedRewardsEvent, error) {
-	event, ok := s.contract.ABI().Events["ClaimedRewards"]
-	if !ok {
-		return nil, fmt.Errorf("event not found")
+func (s *Stargate) ParseClaimedRewards(topics []*thor.Bytes32, data string) (*ClaimedRewardsEvent, error) {
+	if len(topics) < 3 {
+		return nil, fmt.Errorf("not enough topics for ClaimedRewards event")
 	}
 
-	from64 := uint64(from)
-	to64 := uint64(to)
-	rnge := &events.Range{
-		From: &from64,
-		To:   &to64,
-	}
-	raw, err := s.contract.FilterEvents("ClaimedRewards", rnge, nil, logdb.ASC)
+	validationID := thor.Bytes32(topics[1][:])     // indexed
+	delegator := thor.BytesToAddress(topics[2][:]) // indexed
+	dataFields := make([]interface{}, 3)
+	dataFields[0] = new(*big.Int)
+	dataFields[1] = new(uint32)
+	dataFields[2] = new(uint32)
+	bytes, err := hexutil.Decode(data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode ClaimedRewards event data: %w", err)
+	}
+	if err := s.contract.ABI().Events["ClaimedRewards"].Inputs.Unpack(&dataFields, bytes); err != nil {
+		return nil, fmt.Errorf("failed to unpack ClaimedRewards event data: %w", err)
+	}
+	return &ClaimedRewardsEvent{
+		ValidationID:         validationID,
+		Delegator:            delegator,
+		Amount:               *(dataFields[0].(**big.Int)),
+		FirstClaimablePeriod: *(dataFields[1].(*uint32)),
+		LastClaimablePeriod:  *(dataFields[2].(*uint32)),
+	}, nil
+}
+
+func (s *Stargate) FilterClaimedRewards(from, to uint32) ([]*ClaimedRewardsEvent, error) {
+	raw, err := s.filterEvents("ClaimedRewards", from, to)
+	if err != nil {
+		return nil, fmt.Errorf("failed to filter ClaimedRewards events: %w", err)
 	}
 
-	out := make([]ClaimedRewardsEvent, len(raw))
+	out := make([]*ClaimedRewardsEvent, len(raw))
 	for i, log := range raw {
-		validationID := thor.Bytes32(log.Topics[1][:])     // indexed
-		delegator := thor.BytesToAddress(log.Topics[2][:]) // indexed
-
-		// non-indexed
-		data := make([]interface{}, 3)
-		data[0] = new(*big.Int)
-		data[1] = new(uint32)
-		data[2] = new(uint32)
-
-		bytes, err := hexutil.Decode(log.Data)
+		out[i], err = s.ParseClaimedRewards(log.Topics, log.Data)
 		if err != nil {
-			return nil, err
-		}
-
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
-			return nil, err
-		}
-
-		out[i] = ClaimedRewardsEvent{
-			ValidationID:         validationID,
-			Delegator:            delegator,
-			Amount:               *(data[0].(**big.Int)),
-			FirstClaimablePeriod: *(data[1].(*uint32)),
-			LastClaimablePeriod:  *(data[2].(*uint32)),
+			return nil, fmt.Errorf("failed to parse ClaimedRewards event: %w", err)
 		}
 	}
 
 	return out, nil
 }
 
-// Rename ClaimingEvent to ClaimParamsEvent and update fields
 type ClaimParamsEvent struct {
 	DelegationID              thor.Bytes32
 	Delegator                 thor.Address
@@ -234,114 +236,100 @@ type ClaimParamsEvent struct {
 	DelegatorWeight           *big.Int
 }
 
-// Rename FilterClaiming to FilterClaimParams
-func (s *Stargate) FilterClaimParams(from, to uint32) ([]ClaimParamsEvent, error) {
-	event, ok := s.contract.ABI().Events["ClaimParams"]
-	if !ok {
-		return nil, fmt.Errorf("event not found")
+func (s *Stargate) ParseClaimParams(topics []*thor.Bytes32, data string) (*ClaimParamsEvent, error) {
+	if len(topics) < 2 {
+		return nil, fmt.Errorf("not enough topics for ClaimParams event")
 	}
 
-	from64 := uint64(from)
-	to64 := uint64(to)
-	rnge := &events.Range{
-		From: &from64,
-		To:   &to64,
-	}
-	raw, err := s.contract.FilterEvents("ClaimParams", rnge, nil, logdb.ASC)
+	delegationID := thor.Bytes32(topics[1][:]) // indexed
+	dataFields := make([]interface{}, 6)
+	dataFields[0] = new(common.Address)
+	dataFields[1] = new(uint32)
+	dataFields[2] = new(uint32)
+	dataFields[3] = new(uint32)
+	dataFields[4] = new(uint32)
+	dataFields[5] = new(*big.Int)
+	bytes, err := hexutil.Decode(data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode ClaimParams event data: %w", err)
+	}
+	if err := s.contract.ABI().Events["ClaimParams"].Inputs.Unpack(&dataFields, bytes); err != nil {
+		return nil, fmt.Errorf("failed to unpack ClaimParams event data: %w", err)
+	}
+	return &ClaimParamsEvent{
+		DelegationID:              delegationID,
+		Delegator:                 (thor.Address)(*(dataFields[0].(*common.Address))),
+		FirstClaimablePeriod:      *(dataFields[1].(*uint32)),
+		LastClaimablePeriod:       *(dataFields[2].(*uint32)),
+		PreviouslyPopulatedPeriod: *(dataFields[3].(*uint32)),
+		MaxClaimablePeriod:        *(dataFields[4].(*uint32)),
+		DelegatorWeight:           *(dataFields[5].(**big.Int)),
+	}, nil
+}
+
+func (s *Stargate) FilterClaimParams(from, to uint32) ([]*ClaimParamsEvent, error) {
+	raw, err := s.filterEvents("ClaimParams", from, to)
+	if err != nil {
+		return nil, fmt.Errorf("failed to filter ClaimParams events: %w", err)
 	}
 
-	out := make([]ClaimParamsEvent, len(raw))
+	out := make([]*ClaimParamsEvent, len(raw))
 	for i, log := range raw {
-		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
-
-		// non-indexed
-		data := make([]interface{}, 6)
-		data[0] = new(common.Address)
-		data[1] = new(uint32)
-		data[2] = new(uint32)
-		data[3] = new(uint32)
-		data[4] = new(uint32)
-		data[5] = new(*big.Int)
-
-		bytes, err := hexutil.Decode(log.Data)
+		out[i], err = s.ParseClaimParams(log.Topics, log.Data)
 		if err != nil {
-			return nil, err
-		}
-
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
-			return nil, err
-		}
-
-		out[i] = ClaimParamsEvent{
-			DelegationID:              delegationID,
-			Delegator:                 (thor.Address)(*(data[0].(*common.Address))),
-			FirstClaimablePeriod:      *(data[1].(*uint32)),
-			LastClaimablePeriod:       *(data[2].(*uint32)),
-			PreviouslyPopulatedPeriod: *(data[3].(*uint32)),
-			MaxClaimablePeriod:        *(data[4].(*uint32)),
-			DelegatorWeight:           *(data[5].(**big.Int)),
+			return nil, fmt.Errorf("failed to parse ClaimParams event: %w", err)
 		}
 	}
 
 	return out, nil
 }
 
-// ClaimOutputsEvent represents a ClaimOutputs event
 type ClaimOutputsEvent struct {
 	DelegationID thor.Bytes32
 	Delegator    thor.Address
 	TotalRewards *big.Int
 }
 
-// FilterClaimOutputs filters ClaimOutputs events
-func (s *Stargate) FilterClaimOutputs(from, to uint32) ([]ClaimOutputsEvent, error) {
-	event, ok := s.contract.ABI().Events["ClaimOutputs"]
-	if !ok {
-		return nil, fmt.Errorf("event not found")
-	}
-	from64 := uint64(from)
-	to64 := uint64(to)
-	rnge := &events.Range{
-		From: &from64,
-		To:   &to64,
+func (s *Stargate) ParseClaimOutputs(topics []*thor.Bytes32, data string) (*ClaimOutputsEvent, error) {
+	if len(topics) < 2 {
+		return nil, fmt.Errorf("not enough topics for ClaimOutputs event")
 	}
 
-	raw, err := s.contract.FilterEvents("ClaimOutputs", rnge, nil, logdb.ASC)
+	delegationID := thor.Bytes32(topics[1][:]) // indexed
+	dataFields := make([]interface{}, 2)
+	dataFields[0] = new(common.Address)
+	dataFields[1] = new(*big.Int)
+	bytes, err := hexutil.Decode(data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode ClaimOutputs event data: %w", err)
+	}
+	if err := s.contract.ABI().Events["ClaimOutputs"].Inputs.Unpack(&dataFields, bytes); err != nil {
+		return nil, fmt.Errorf("failed to unpack ClaimOutputs event data: %w", err)
+	}
+	return &ClaimOutputsEvent{
+		DelegationID: delegationID,
+		Delegator:    (thor.Address)(*(dataFields[0].(*common.Address))),
+		TotalRewards: *(dataFields[1].(**big.Int)),
+	}, nil
+}
+
+func (s *Stargate) FilterClaimOutputs(from, to uint32) ([]*ClaimOutputsEvent, error) {
+	raw, err := s.filterEvents("ClaimOutputs", from, to)
+	if err != nil {
+		return nil, fmt.Errorf("failed to filter ClaimOutputs events: %w", err)
 	}
 
-	out := make([]ClaimOutputsEvent, len(raw))
+	out := make([]*ClaimOutputsEvent, len(raw))
 	for i, log := range raw {
-		delegationID := thor.Bytes32(log.Topics[1][:]) // indexed
-
-		// non-indexed
-		data := make([]interface{}, 2)
-		data[0] = new(common.Address)
-		data[1] = new(*big.Int)
-
-		bytes, err := hexutil.Decode(log.Data)
+		out[i], err = s.ParseClaimOutputs(log.Topics, log.Data)
 		if err != nil {
-			return nil, err
-		}
-
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
-			return nil, err
-		}
-
-		out[i] = ClaimOutputsEvent{
-			DelegationID: delegationID,
-			Delegator:    (thor.Address)(*(data[0].(*common.Address))),
-			TotalRewards: *(data[1].(**big.Int)),
+			return nil, fmt.Errorf("failed to parse ClaimOutputs event: %w", err)
 		}
 	}
 
 	return out, nil
 }
 
-// Update WeightsPopulatedEvent to match ABI
 type WeightsPopulatedEvent struct {
 	ValidationID   thor.Bytes32
 	StakingPeriod  uint32
@@ -351,52 +339,45 @@ type WeightsPopulatedEvent struct {
 	NewWeight      *big.Int
 }
 
-// Update FilterWeightsPopulated to match ABI
-func (s *Stargate) FilterWeightsPopulated(from, to uint32) ([]WeightsPopulatedEvent, error) {
-	event, ok := s.contract.ABI().Events["WeightsPopulated"]
-	if !ok {
-		return nil, fmt.Errorf("event not found")
+func (s *Stargate) ParseWeightsPopulated(topics []*thor.Bytes32, data string) (*WeightsPopulatedEvent, error) {
+	if len(topics) < 2 {
+		return nil, fmt.Errorf("not enough topics for WeightsPopulated event")
 	}
 
-	from64 := uint64(from)
-	to64 := uint64(to)
-	rnge := &events.Range{
-		From: &from64,
-		To:   &to64,
-	}
-	raw, err := s.contract.FilterEvents("WeightsPopulated", rnge, nil, logdb.ASC)
+	validationID := thor.Bytes32(topics[1][:]) // indexed
+	dataFields := make([]interface{}, 5)
+	dataFields[0] = new(uint32)
+	dataFields[1] = new(*big.Int)
+	dataFields[2] = new(*big.Int)
+	dataFields[3] = new(*big.Int)
+	dataFields[4] = new(*big.Int)
+	bytes, err := hexutil.Decode(data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode WeightsPopulated event data: %w", err)
 	}
+	if err := s.contract.ABI().Events["WeightsPopulated"].Inputs.Unpack(&dataFields, bytes); err != nil {
+		return nil, fmt.Errorf("failed to unpack WeightsPopulated event data: %w", err)
+	}
+	return &WeightsPopulatedEvent{
+		ValidationID:   validationID,
+		StakingPeriod:  *(dataFields[0].(*uint32)),
+		PreviousWeight: *(dataFields[1].(**big.Int)),
+		Increase:       *(dataFields[2].(**big.Int)),
+		Reduction:      *(dataFields[3].(**big.Int)),
+		NewWeight:      *(dataFields[4].(**big.Int)),
+	}, nil
+}
 
-	out := make([]WeightsPopulatedEvent, len(raw))
+func (s *Stargate) FilterWeightsPopulated(from, to uint32) ([]*WeightsPopulatedEvent, error) {
+	raw, err := s.filterEvents("WeightsPopulated", from, to)
+	if err != nil {
+		return nil, fmt.Errorf("failed to filter WeightsPopulated events: %w", err)
+	}
+	out := make([]*WeightsPopulatedEvent, len(raw))
 	for i, log := range raw {
-		validationID := thor.Bytes32(log.Topics[1][:]) // indexed
-
-		// non-indexed
-		data := make([]interface{}, 5)
-		data[0] = new(uint32)
-		data[1] = new(*big.Int)
-		data[2] = new(*big.Int)
-		data[3] = new(*big.Int)
-		data[4] = new(*big.Int)
-
-		bytes, err := hexutil.Decode(log.Data)
+		out[i], err = s.ParseWeightsPopulated(log.Topics, log.Data)
 		if err != nil {
-			return nil, err
-		}
-
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
-			return nil, err
-		}
-
-		out[i] = WeightsPopulatedEvent{
-			ValidationID:   validationID,
-			StakingPeriod:  *(data[0].(*uint32)),
-			PreviousWeight: *(data[1].(**big.Int)),
-			Increase:       *(data[2].(**big.Int)),
-			Reduction:      *(data[3].(**big.Int)),
-			NewWeight:      *(data[4].(**big.Int)),
+			return nil, fmt.Errorf("failed to parse WeightsPopulated event: %w", err)
 		}
 	}
 
@@ -411,50 +392,45 @@ type RewardsPopulatedEvent struct {
 	ProposerRewards      *big.Int
 }
 
-// FilterRewardsPopulated filters RewardsPopulated events
-func (s *Stargate) FilterRewardsPopulated(from, to uint32) ([]RewardsPopulatedEvent, error) {
-	event, ok := s.contract.ABI().Events["RewardsPopulated"]
-	if !ok {
-		return nil, fmt.Errorf("event not found")
+func (s *Stargate) ParseRewardsPopulated(topics []*thor.Bytes32, data string) (*RewardsPopulatedEvent, error) {
+	if len(topics) < 2 {
+		return nil, fmt.Errorf("not enough topics for RewardsPopulated event")
 	}
 
-	from64 := uint64(from)
-	to64 := uint64(to)
-	rnge := &events.Range{
-		From: &from64,
-		To:   &to64,
-	}
-	raw, err := s.contract.FilterEvents("RewardsPopulated", rnge, nil, logdb.ASC)
+	validationID := thor.Bytes32(topics[1][:]) // indexed
+	dataFields := make([]interface{}, 4)
+	dataFields[0] = new(uint32)
+	dataFields[1] = new(*big.Int)
+	dataFields[2] = new(*big.Int)
+	dataFields[3] = new(*big.Int)
+	bytes, err := hexutil.Decode(data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode RewardsPopulated event data: %w", err)
+	}
+	if err := s.contract.ABI().Events["RewardsPopulated"].Inputs.Unpack(&dataFields, bytes); err != nil {
+		return nil, fmt.Errorf("failed to unpack RewardsPopulated event data: %w", err)
+	}
+	return &RewardsPopulatedEvent{
+		ValidationID:         validationID,
+		StakingPeriod:        *(dataFields[0].(*uint32)),
+		BlockRewards:         *(dataFields[1].(**big.Int)),
+		AllDelegatorsRewards: *(dataFields[2].(**big.Int)),
+		ProposerRewards:      *(dataFields[3].(**big.Int)),
+	}, nil
+}
+
+// FilterRewardsPopulated filters RewardsPopulated events
+func (s *Stargate) FilterRewardsPopulated(from, to uint32) ([]*RewardsPopulatedEvent, error) {
+	raw, err := s.filterEvents("RewardsPopulated", from, to)
+	if err != nil {
+		return nil, fmt.Errorf("failed to filter RewardsPopulated events: %w", err)
 	}
 
-	out := make([]RewardsPopulatedEvent, len(raw))
+	out := make([]*RewardsPopulatedEvent, len(raw))
 	for i, log := range raw {
-		validationID := thor.Bytes32(log.Topics[1][:]) // indexed
-
-		// non-indexed
-		data := make([]interface{}, 4)
-		data[0] = new(uint32)
-		data[1] = new(*big.Int)
-		data[2] = new(*big.Int)
-		data[3] = new(*big.Int)
-
-		bytes, err := hexutil.Decode(log.Data)
+		out[i], err = s.ParseRewardsPopulated(log.Topics, log.Data)
 		if err != nil {
-			return nil, err
-		}
-
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
-			return nil, err
-		}
-
-		out[i] = RewardsPopulatedEvent{
-			ValidationID:         validationID,
-			StakingPeriod:        *(data[0].(*uint32)),
-			BlockRewards:         *(data[1].(**big.Int)),
-			AllDelegatorsRewards: *(data[2].(**big.Int)),
-			ProposerRewards:      *(data[3].(**big.Int)),
+			return nil, fmt.Errorf("failed to parse RewardsPopulated event: %w", err)
 		}
 	}
 
@@ -469,50 +445,46 @@ type RewardsCalculatedEvent struct {
 	AllDelegatorsRewards *big.Int
 }
 
-// FilterRewardsCalculated filters RewardsCalculated events
-func (s *Stargate) FilterRewardsCalculated(from, to uint32) ([]RewardsCalculatedEvent, error) {
-	event, ok := s.contract.ABI().Events["RewardsCalculated"]
-	if !ok {
-		return nil, fmt.Errorf("event not found")
+// ParseRewardsCalculated
+func (s *Stargate) ParseRewardsCalculated(topics []*thor.Bytes32, data string) (*RewardsCalculatedEvent, error) {
+	if len(topics) < 2 {
+		return nil, fmt.Errorf("not enough topics for RewardsCalculated event")
 	}
 
-	from64 := uint64(from)
-	to64 := uint64(to)
-	rnge := &events.Range{
-		From: &from64,
-		To:   &to64,
-	}
-	raw, err := s.contract.FilterEvents("RewardsCalculated", rnge, nil, logdb.ASC)
+	validationID := thor.Bytes32(topics[1][:]) // indexed
+	dataFields := make([]interface{}, 4)
+	dataFields[0] = new(uint32)
+	dataFields[1] = new(*big.Int)
+	dataFields[2] = new(*big.Int)
+	dataFields[3] = new(*big.Int)
+	bytes, err := hexutil.Decode(data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode RewardsCalculated event data: %w", err)
+	}
+	if err := s.contract.ABI().Events["RewardsCalculated"].Inputs.Unpack(&dataFields, bytes); err != nil {
+		return nil, fmt.Errorf("failed to unpack RewardsCalculated event data: %w", err)
+	}
+	return &RewardsCalculatedEvent{
+		ValidationID:         validationID,
+		StakingPeriod:        *(dataFields[0].(*uint32)),
+		Rewards:              *(dataFields[1].(**big.Int)),
+		AllDelegatorsWeight:  *(dataFields[2].(**big.Int)),
+		AllDelegatorsRewards: *(dataFields[3].(**big.Int)),
+	}, nil
+}
+
+// FilterRewardsCalculated filters RewardsCalculated events
+func (s *Stargate) FilterRewardsCalculated(from, to uint32) ([]*RewardsCalculatedEvent, error) {
+	raw, err := s.filterEvents("RewardsCalculated", from, to)
+	if err != nil {
+		return nil, fmt.Errorf("failed to filter RewardsCalculated events: %w", err)
 	}
 
-	out := make([]RewardsCalculatedEvent, len(raw))
+	out := make([]*RewardsCalculatedEvent, len(raw))
 	for i, log := range raw {
-		validationID := thor.Bytes32(log.Topics[1][:]) // indexed
-
-		// non-indexed
-		data := make([]interface{}, 4)
-		data[0] = new(uint32)
-		data[1] = new(*big.Int)
-		data[2] = new(*big.Int)
-		data[3] = new(*big.Int)
-
-		bytes, err := hexutil.Decode(log.Data)
+		out[i], err = s.ParseRewardsCalculated(log.Topics, log.Data)
 		if err != nil {
-			return nil, err
-		}
-
-		if err := event.Inputs.Unpack(&data, bytes); err != nil {
-			return nil, err
-		}
-
-		out[i] = RewardsCalculatedEvent{
-			ValidationID:         validationID,
-			StakingPeriod:        *(data[0].(*uint32)),
-			Rewards:              *(data[1].(**big.Int)),
-			AllDelegatorsWeight:  *(data[2].(**big.Int)),
-			AllDelegatorsRewards: *(data[3].(**big.Int)),
+			return nil, fmt.Errorf("failed to parse RewardsCalculated event: %w", err)
 		}
 	}
 
@@ -536,168 +508,79 @@ func (s *Stargate) LogEventValues(events []*transactions.Event) {
 
 		switch name {
 		case "ClaimedRewards":
-			//validationID := thor.Bytes32(event.Topics[1][:])     // indexed
-			//delegator := thor.BytesToAddress(event.Topics[2][:]) // indexed
-
-			// non-indexed
-			data := make([]interface{}, 3)
-			data[0] = new(*big.Int)
-			data[1] = new(uint32)
-			data[2] = new(uint32)
-
-			bytes, err := hexutil.Decode(event.Data)
+			event, err := s.ParseClaimedRewards(topicsToPointers(event.Topics), event.Data)
 			if err != nil {
-				fmt.Printf("Error decoding ClaimedRewards event data: %v\n", err)
-				continue
-			}
-			if err := s.contract.ABI().Events["ClaimedRewards"].Inputs.Unpack(&data, bytes); err != nil {
-				fmt.Printf("Error unpacking ClaimedRewards event data: %v\n", err)
+				fmt.Printf("Error parsing ClaimedRewards event: %v\n", err)
 				continue
 			}
 
 			slog.Info("ClaimedRewards Event",
-				//"validationID", validationID,
-				//"delegator", delegator,
-				"amount", *(data[0].(**big.Int)),
-				"firstClaimablePeriod", *(data[1].(*uint32)),
-				"lastClaimablePeriod", *(data[2].(*uint32)),
+				"amount", event.Amount,
+				"firstClaimablePeriod", event.FirstClaimablePeriod,
+				"lastClaimablePeriod", event.LastClaimablePeriod,
 			)
 		case "ClaimParams":
-			//delegationID := thor.Bytes32(event.Topics[1][:]) // indexed
-
-			// non-indexed
-			data := make([]interface{}, 6)
-			data[0] = new(common.Address)
-			data[1] = new(uint32)
-			data[2] = new(uint32)
-			data[3] = new(uint32)
-			data[4] = new(uint32)
-			data[5] = new(*big.Int)
-
-			bytes, err := hexutil.Decode(event.Data)
+			event, err := s.ParseClaimParams(topicsToPointers(event.Topics), event.Data)
 			if err != nil {
-				fmt.Printf("Error decoding ClaimParams event data: %v\n", err)
-				continue
-			}
-			if err := s.contract.ABI().Events["ClaimParams"].Inputs.Unpack(&data, bytes); err != nil {
-				fmt.Printf("Error unpacking ClaimParams event data: %v\n", err)
+				fmt.Printf("Error parsing ClaimParams event: %v\n", err)
 				continue
 			}
 
 			slog.Info("ClaimParams Event",
-				//"delegationID", delegationID,
-				//"delegator", thor.Address(*(data[0].(*common.Address))),
-				"firstClaimablePeriod", *(data[1].(*uint32)),
-				"lastClaimablePeriod", *(data[2].(*uint32)),
-				"previouslyPopulatedPeriod", *(data[3].(*uint32)),
-				"maxClaimablePeriod", *(data[4].(*uint32)),
-				"delegatorWeight", *(data[5].(**big.Int)),
+				"firstClaimablePeriod", event.FirstClaimablePeriod,
+				"lastClaimablePeriod", event.LastClaimablePeriod,
+				"previouslyPopulatedPeriod", event.PreviouslyPopulatedPeriod,
+				"maxClaimablePeriod", event.MaxClaimablePeriod,
+				"delegatorWeight", event.DelegatorWeight,
 			)
 
 		case "ClaimOutputs":
-			//delegationID := thor.Bytes32(event.Topics[1][:]) // indexed
-			// non-indexed
-			data := make([]interface{}, 2)
-			data[0] = new(common.Address)
-			data[1] = new(*big.Int)
-
-			bytes, err := hexutil.Decode(event.Data)
+			event, err := s.ParseClaimOutputs(topicsToPointers(event.Topics), event.Data)
 			if err != nil {
-				fmt.Printf("Error decoding ClaimOutputs event data: %v\n", err)
+				fmt.Printf("Error parsing ClaimOutputs event: %v\n", err)
 				continue
 			}
-
-			if err := s.contract.ABI().Events["ClaimOutputs"].Inputs.Unpack(&data, bytes); err != nil {
-				fmt.Printf("Error unpacking ClaimOutputs event data: %v\n", err)
-				continue
-			}
-
 			slog.Info("ClaimOutputs Event",
-				//"delegationID", delegationID,
-				//"delegator", thor.Address(*(data[0].(*common.Address))),
-				"totalRewards", *(data[1].(**big.Int)),
+				"totalRewards", event.TotalRewards,
 			)
-
 		case "WeightsPopulated":
-			//validationID := thor.Bytes32(event.Topics[1][:]) // indexed
-			// non-indexed
-			data := make([]interface{}, 5)
-			data[0] = new(uint32)
-			data[1] = new(*big.Int)
-			data[2] = new(*big.Int)
-			data[3] = new(*big.Int)
-			data[4] = new(*big.Int)
-			bytes, err := hexutil.Decode(event.Data)
+			event, err := s.ParseWeightsPopulated(topicsToPointers(event.Topics), event.Data)
 			if err != nil {
-				fmt.Printf("Error decoding WeightsPopulated event data: %v\n", err)
+				fmt.Printf("Error parsing WeightsPopulated event: %v\n", err)
 				continue
 			}
-
-			if err := s.contract.ABI().Events["WeightsPopulated"].Inputs.Unpack(&data, bytes); err != nil {
-				fmt.Printf("Error unpacking WeightsPopulated event data: %v\n", err)
-				continue
-			}
-
 			slog.Info("WeightsPopulated Event",
-				//"validationID", validationID,
-				"stakingPeriod", *(data[0].(*uint32)),
-				"previousWeight", *(data[1].(**big.Int)),
-				"increase", *(data[2].(**big.Int)),
-				"reduction", *(data[3].(**big.Int)),
-				"newWeight", *(data[4].(**big.Int)),
+				"stakingPeriod", event.StakingPeriod,
+				"previousWeight", event.PreviousWeight,
+				"increase", event.Increase,
+				"reduction", event.Reduction,
+				"newWeight", event.NewWeight,
 			)
 
 		case "RewardsPopulated":
-			//validationID := thor.Bytes32(event.Topics[1][:]) // indexed
-			// non-indexed
-			data := make([]interface{}, 4)
-			data[0] = new(uint32)
-			data[1] = new(*big.Int)
-			data[2] = new(*big.Int)
-			data[3] = new(*big.Int)
-			bytes, err := hexutil.Decode(event.Data)
+			event, err := s.ParseRewardsPopulated(topicsToPointers(event.Topics), event.Data)
 			if err != nil {
-				fmt.Printf("Error decoding RewardsPopulated event data: %v\n", err)
-				continue
-			}
-
-			if err := s.contract.ABI().Events["RewardsPopulated"].Inputs.Unpack(&data, bytes); err != nil {
-				fmt.Printf("Error unpacking RewardsPopulated event data: %v\n", err)
+				fmt.Printf("Error parsing RewardsPopulated event: %v\n", err)
 				continue
 			}
 
 			slog.Info("RewardsPopulated Event",
-				//"validationID", validationID,
-				"stakingPeriod", *(data[0].(*uint32)),
-				"blockRewards", *(data[1].(**big.Int)),
-				"allDelegatorsRewards", *(data[2].(**big.Int)),
-				"proposerRewards", *(data[3].(**big.Int)),
+				"stakingPeriod", event.StakingPeriod,
+				"blockRewards", event.BlockRewards,
+				"allDelegatorsRewards", event.AllDelegatorsRewards,
+				"proposerRewards", event.ProposerRewards,
 			)
-
 		case "RewardsCalculated":
-			//validationID := thor.Bytes32(event.Topics[1][:]) // indexed
-			// non-indexed
-			data := make([]interface{}, 4)
-			data[0] = new(uint32)
-			data[1] = new(*big.Int)
-			data[2] = new(*big.Int)
-			data[3] = new(*big.Int)
-			bytes, err := hexutil.Decode(event.Data)
+			event, err := s.ParseRewardsCalculated(topicsToPointers(event.Topics), event.Data)
 			if err != nil {
-				fmt.Printf("Error decoding RewardsCalculated event data: %v\n", err)
+				fmt.Printf("Error parsing RewardsCalculated event: %v\n", err)
 				continue
 			}
-			if err := s.contract.ABI().Events["RewardsCalculated"].Inputs.Unpack(&data, bytes); err != nil {
-				fmt.Printf("Error unpacking RewardsCalculated event data: %v\n", err)
-				continue
-			}
-
 			slog.Info("RewardsCalculated Event",
-				//"validationID", validationID,
-				"stakingPeriod", *(data[0].(*uint32)),
-				"rewards", *(data[1].(**big.Int)),
-				"allDelegatorsWeight", *(data[2].(**big.Int)),
-				"allDelegatorsRewards", *(data[3].(**big.Int)),
+				"stakingPeriod", event.StakingPeriod,
+				"rewards", event.Rewards,
+				"allDelegatorsWeight", event.AllDelegatorsWeight,
+				"allDelegatorsRewards", event.AllDelegatorsRewards,
 			)
 
 		default:
@@ -706,4 +589,12 @@ func (s *Stargate) LogEventValues(events []*transactions.Event) {
 				"topics", event.Topics)
 		}
 	}
+}
+
+func topicsToPointers(topics []thor.Bytes32) []*thor.Bytes32 {
+	pointers := make([]*thor.Bytes32, len(topics))
+	for i, topic := range topics {
+		pointers[i] = &topic
+	}
+	return pointers
 }

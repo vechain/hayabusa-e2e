@@ -23,11 +23,11 @@ import (
 )
 
 var (
-	ValidatorAccounts  = mustGenerateAccounts(101)
-	Stargate           = mustGenerateAccounts(1)[0]
+	ValidatorAccounts  = mustParseKeys(validatorKeys)
+	Stargate           = mustParseKey("274c9caa1b72003d86eab9ea817f9b4c172246e75a9e20d1baaf44bbf5c89762")
 	ParamsStargateKey  = nameToBytes32("stargate-contract-address")
 	Executor           = (*bind.PrivateKeySigner)(thorgenesis.DevAccounts()[0].PrivateKey)
-	AdditionalAccounts = mustGenerateAccounts(100)
+	AdditionalAccounts = mustParseKeys(additionalKeys)
 )
 
 func Genesis(config *Config) *genesis.CustomGenesis {
@@ -166,16 +166,20 @@ func nameToBytes32(name string) string {
 	return thor.BytesToBytes32([]byte(name)).String()
 }
 
-func mustGenerateAccounts(amount int) []*bind.PrivateKeySigner {
-	accounts := make([]*bind.PrivateKeySigner, amount)
+func mustParseKey(hexKey string) *bind.PrivateKeySigner {
+	key, err := crypto.HexToECDSA(hexKey)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse key: %v", err))
+	}
+	return (*bind.PrivateKeySigner)(key)
+}
 
-	for i := range amount {
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			panic(fmt.Sprintf("failed to generate key: %v", err))
-		}
-		accounts[i] = (*bind.PrivateKeySigner)(key)
+func mustParseKeys(hexKeys []string) []*bind.PrivateKeySigner {
+	keys := make([]*bind.PrivateKeySigner, len(hexKeys))
+
+	for i, hexKey := range hexKeys {
+		keys[i] = mustParseKey(hexKey)
 	}
 
-	return accounts
+	return keys
 }

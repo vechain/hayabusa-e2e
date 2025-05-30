@@ -1,7 +1,6 @@
 package stargate
 
 import (
-	"log/slog"
 	"math/big"
 	"strconv"
 	"strings"
@@ -25,6 +24,44 @@ import (
 	"github.com/vechain/thor/v2/thorclient/builtin"
 	"github.com/vechain/thor/v2/tx"
 )
+
+func Test_DebugTotals(t *testing.T) {
+	stargate := []string{
+		"307309589041095890411", // block 8
+		"307309589041095890411", // block 9
+		"307309589041095890411", // block 10
+		"307309589041095890411", // block 11
+	}
+
+	contractRewards := []string{
+		"147628614916286149163", // period 2
+		"614619178082191780822", // period 3
+		"614619178082191780822", // period 4
+	}
+
+	// 147628614916286149163 - 307309589041095890411 = -159680974124809741248
+
+	stargateTotalRewards := new(big.Int)
+	for _, reward := range stargate {
+		rewardBig, ok := new(big.Int).SetString(reward, 10)
+		if !ok {
+			t.Fatalf("failed to parse reward: %s", reward)
+		}
+		stargateTotalRewards.Add(stargateTotalRewards, rewardBig)
+	}
+
+	totalContractRewards := new(big.Int)
+	for _, reward := range contractRewards {
+		rewardBig, ok := new(big.Int).SetString(reward, 10)
+		if !ok {
+			t.Fatalf("failed to parse contract reward: %s", reward)
+		}
+		totalContractRewards.Add(totalContractRewards, rewardBig)
+	}
+
+	t.Logf("Total Stargate Rewards: %s", stargateTotalRewards.String())
+	t.Logf("Total Contract Rewards: %s", totalContractRewards.String())
+}
 
 func Test_Stargate_SingleDelegator(t *testing.T) {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
@@ -54,14 +91,14 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	assert.Equal(t, 1, int(*completed))
 	delegation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err)
-	assert.Equal(t, 2, int(delegation.StartPeriod))
+	assert.Equal(t, 3, int(delegation.StartPeriod))
 
 	// assert no claimable periods
 	claimable, start, end, err := stargate.GetClaimable(acc.Address())
 	require.NoError(t, err)
 	assert.Equal(t, 0, claimable.Sign())
 	// start is after end, so no claimable periods
-	assert.Equal(t, 2, int(start))
+	assert.Equal(t, 3, int(start))
 	assert.Equal(t, 1, int(end))
 
 	// wait for 1 staking period
@@ -76,7 +113,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	// assert delegator can claim for that period
 	claimable, start, end, err = stargate.GetClaimable(acc.Address())
 	assert.NoError(t, err)
-	assert.Equal(t, 2, int(start))
+	assert.Equal(t, 3, int(start))
 	assert.Equal(t, 2, int(end))
 
 	// assert TVL
@@ -86,10 +123,11 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expected, lockedVET)
 
-	firstDelegatedBlock := block
+	firstDelegatedBlock := config.ForkBlock + config.TransitionPeriod + 2*config.MinStakingPeriod
 	block += 2 * config.MinStakingPeriod
 	require.NoError(t, ticker.WaitForBlock(block-1))
 
+	t.Logf("✅ - checking delegated blocks (from %d to %d)", firstDelegatedBlock, block-1)
 	blockCount := 0
 	for i := firstDelegatedBlock; i < block; i++ {
 		block, err := staker.Raw().Client().GetBlock(strconv.Itoa(int(i)))
@@ -98,6 +136,8 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 			blockCount++
 		}
 	}
+
+	// these rewards are the expected rewards
 	blockReward := hayabusa.GetExpectedReward(lockedVET)
 
 	proposerReward := new(big.Int).Set(blockReward)
@@ -105,10 +145,10 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	proposerReward = proposerReward.Div(proposerReward, big.NewInt(10))
 
 	delegatorReward := new(big.Int).Sub(blockReward, proposerReward)
-
-	slog.Info("rewards per block", "proposer", proposerReward.String(), "delegator", delegatorReward.String(), "blockCount", blockCount)
-
+	t.Logf("✅ rewards per block: proposer=%s, delegator=%s, blockCount=%d", proposerReward.String(), delegatorReward.String(), blockCount)
 	delegatorReward = delegatorReward.Mul(delegatorReward, big.NewInt(int64(blockCount)))
+	proposerReward = proposerReward.Mul(proposerReward, big.NewInt(int64(blockCount)))
+	t.Logf("✅ total rewards: proposer=%s, delegator=%s, combined=%s", proposerReward.String(), delegatorReward.String(), new(big.Int).Add(proposerReward, delegatorReward).String())
 
 	stargateAddr := stargate.Address()
 	stargateAcc, err := staker.Raw().Client().GetAccount(&stargateAddr, "best")
@@ -124,12 +164,23 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 
 	claimable, start, end, err = stargate.GetClaimable(acc.Address())
 	assert.NoError(t, err)
-	assert.Equal(t, 2, int(start))
+	assert.Equal(t, 3, int(start))
 	assert.Equal(t, 4, int(end))
 	assert.Equal(t, delegatorReward, claimable, "claimable should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, claimable).String())
 	simulation, err := stargate.Raw().Simulate(big.NewInt(0), acc.Address(), "getClaimable", acc.Address())
 	require.NoError(t, err)
 	stargate.LogEventValues(simulation.Events)
+
+	// these are the actual total rewards for the 4 periods
+	totalPeriodRewards := big.NewInt(0)
+	for i := start; i <= end; i++ {
+		reward, err := staker.GetRewards(validationID, i)
+		require.NoError(t, err)
+		totalPeriodRewards = totalPeriodRewards.Add(totalPeriodRewards, reward)
+	}
+
+	t.Logf("✅ total rewards for: %s", totalPeriodRewards.String())
+	assert.Equal(t, new(big.Int).Add(proposerReward, delegatorReward), totalPeriodRewards)
 }
 
 func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Bytes32) {
