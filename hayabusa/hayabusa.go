@@ -57,7 +57,7 @@ func StartNetwork(config *Config) (*httpclient.Client, environments.Actions, fun
 		thorBuilder = &thorbuilder.Config{
 			BuildConfig: &thorbuilder.BuildConfig{
 				ExistingPath: workingDir,
-				DebugBuild:   true,
+				DebugBuild:   config.Debug,
 			},
 		}
 	} else {
