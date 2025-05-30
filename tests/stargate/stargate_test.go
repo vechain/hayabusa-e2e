@@ -25,44 +25,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-func Test_DebugTotals(t *testing.T) {
-	stargate := []string{
-		"307309589041095890411", // block 8
-		"307309589041095890411", // block 9
-		"307309589041095890411", // block 10
-		"307309589041095890411", // block 11
-	}
-
-	contractRewards := []string{
-		"147628614916286149163", // period 2
-		"614619178082191780822", // period 3
-		"614619178082191780822", // period 4
-	}
-
-	// 147628614916286149163 - 307309589041095890411 = -159680974124809741248
-
-	stargateTotalRewards := new(big.Int)
-	for _, reward := range stargate {
-		rewardBig, ok := new(big.Int).SetString(reward, 10)
-		if !ok {
-			t.Fatalf("failed to parse reward: %s", reward)
-		}
-		stargateTotalRewards.Add(stargateTotalRewards, rewardBig)
-	}
-
-	totalContractRewards := new(big.Int)
-	for _, reward := range contractRewards {
-		rewardBig, ok := new(big.Int).SetString(reward, 10)
-		if !ok {
-			t.Fatalf("failed to parse contract reward: %s", reward)
-		}
-		totalContractRewards.Add(totalContractRewards, rewardBig)
-	}
-
-	t.Logf("Total Stargate Rewards: %s", stargateTotalRewards.String())
-	t.Logf("Total Contract Rewards: %s", totalContractRewards.String())
-}
-
 func Test_Stargate_SingleDelegator(t *testing.T) {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
 
