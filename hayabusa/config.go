@@ -1,13 +1,13 @@
 package hayabusa
 
 import (
-	"github.com/vechain/thor/v2/builtin"
 	"math/big"
 	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/networkhub/network/node/genesis"
+	"github.com/vechain/thor/v2/builtin"
 	devgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/thor"

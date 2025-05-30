@@ -3,13 +3,13 @@ package utils
 import (
 	"errors"
 	"fmt"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/thorclient/common"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Ticker struct {

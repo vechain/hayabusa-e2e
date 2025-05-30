@@ -2,9 +2,10 @@ package network
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/vechain/networkhub/network"
 	"github.com/vechain/thor/v2/thorclient"
-	"time"
 )
 
 type RunningNetwork struct {

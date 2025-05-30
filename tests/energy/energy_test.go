@@ -1,16 +1,16 @@
 package energy
 
 import (
-	"github.com/vechain/hayabusa-e2e/testutil"
-	"github.com/vechain/thor/v2/thorclient/bind"
 	"math/big"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 

@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
-	"time"
 )
 
 func sendTx(chainTag byte, clause *tx.Clause, acc genesis.DevAccount, client *httpclient.Client) (*transactions.SendTxResult, error) {

@@ -73,7 +73,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	assert.Equal(t, 2, int(*completed))
 
 	// assert delegator can claim for that period
-	claimable, start, end, err = stargate.GetClaimable(acc.Address())
+	_, start, end, err = stargate.GetClaimable(acc.Address())
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(start))
 	assert.Equal(t, 2, int(end))
@@ -228,7 +228,7 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 		Build()
 
 	caller := acc.Address()
-	inpsection, err := staker.Raw().Client().InspectClauses(&accounts.BatchCallData{
+	inspection, err := staker.Raw().Client().InspectClauses(&accounts.BatchCallData{
 		Caller: &caller,
 		Clauses: []accounts.Clause{
 			{
@@ -239,7 +239,7 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 		},
 	}, "best")
 	require.NoError(t, err)
-	require.Equal(t, 1, len(inpsection))
+	require.Equal(t, 1, len(inspection))
 
 	trx, err = hayabusa.Stargate.SignTransaction(trx)
 	require.NoError(t, err)

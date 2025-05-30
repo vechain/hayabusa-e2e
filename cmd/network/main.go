@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/vechain/hayabusa-e2e/utils"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -13,6 +12,7 @@ import (
 	"github.com/cqroot/prompt/input"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -48,13 +48,13 @@ func main() {
 	for i, acc := range genesis.DevAccounts() {
 		fmt.Println("")
 		if uint32(i) < config.MaxBlockProposers {
-			fmt.Println(fmt.Sprintf("  - Validator (%d):", i))
-			fmt.Println(fmt.Sprintf("    🏰 %s", acc.Address))
-			fmt.Println(fmt.Sprintf("    🔑 %s", hexutil.Encode(acc.PrivateKey.D.Bytes())))
+			fmt.Printf("  - Validator (%d):", i)
+			fmt.Printf("    🏰 %s", acc.Address)
+			fmt.Printf("    🔑 %s", hexutil.Encode(acc.PrivateKey.D.Bytes()))
 		} else {
-			fmt.Println(fmt.Sprintf("  - Account (%d):", i-int(config.MaxBlockProposers)))
-			fmt.Println(fmt.Sprintf("    🤑 %s", acc.Address))
-			fmt.Println(fmt.Sprintf("    🔑 %s", hexutil.Encode(acc.PrivateKey.D.Bytes())))
+			fmt.Printf("  - Account (%d):", i-int(config.MaxBlockProposers))
+			fmt.Printf("    🤑 %s", acc.Address)
+			fmt.Printf("    🔑 %s", hexutil.Encode(acc.PrivateKey.D.Bytes()))
 		}
 	}
 	fmt.Println("")
@@ -75,7 +75,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(fmt.Sprintf("\n🕐 Setting stargate address... %s", res))
+	fmt.Printf("\n🕐 Setting stargate address... %s", res)
 	fmt.Println("")
 
 	if err := setStargateAddr(client, thor.MustParseAddress(res)); err != nil {
@@ -106,9 +106,7 @@ func main() {
 	}
 	defer killDevpal()
 
-	fmt.Println("\n\n")
-	fmt.Println("✅ Network is setup, happy hacking!")
-
+	fmt.Println("\n\n✅ Network is setup, happy hacking!")
 	fmt.Println("\n\n--> Press Ctrl+C to exit or stop")
 	exitSignalCh := make(chan os.Signal, 1)
 	signal.Notify(exitSignalCh, os.Interrupt, syscall.SIGTERM)

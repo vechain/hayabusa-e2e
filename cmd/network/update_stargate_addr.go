@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	big2 "math/big"
+
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/builtin"
@@ -9,7 +11,6 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
-	big2 "math/big"
 )
 
 func setStargateAddr(client *httpclient.Client, stargate thor.Address) error {

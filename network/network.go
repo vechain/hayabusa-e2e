@@ -2,10 +2,11 @@ package network
 
 import (
 	"fmt"
-	"github.com/vechain/networkhub/network"
-	"github.com/vechain/networkhub/network/node"
 	"os"
 	"strings"
+
+	"github.com/vechain/networkhub/network"
+	"github.com/vechain/networkhub/network/node"
 )
 
 type ConnectionDetails struct {

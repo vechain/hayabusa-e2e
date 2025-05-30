@@ -3,13 +3,14 @@ package network
 import (
 	"crypto/rand"
 	"fmt"
+	"time"
+
 	networkHubClient "github.com/vechain/networkhub/entrypoint/client"
 	"github.com/vechain/networkhub/network"
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/preset"
 	"github.com/vechain/networkhub/thorbuilder"
 	"github.com/vechain/thor/v2/thorclient"
-	"time"
 )
 
 type CustomNetwork struct {
