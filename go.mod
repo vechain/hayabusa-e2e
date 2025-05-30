@@ -13,9 +13,10 @@ require (
 	github.com/cqroot/prompt v0.9.4
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/stretchr/testify v1.10.0
-	github.com/vechain/networkhub v0.0.0-20250529152035-fc8cc919bf47
 	github.com/vechain/thor/v2 v2.2.3-0.20250529120017-2abbad1d9c9e
 )
+
+require github.com/vechain/networkhub v0.0.0-20250530135136-c57dd785b5d1
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect

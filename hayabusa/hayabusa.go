@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"os"
 	"strconv"
 	"time"
 
@@ -50,17 +51,24 @@ func StartNetwork(config *Config) (*httpclient.Client, environments.Actions, fun
 	repo := "git@github.com:vechain/thor.git"
 
 	// reimplement this logic
-	// workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
-	//if ok {
-	//	net = network.NewCustomWithRepoAndDownloadPath(repo, workingDir, config.Debug)
-	//} else {
-	//	slog.Warn("THOR_WORKING_DIR not set, using default repo/branch")
-	//	net = network.NewCustomNetworkWithBranchAndRepo(repo, "release/hayabusa")
-	//}
-	thorBuilder := &thorbuilder.BuilderConfig{
-		RepoUrl:  repo,
-		Branch:   "release/hayabusa",
-		Reusable: false,
+	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
+	var thorBuilder *thorbuilder.Config
+	if ok {
+		thorBuilder = &thorbuilder.Config{
+			BuildConfig: &thorbuilder.BuildConfig{
+				ExistingPath: workingDir,
+				DebugBuild:   true,
+			},
+		}
+	} else {
+		slog.Warn("THOR_WORKING_DIR not set, using default repo/branch")
+		thorBuilder = &thorbuilder.Config{
+			DownloadConfig: &thorbuilder.DownloadConfig{
+				RepoUrl:    repo,
+				Branch:     "release/hayabusa",
+				IsReusable: true,
+			},
+		}
 	}
 
 	verbosity := 3
