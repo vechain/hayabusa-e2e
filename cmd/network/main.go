@@ -106,7 +106,7 @@ func main() {
 	}
 	defer killDevpal()
 
-	fmt.Println("\n\n")
+	fmt.Printf("\n\n\n")
 	fmt.Println("✅ Network is setup, happy hacking!")
 
 	fmt.Println("\n\n--> Press Ctrl+C to exit or stop")

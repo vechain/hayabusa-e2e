@@ -66,7 +66,7 @@ func StartNetwork(config *Config) (*httpclient.Client, environments.Actions, fun
 			DownloadConfig: &thorbuilder.DownloadConfig{
 				RepoUrl:    repo,
 				Branch:     "release/hayabusa",
-				IsReusable: true,
+				IsReusable: false,
 			},
 		}
 	}
