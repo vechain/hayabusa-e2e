@@ -106,7 +106,7 @@ func main() {
 	}
 	defer killDevpal()
 
-	fmt.Println("\n\n✅ Network is setup, happy hacking!")
+	fmt.Printf("\n\n\n✅ Network is setup, happy hacking!")
 	fmt.Println("\n\n--> Press Ctrl+C to exit or stop")
 	exitSignalCh := make(chan os.Signal, 1)
 	signal.Notify(exitSignalCh, os.Interrupt, syscall.SIGTERM)
