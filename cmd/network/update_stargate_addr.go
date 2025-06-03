@@ -4,22 +4,22 @@ import (
 	"fmt"
 	big2 "math/big"
 
+	"github.com/vechain/thor/v2/thorclient"
+
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 	"github.com/vechain/thor/v2/tx"
 )
 
-func setStargateAddr(client *httpclient.Client, stargate thor.Address) error {
+func setStargateAddr(client *thorclient.Client, stargate thor.Address) error {
 	executor := genesis.DevAccounts()[0]
-	genesis, err := client.GetBlock("0")
+	chainTag, err := client.ChainTag()
 	if err != nil {
-		return fmt.Errorf("failed to get genesis block: %w", err)
+		return fmt.Errorf("failed to get chain tag: %w", err)
 	}
-	chainTag := genesis.ID[31]
 
 	// set params call data
 	paramsMethod, ok := builtin.Params.ABI.MethodByName("set")

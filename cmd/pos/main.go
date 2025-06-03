@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vechain/thor/v2/thorclient"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 func main() {
@@ -60,7 +61,7 @@ func main() {
 			minStakingPeriod = uint32(val)
 		}
 	}
-	client := httpclient.New(networkURL)
+	client := thorclient.New(networkURL)
 
 	staker, err := builtin.NewStaker(client)
 	if err != nil {
@@ -85,7 +86,7 @@ func main() {
 	}
 
 	fmt.Println("Start sending transactions to register validators")
-	senders := bind.Senders{}
+	senders := &utils.Senders{}
 	for i := range len(validators) {
 		acc := validators[i]
 		node, ok := authEntries[acc.Address]
@@ -97,14 +98,14 @@ func main() {
 
 		signer := (*bind.PrivateKeySigner)(acc.PrivateKey)
 
-		sender := staker.AddValidator(signer, node.master, builtin.MinStake(), minStakingPeriod, true)
+		sender := staker.AddValidator(node.master, builtin.MinStake(), minStakingPeriod, true).Send().WithSigner(signer).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 
 	fmt.Println("Sending transactions...")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	receipts, txs, err := senders.Send(ctx, testutil.TxOptions())
+	receipts, txs, err := senders.Send(ctx)
 	if err != nil {
 		fmt.Printf("Error sending transactions: %v\n", err)
 		os.Exit(1)
@@ -120,7 +121,7 @@ func main() {
 
 	fmt.Printf("✅ Successfully registered %d of 10 validators - PoS is now active\n", len(validators))
 
-	best, err := client.GetBlock("0")
+	best, err := client.Block("0")
 	if err != nil {
 		fmt.Printf("Error fetching best block: %v\n", err)
 		os.Exit(1)
@@ -173,7 +174,7 @@ type nodeEntry struct {
 
 // fetchAuthorities retrieves all authority nodes from the blockchain and returns them as a map.
 // The map key is the endorsor address.
-func fetchAuthorities(client *httpclient.Client) (map[thor.Address]nodeEntry, error) {
+func fetchAuthorities(client *thorclient.Client) (map[thor.Address]nodeEntry, error) {
 	contract, err := builtin.NewAuthority(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authority contract: %w", err)

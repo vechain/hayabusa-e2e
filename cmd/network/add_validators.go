@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/vechain/hayabusa-e2e/utils"
+
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/thor/v2/genesis"
@@ -15,12 +17,12 @@ import (
 
 func addValidators(staker *builtin.Staker, config *hayabusa.Config) error {
 	fmt.Println("")
-	senders := bind.Senders{}
-	for i := 0; i < int(config.MaxBlockProposers); i++ {
+	senders := &utils.Senders{}
+	for i := range int(config.MaxBlockProposers) {
 		acc := genesis.DevAccounts()[i]
 		signer := (*bind.PrivateKeySigner)(acc.PrivateKey)
 		// Add the validator
-		sender := staker.AddValidator(signer, signer.Address(), builtin.MinStake(), config.MinStakingPeriod, true)
+		sender := staker.AddValidator(signer.Address(), builtin.MinStake(), config.MinStakingPeriod, true).Send().WithSigner(signer).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 
@@ -28,7 +30,7 @@ func addValidators(staker *builtin.Staker, config *hayabusa.Config) error {
 	defer cancel()
 
 	fmt.Println("⏳ Add Validator transactions sent, waiting for confirmation...")
-	_, _, err := senders.Send(ctx, testutil.TxOptions())
+	_, _, err := senders.Send(ctx)
 	if err != nil {
 		fmt.Println("  - Error sending transactions:", err)
 		return err
