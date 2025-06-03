@@ -51,11 +51,8 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 	firstStake := big.NewInt(0).Mul(stake, big.NewInt(2))
 
-	sender := staker.AddValidator(validator1NonPoA, validator1NonPoA.Address(), firstStake, config.MinStakingPeriod, false)
-	gas := uint64(10_000_000)
-	receipt, _, err := sender.Receipt(testutil.TxContext(t), &bind.TxOptions{
-		Gas: &gas,
-	})
+	receipt, _, err := staker.AddValidator(validator1NonPoA.Address(), firstStake, config.MinStakingPeriod, false).
+		Send().WithOptions(testutil.TxOptions()).WithSigner(validator1NonPoA).SubmitAndConfirm(testutil.TxContext(t))
 	assert.NoError(t, err)
 	assert.True(t, receipt.Reverted)
 	t.Log("✅ - Not a PoA candidate refused to join")
@@ -72,7 +69,7 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 	t.Log("✅ - Queued validator OK")
 
-	currentBlock, err := client.GetBlock("best")
+	currentBlock, err := client.Block("best")
 	assert.NoError(t, err)
 
 	block = currentBlock.Number
@@ -339,7 +336,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assert.Equal(t, id4, validatorID)
 	t.Log("✅ - Three validators are activated, 2 are queued, queue order has changed based on weight")
 
-	receipt, _, err := staker.UpdateAutoRenew(validator3, id3, false).Receipt(testutil.TxContext(t), testutil.TxOptions())
+	receipt, _, err := staker.UpdateAutoRenew(id3, false).
+		Send().
+		WithSigner(validator3).
+		WithOptions(testutil.TxOptions()).
+		SubmitAndConfirm(testutil.TxContext(t))
 	assert.NoError(t, err)
 	require.False(t, receipt.Reverted, "Transaction should not be reverted")
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
@@ -379,8 +380,8 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 }
 
 func addValidatorWithStake(t *testing.T, staker *builtin.Staker, signer bind.Signer, autoRenew bool, stake *big.Int, period uint32) thor.Bytes32 {
-	sender := staker.AddValidator(signer, signer.Address(), stake, period, autoRenew)
-	receipt, _, err := sender.Receipt(testutil.TxContext(t), testutil.TxOptions())
+	sender := staker.AddValidator(signer.Address(), stake, period, autoRenew).Send().WithSigner(signer).WithOptions(testutil.TxOptions())
+	receipt, _, err := sender.SubmitAndConfirm(testutil.TxContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted, "Transaction should not be reverted")
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
@@ -402,7 +403,7 @@ func addValidator(t *testing.T, staker *builtin.Staker, signer bind.Signer, auto
 }
 
 func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Bytes32) {
-	receipt, _, err := staker.Withdraw(signer, validatorID).Receipt(testutil.TxContext(t), testutil.TxOptions())
+	receipt, _, err := staker.Withdraw(validatorID).Send().WithSigner(signer).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
 	assert.NoError(t, err)
 	require.False(t, receipt.Reverted, "Transaction should not be reverted")
 	addr := signer.Address()
@@ -433,7 +434,7 @@ func assertRewards(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes3
 
 	proposedBlocks := 0
 	for periodStart < periodEnd {
-		block, err := staker.Raw().Client().GetBlock(strconv.Itoa(int(periodStart)))
+		block, err := staker.Raw().Client().Block(strconv.Itoa(int(periodStart)))
 		assert.NoError(t, err)
 		periodStart = periodStart + 1
 		if block.Signer.String() == validator.Master.String() {

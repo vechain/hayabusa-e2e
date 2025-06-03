@@ -20,7 +20,6 @@ import (
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -43,7 +42,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(10)) // very large stake
-	receipt, _, err := stargate.AddDelegator(acc, validationID, true, 200, stake).Receipt(testutil.TxContext(t), testutil.TxOptions())
+	receipt, _, err := stargate.AddDelegator(acc, validationID, true, 200, stake).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(receipt)
 
@@ -92,7 +91,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	t.Logf("✅ - checking delegated blocks (from %d to %d)", firstDelegatedBlock, block-1)
 	blockCount := 0
 	for i := firstDelegatedBlock; i < block; i++ {
-		block, err := staker.Raw().Client().GetBlock(strconv.Itoa(int(i)))
+		block, err := staker.Raw().Client().Block(strconv.Itoa(int(i)))
 		require.NoError(t, err)
 		if block.Signer == *validation.Master {
 			blockCount++
@@ -112,8 +111,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	proposerReward = proposerReward.Mul(proposerReward, big.NewInt(int64(blockCount)))
 	t.Logf("✅ total rewards: proposer=%s, delegator=%s, combined=%s", proposerReward.String(), delegatorReward.String(), new(big.Int).Add(proposerReward, delegatorReward).String())
 
-	stargateAddr := stargate.Address()
-	stargateAcc, err := staker.Raw().Client().GetAccount(&stargateAddr, "best")
+	stargateAcc, err := staker.Raw().Client().Account(stargate.Address())
 	require.NoError(t, err)
 	stargateEnergy := (*big.Int)(&stargateAcc.Energy)
 	assert.Equal(t, delegatorReward, stargateEnergy, "stargate energy should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, stargateEnergy).String())
@@ -178,15 +176,15 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 	}
 
 	validationIDs := [3]thor.Bytes32{}
-	senders := &bind.Senders{}
+	senders := &utils.Senders{}
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(account, account.Address(), builtin.MinStake(), config.MinStakingPeriod, true)
+		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod, true).Send().WithSigner(account).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 
-	if receipts, _, err := senders.Send(testutil.TxContext(t), testutil.TxOptions()); err != nil {
+	if receipts, _, err := senders.Send(testutil.TxContext(t)); err != nil {
 		t.Fatal(err)
 	} else {
 		for i := range config.MaxBlockProposers {
@@ -203,7 +201,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 }
 
 func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
-	genesis, err := staker.Raw().Client().GetBlock("0")
+	genesis, err := staker.Raw().Client().Block("0")
 	require.NoError(t, err)
 	chainTag := genesis.ID[31]
 
@@ -234,22 +232,18 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 				To:    trx.Clauses()[0].To(),
 			},
 		},
-	}, "best")
+	})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(inspection))
 
 	trx, err = hayabusa.Stargate.SignTransaction(trx)
 	require.NoError(t, err)
-	rlpTx, err := trx.MarshalBinary()
-	if err != nil {
-		t.Fatalf("unable to encode transaction - %v", err)
-	}
-	res, err := staker.Raw().Client().SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
+	res, err := staker.Raw().Client().SendTransaction(trx)
 	require.NoError(t, err)
 
 	var receipt *transactions.Receipt
 	for range 30 {
-		receipt, err = staker.Raw().Client().GetTransactionReceipt(res.ID, "")
+		receipt, err = staker.Raw().Client().TransactionReceipt(res.ID)
 		if err == nil && receipt != nil {
 			break
 		}
@@ -267,7 +261,7 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 	require.NoError(t, err)
 	key := thor.BytesToBytes32([]byte("stargate-contract-address"))
 	value := new(big.Int).SetBytes(contractAddr[:])
-	receipt, _, err = params.Set(hayabusa.Executor, key, value).Receipt(testutil.TxContext(t), testutil.TxOptions())
+	receipt, _, err = params.Set(key, value).Send().WithSigner(hayabusa.Executor).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
 	require.NoError(t, err)
 	require.False(t, receipt.Reverted, "receipt should not be reverted")
 

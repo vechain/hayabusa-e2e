@@ -7,16 +7,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/vechain/thor/v2/thorclient"
+
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/thorclient/common"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Ticker struct {
-	client *httpclient.Client
+	client *thorclient.Client
 }
 
-func NewTicker(client *httpclient.Client) *Ticker {
+func NewTicker(client *thorclient.Client) *Ticker {
 	return &Ticker{
 		client: client,
 	}
@@ -24,7 +25,7 @@ func NewTicker(client *httpclient.Client) *Ticker {
 
 // Wait waits for a new best block to be available
 func (t *Ticker) Wait(timeout time.Duration) (*blocks.JSONExpandedBlock, error) {
-	best, err := t.client.GetExpandedBlock("best")
+	best, err := t.client.ExpandedBlock("best")
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +38,7 @@ func (t *Ticker) Wait(timeout time.Duration) (*blocks.JSONExpandedBlock, error) 
 		case <-ticker.C:
 			return nil, errors.New("timeout waiting for block")
 		default:
-			block, err := t.client.GetExpandedBlock("best")
+			block, err := t.client.ExpandedBlock("best")
 			if err == nil && block != nil && block.Number > best.Number {
 				return block, nil
 			}
@@ -47,7 +48,7 @@ func (t *Ticker) Wait(timeout time.Duration) (*blocks.JSONExpandedBlock, error) 
 }
 
 func (t *Ticker) WaitForBlock(blockNumber uint32) error {
-	best, err := t.client.GetExpandedBlock("best")
+	best, err := t.client.ExpandedBlock("best")
 	if err != nil {
 		return err
 	}
@@ -69,7 +70,7 @@ func (t *Ticker) WaitForBlock(blockNumber uint32) error {
 		case <-ticker.C:
 			return errors.New("timeout waiting for block")
 		default:
-			block, err := t.client.GetExpandedBlock(strconv.Itoa(int(blockNumber)))
+			block, err := t.client.ExpandedBlock(strconv.Itoa(int(blockNumber)))
 			if block != nil && block.Number >= blockNumber {
 				return nil
 			}
