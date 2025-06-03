@@ -129,9 +129,6 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	assert.Equal(t, 3, int(start))
 	assert.Equal(t, 4, int(end))
 	assert.Equal(t, delegatorReward, claimable, "claimable should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, claimable).String())
-	simulation, err := stargate.Raw().Simulate(big.NewInt(0), acc.Address(), "getClaimable", acc.Address())
-	require.NoError(t, err)
-	stargate.LogEventValues(simulation.Events)
 
 	// these are the actual total rewards for the 4 periods
 	totalPeriodRewards := big.NewInt(0)
