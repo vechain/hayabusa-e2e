@@ -63,6 +63,10 @@ func main() {
 	client := httpclient.New(networkURL)
 
 	staker, err := builtin.NewStaker(client)
+	if err != nil {
+		fmt.Printf("Error creating Staker contract: %v\n", err)
+		os.Exit(1)
+	}
 	_, first, _ := staker.FirstActive()
 	if !first.IsZero() {
 		fmt.Println("✅ PoS is already active, exiting")
@@ -146,10 +150,7 @@ func parseValidatorKeys(privateKeysStr string) ([]Validator, error) {
 		if keyStr == "" {
 			continue
 		}
-		if strings.HasPrefix(keyStr, "0x") {
-			keyStr = keyStr[2:]
-		}
-
+		keyStr = strings.TrimPrefix(keyStr, "0x")
 		privateKey, err := crypto.HexToECDSA(keyStr)
 		if err != nil {
 			return nil, fmt.Errorf("invalid private key at position %d: %w", i+1, err)

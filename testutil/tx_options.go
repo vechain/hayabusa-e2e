@@ -20,4 +20,3 @@ func TxOptions() *bind.TxOptions {
 		Gas: &gas,
 	}
 }
-	

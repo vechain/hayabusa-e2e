@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
-	"time"
 )
 
 func addValidators(staker *builtin.Staker, config *hayabusa.Config) error {
@@ -41,9 +42,9 @@ func addValidators(staker *builtin.Staker, config *hayabusa.Config) error {
 
 	fmt.Println("")
 	for i, event := range events {
-		fmt.Println(fmt.Sprintf("  - Validation %d:", i))
-		fmt.Println(fmt.Sprintf("    📭 %s", event.Master))
-		fmt.Println(fmt.Sprintf("    🆔 %s", event.ValidationID))
+		fmt.Printf("  - Validation %d:", i)
+		fmt.Printf("    📭 %s", event.Master)
+		fmt.Printf("    🆔 %s", event.ValidationID)
 	}
 
 	fmt.Println("✅ - All validators added successfully")

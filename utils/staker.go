@@ -42,6 +42,6 @@ func WaitForCondition(client *httpclient.Client, maxBlock uint32, condition func
 		if best.Number > maxBlock {
 			return errors.New("condition not met, max block reached")
 		}
-		time.Sleep(3 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 }

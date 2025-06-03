@@ -2,7 +2,6 @@ package delegations
 
 import (
 	"context"
-	"github.com/vechain/hayabusa-e2e/testutil"
 	"math/big"
 	"strconv"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/logdb"
@@ -91,6 +91,7 @@ func Test_Delegations(t *testing.T) {
 		// withdraw - should succeed since auto-renew is false
 		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
+		require.False(t, receipt.Reverted)
 
 		delegation, err = staker.GetDelegation(delegationID)
 		require.NoError(t, err)
@@ -162,6 +163,7 @@ func Test_Delegations(t *testing.T) {
 		// withdraw - should succeed since auto-renew is false
 		receipt, _, err = staker.WithdrawDelegation(hayabusa.Stargate, delegationID).Receipt(testutil.TxContext(t), testutil.TxOptions())
 		require.NoError(t, err)
+		require.False(t, receipt.Reverted)
 		delegation, err = staker.GetDelegation(delegationID)
 		require.NoError(t, err)
 		assert.True(t, delegation.Stake.Sign() == 0)

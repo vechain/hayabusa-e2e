@@ -1,8 +1,6 @@
 package slots
 
 import (
-	"github.com/vechain/hayabusa-e2e/testutil"
-	"github.com/vechain/thor/v2/thorclient/bind"
 	"math/big"
 	"testing"
 	"time"
@@ -10,8 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 

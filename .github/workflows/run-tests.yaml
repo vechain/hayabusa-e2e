@@ -43,6 +43,7 @@ jobs:
           - tests/delegations
           - tests/slots
           - tests/energy
+          - tests/stargate
       fail-fast: false
 
     steps:

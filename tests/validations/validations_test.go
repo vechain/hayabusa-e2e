@@ -134,20 +134,15 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 	id2 := addValidator(t, staker, validator2, false, config.MinStakingPeriod)
 
-	var validatorIDs []thor.Bytes32
 	block += config.TransitionPeriod
 	periodStart := block
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	t.Log("✅ - Both validators are activated")
 
-	validatorIDs = append(validatorIDs, id1)
-	validatorIDs = append(validatorIDs, id2)
-
 	block += config.MinStakingPeriod
 	periodEnd := block
 	id3 := addValidator(t, staker, validator3, true, config.MinStakingPeriod)
-	validatorIDs = append(validatorIDs, id3)
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusExited, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
@@ -182,7 +177,6 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
 	validator3 := hayabusa.ValidatorAccounts[2]
-	var validatorIDs []thor.Bytes32
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
@@ -190,11 +184,8 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	ticker := utils.NewTicker(client)
 
 	id1 := addValidator(t, staker, validator1, false, config.MinStakingPeriod)
-	validatorIDs = append(validatorIDs, id1)
 	id2 := addValidator(t, staker, validator2, false, config.MinStakingPeriod)
-	validatorIDs = append(validatorIDs, id2)
 	id3 := addValidator(t, staker, validator3, true, config.MinStakingPeriod)
-	validatorIDs = append(validatorIDs, id3)
 
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -280,7 +271,6 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	validator3 := hayabusa.ValidatorAccounts[2]
 	validator4 := hayabusa.ValidatorAccounts[3]
 	validator5 := hayabusa.ValidatorAccounts[4]
-	var validatorIDs []thor.Bytes32
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
@@ -290,13 +280,9 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
 	stake = big.NewInt(0).Mul(stake, big.NewInt(26))
 	id1 := addValidator(t, staker, validator1, true, config.MinStakingPeriod)
-	validatorIDs = append(validatorIDs, id1)
 	id2 := addValidator(t, staker, validator2, true, config.MinStakingPeriod)
-	validatorIDs = append(validatorIDs, id2)
 	id3 := addValidator(t, staker, validator3, true, config.MinStakingPeriod)
-	validatorIDs = append(validatorIDs, id3)
 	id4 := addValidator(t, staker, validator4, true, config.MinStakingPeriod)
-	validatorIDs = append(validatorIDs, id4)
 
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -322,14 +308,15 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	validatorStake = big.NewInt(0).Mul(validatorStake, big.NewInt(1e6))
 	validatorStake = big.NewInt(0).Mul(validatorStake, big.NewInt(25))
 	total, totalWeight, err := staker.TotalStake()
+	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), total)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(6)), totalWeight)
 	queued, queuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(1)), queued)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(2)), queuedWeight)
 
 	id5 := addValidatorWithStake(t, staker, validator5, false, stake, config.MinStakingPeriod)
-	validatorIDs = append(validatorIDs, id5)
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
@@ -337,9 +324,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id5, builtin.StakerStatusQueued, block)
 
 	total, totalWeight, err = staker.TotalStake()
+	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), total)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(6)), totalWeight)
 	queued, queuedWeight, err = staker.QueuedStake()
+	assert.NoError(t, err)
 
 	queuedStk := big.NewInt(0).Add(validatorStake, stake)
 	assert.Equal(t, queuedStk, queued)
@@ -438,7 +427,6 @@ func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validato
 }
 
 func assertRewards(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, totalStaked *big.Int, periodStart uint32, periodEnd uint32) {
-
 	expectedReward := hayabusa.GetExpectedReward(totalStaked)
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
