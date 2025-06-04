@@ -2,18 +2,18 @@ package main
 
 import (
 	"fmt"
+	"github.com/vechain/hayabusa-e2e/utils"
 	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/cqroot/prompt"
 	"github.com/cqroot/prompt/input"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
-	"github.com/vechain/hayabusa-e2e/utils"
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
@@ -21,6 +21,7 @@ import (
 func main() {
 	config := &hayabusa.Config{
 		Verbosity:         1,
+		StakerVerbosity:   1,
 		Nodes:             3,
 		MaxBlockProposers: 3,
 		ForkBlock:         0,
@@ -44,26 +45,47 @@ func main() {
 		return
 	}
 
-	fmt.Println(" ✅ - Network started successfully")
-	for i, acc := range genesis.DevAccounts() {
-		fmt.Println("")
-		if uint32(i) < config.MaxBlockProposers {
-			fmt.Printf("  - Validator (%d):", i)
-			fmt.Printf("    🏰 %s", acc.Address)
-			fmt.Printf("    🔑 %s", hexutil.Encode(acc.PrivateKey.D.Bytes()))
-		} else {
-			fmt.Printf("  - Account (%d):", i-int(config.MaxBlockProposers))
-			fmt.Printf("    🤑 %s", acc.Address)
-			fmt.Printf("    🔑 %s", hexutil.Encode(acc.PrivateKey.D.Bytes()))
-		}
-	}
-	fmt.Println("")
 	fmt.Println(" 🛠️ Setting up the staker contract with validators...")
-	fmt.Println("  - In the meantime, please deploy or get ready to provide a stargate address")
-	if err := addValidators(staker, config); err != nil {
+
+	queuedEvents, err := addValidators(staker, config)
+	if err != nil {
 		fmt.Println("  - Error adding validators:", err)
 		return
 	}
+	fmt.Println("\n🕐 Waiting for POS to become active... expected at block ", config.ForkBlock+config.TransitionPeriod)
+	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
+		fmt.Println("  - Error waiting for PoS:", err)
+		return
+	}
+
+	fmt.Println(" ✅ - Network started successfully")
+	for i := range config.MaxBlockProposers {
+		acc := hayabusa.ValidatorAccounts[i]
+		fmt.Printf("\n  - Validator (%d):", i)
+		fmt.Printf("    🏰 %s", acc.Address())
+		fmt.Printf("    🔑 %s", hexutil.Encode(acc.D.Bytes()))
+
+		var event *builtin.ValidatorQueuedEvent
+		for _, e := range queuedEvents {
+			if e.Master == acc.Address() {
+				event = &e
+				break
+			}
+		}
+		if event == nil {
+			fmt.Println("    ❌ - No queued event found for this validator")
+			continue
+		} else {
+			fmt.Printf("    ⏳ - Validation ID: %s", hexutil.Encode(event.ValidationID[:]))
+		}
+	}
+	for i := range 10 {
+		acc := hayabusa.AdditionalAccounts[i]
+		fmt.Printf("\n  - Additional Account (%d):", i)
+		fmt.Printf("    🤑 %s", acc.Address())
+		fmt.Printf("    🔑 %s", hexutil.Encode(acc.D.Bytes()))
+	}
+	fmt.Println("")
 
 	fmt.Println("")
 	fmt.Println("🌐 - Network URL: ", net.Config().Nodes[0].GetAPIAddr())
@@ -85,11 +107,6 @@ func main() {
 	fmt.Println("")
 	fmt.Println("✅ - Stargate address updated successfully")
 
-	fmt.Println("\n🕐 Waiting for POS to become active... expected at block ", config.ForkBlock+config.TransitionPeriod)
-	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
-		fmt.Println("  - Error waiting for PoS:", err)
-		return
-	}
 	fmt.Println("\n✅ - PoS is now active")
 
 	res, err = prompt.New().Ask("Start Devpal? (y/n)").Choose([]string{"y", "n"})
@@ -98,7 +115,10 @@ func main() {
 	}
 	var killDevpal func()
 	if res == "y" {
-		killDevpal, err = startDevPal(net.Config().Nodes[0].GetAPIAddr())
+		addr := net.Config().Nodes[0].GetAPIAddr()
+		parts := strings.Split(addr, ":")
+		addr = fmt.Sprintf("http://localhost:%s", parts[len(parts)-1])
+		killDevpal, err = startDevPal(addr)
 		if err != nil {
 			fmt.Println("  - Error starting devpal:", err)
 			return
