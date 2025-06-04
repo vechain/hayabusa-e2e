@@ -14,7 +14,6 @@ import (
 )
 
 func setStargateAddr(client *thorclient.Client, stargate thor.Address) error {
-
 	params, err := builtin.NewParams(client)
 	if err != nil {
 		return fmt.Errorf("failed to create params: %w", err)

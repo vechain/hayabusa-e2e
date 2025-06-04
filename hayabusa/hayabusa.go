@@ -93,10 +93,7 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 			"txpool-limit-per-account": "100000",
 			"api-allowed-tracers":      "all",
 		}
-		stakerVerbosity := 0
-		if config.StakerVerbosity > 0 {
-			stakerVerbosity = config.StakerVerbosity
-		}
+		stakerVerbosity := max(config.StakerVerbosity, 0)
 		if i == 0 { // enable verbose staker logs for 1 node
 			additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
 		}

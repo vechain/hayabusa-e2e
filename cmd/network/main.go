@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/vechain/hayabusa-e2e/utils"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -14,6 +13,7 @@ import (
 	"github.com/cqroot/prompt/input"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
