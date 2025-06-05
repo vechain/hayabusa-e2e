@@ -25,6 +25,7 @@ type Config struct {
 	HighStakingPeriod uint32       // staker-high-staking-period
 	StargateAddress   thor.Address // Stargate contract address
 	Verbosity         int          // Verbosity level for the nodes
+	StakerVerbosity   int          // Staker verbosity level
 	Debug             bool         // Debug mode for the nodes
 }
 

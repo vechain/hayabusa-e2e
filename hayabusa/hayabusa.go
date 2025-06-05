@@ -75,7 +75,7 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 			DownloadConfig: &thorbuilder.DownloadConfig{
 				RepoUrl:    repo,
 				Branch:     "release/hayabusa",
-				IsReusable: false,
+				IsReusable: true,
 			},
 		}
 	}
@@ -93,8 +93,9 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 			"txpool-limit-per-account": "100000",
 			"api-allowed-tracers":      "all",
 		}
+		stakerVerbosity := max(config.StakerVerbosity, 0)
 		if i == 0 { // enable verbose staker logs for 1 node
-			additionalArgs["verbosity-staker"] = "4"
+			additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
 		}
 		nodes[i] = &node.BaseNode{
 			ID:             "Node-" + strconv.Itoa(i),
