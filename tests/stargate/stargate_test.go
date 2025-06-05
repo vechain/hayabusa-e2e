@@ -1,6 +1,7 @@
 package stargate
 
 import (
+	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -47,8 +48,11 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	txId := tx.ID()
 	err = ticker.WaitForCondition(time.Second*120, func() (bool, error) {
 		receipt, err := staker.Raw().Client().TransactionReceipt(&txId)
-		if err != nil || receipt == nil || receipt.Reverted {
+		if err != nil || receipt == nil {
 			return false, nil
+		}
+		if receipt.Reverted {
+			return false, fmt.Errorf("Tx reverted %s", txId)
 		}
 		return true, nil
 	})
