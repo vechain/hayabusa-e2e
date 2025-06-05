@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/builtin"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 func WaitForPOS(staker *builtin.Staker, maxBlock uint32) error {
@@ -18,7 +18,7 @@ func WaitForPOS(staker *builtin.Staker, maxBlock uint32) error {
 func WaitForFork(staker *builtin.Staker, forkBlock uint32) error {
 	addr := staker.Raw().Address()
 	return WaitForCondition(staker.Raw().Client(), forkBlock, func() (bool, error) {
-		acc, err := staker.Raw().Client().GetAccountCode(&addr, "best")
+		acc, err := staker.Raw().Client().AccountCode(addr)
 		if err != nil {
 			return false, err
 		}
@@ -26,7 +26,7 @@ func WaitForFork(staker *builtin.Staker, forkBlock uint32) error {
 	})
 }
 
-func WaitForCondition(client *httpclient.Client, maxBlock uint32, condition func() (bool, error)) error {
+func WaitForCondition(client *thorclient.Client, maxBlock uint32, condition func() (bool, error)) error {
 	for {
 		ok, err := condition()
 		if err != nil {
@@ -35,7 +35,7 @@ func WaitForCondition(client *httpclient.Client, maxBlock uint32, condition func
 		if ok {
 			return nil
 		}
-		best, err := client.GetBlock("best")
+		best, err := client.Block("best")
 		if err != nil {
 			return err
 		}

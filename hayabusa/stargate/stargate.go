@@ -6,14 +6,14 @@ import (
 	"log/slog"
 	"math/big"
 
+	"github.com/vechain/thor/v2/thorclient"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 //go:embed Stargate.abi
@@ -24,12 +24,12 @@ var Bin string
 
 // Stargate represents a wrapper to interact with the Stargate contract
 type Stargate struct {
-	contract *bind.Caller
+	contract bind.Contract
 }
 
 // NewStargate creates a new instance of the Stargate contract wrapper
-func NewStargate(client *httpclient.Client, addr thor.Address) *Stargate {
-	base, err := bind.NewCaller(client, ABI, addr)
+func NewStargate(client *thorclient.Client, addr thor.Address) *Stargate {
+	base, err := bind.NewContract(client, ABI, &addr)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create stargate contract: %v", err))
 	}
@@ -39,12 +39,12 @@ func NewStargate(client *httpclient.Client, addr thor.Address) *Stargate {
 }
 
 // Raw returns the underlying caller for direct interactions
-func (s *Stargate) Raw() *bind.Caller {
+func (s *Stargate) Raw() bind.Contract {
 	return s.contract
 }
 
 // Address returns the address of the contract
-func (s *Stargate) Address() thor.Address {
+func (s *Stargate) Address() *thor.Address {
 	return s.contract.Address()
 }
 
@@ -53,7 +53,7 @@ func (s *Stargate) Address() thor.Address {
 // Claims returns the claims for a given validation ID
 func (s *Stargate) Claims(validationID thor.Bytes32) (uint32, error) {
 	var result uint32
-	if err := s.contract.CallInto("claims", &result, validationID); err != nil {
+	if err := s.contract.Method("claims", validationID).Call().ExecuteInto(&result); err != nil {
 		return 0, err
 	}
 	return result, nil
@@ -62,7 +62,7 @@ func (s *Stargate) Claims(validationID thor.Bytes32) (uint32, error) {
 // DelegationIDs returns the delegation ID for a given address
 func (s *Stargate) DelegationIDs(address thor.Address) (thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.CallInto("delegationIDs", &out, address); err != nil {
+	if err := s.contract.Method("delegationIDs", address).Call().ExecuteInto(&out); err != nil {
 		return thor.Bytes32{}, err
 	}
 	return thor.Bytes32(*out), nil
@@ -70,12 +70,12 @@ func (s *Stargate) DelegationIDs(address thor.Address) (thor.Bytes32, error) {
 
 // GetClaimable returns the claimable rewards for a delegator
 func (s *Stargate) GetClaimable(delegator thor.Address) (*big.Int, uint32, uint32, error) {
-	var out = make([]interface{}, 3)
+	var out = make([]any, 3)
 	out[0] = new(*big.Int)
 	out[1] = new(uint32)
 	out[2] = new(uint32)
 
-	if err := s.contract.CallInto("getClaimable", &out, delegator); err != nil {
+	if err := s.contract.Method("getClaimable", delegator).Call().ExecuteInto(&out); err != nil {
 		return nil, 0, 0, err
 	}
 
@@ -85,7 +85,7 @@ func (s *Stargate) GetClaimable(delegator thor.Address) (*big.Int, uint32, uint3
 // PopulatedWeights returns the populated weights for a validation ID
 func (s *Stargate) PopulatedWeights(validationID thor.Bytes32) (uint32, error) {
 	var result uint32
-	if err := s.contract.CallInto("populatedWeights", &result, validationID); err != nil {
+	if err := s.contract.Method("populatedWeights", validationID).Call().ExecuteInto(&result); err != nil {
 		return 0, err
 	}
 	return result, nil
@@ -94,7 +94,7 @@ func (s *Stargate) PopulatedWeights(validationID thor.Bytes32) (uint32, error) {
 // Reductions returns the reductions for a validation ID and period
 func (s *Stargate) Reductions(validationID thor.Bytes32, period uint32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.CallInto("reductions", &out, validationID, period); err != nil {
+	if err := s.contract.Method("reductions", validationID, period).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -103,7 +103,7 @@ func (s *Stargate) Reductions(validationID thor.Bytes32, period uint32) (*big.In
 // Rewards returns the rewards for a validation ID and period
 func (s *Stargate) Rewards(validationID thor.Bytes32, period uint32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.CallInto("rewards", &out, validationID, period); err != nil {
+	if err := s.contract.Method("rewards", validationID, period).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -112,7 +112,7 @@ func (s *Stargate) Rewards(validationID thor.Bytes32, period uint32) (*big.Int, 
 // Staker returns the staker contract address
 func (s *Stargate) Staker() (thor.Address, error) {
 	out := new(common.Address)
-	if err := s.contract.CallInto("staker", &out); err != nil {
+	if err := s.contract.Method("staker").Call().ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -121,7 +121,7 @@ func (s *Stargate) Staker() (thor.Address, error) {
 // VTHO returns the VTHO token contract address
 func (s *Stargate) VTHO() (thor.Address, error) {
 	out := new(common.Address)
-	if err := s.contract.CallInto("vtho", &out); err != nil {
+	if err := s.contract.Method("vtho").Call().ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -130,7 +130,7 @@ func (s *Stargate) VTHO() (thor.Address, error) {
 // Weights returns the weights for a validation ID and period
 func (s *Stargate) Weights(validationID thor.Bytes32, period uint32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.CallInto("weights", &out, validationID, period); err != nil {
+	if err := s.contract.Method("weights", validationID, period).Call().ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -139,23 +139,23 @@ func (s *Stargate) Weights(validationID thor.Bytes32, period uint32) (*big.Int, 
 // ---- Transaction Methods ----
 
 // AddDelegator adds a delegator to a validation ID
-func (s *Stargate) AddDelegator(signer bind.Signer, validationID thor.Bytes32, autoRenew bool, multiplier uint8, amount *big.Int) *bind.Sender {
-	return s.contract.Attach(signer).SenderWithVET(amount, "addDelegator", validationID, autoRenew, multiplier)
+func (s *Stargate) AddDelegator(signer bind.Signer, validationID thor.Bytes32, autoRenew bool, multiplier uint8, amount *big.Int) bind.SendBuilder {
+	return s.contract.Method("addDelegator", validationID, autoRenew, multiplier).WithValue(amount).Send().WithSigner(signer)
 }
 
 // ClaimRewards claims rewards for the sender
-func (s *Stargate) ClaimRewards(signer bind.Signer) *bind.Sender {
-	return s.contract.Attach(signer).Sender("claimRewards")
+func (s *Stargate) ClaimRewards(signer bind.Signer) bind.SendBuilder {
+	return s.contract.Method("claimRewards").Send().WithSigner(signer)
 }
 
 // DisableAutoRenew disables auto renewal for the sender's delegation
-func (s *Stargate) DisableAutoRenew(signer bind.Signer) *bind.Sender {
-	return s.contract.Attach(signer).Sender("disableAutoRenew")
+func (s *Stargate) DisableAutoRenew(signer bind.Signer) bind.SendBuilder {
+	return s.contract.Method("disableAutoRenew").Send().WithSigner(signer)
 }
 
 // EnableAutoRenew enables auto renewal for the sender's delegation
-func (s *Stargate) EnableAutoRenew(signer bind.Signer) *bind.Sender {
-	return s.contract.Attach(signer).Sender("enableAutoRenew")
+func (s *Stargate) EnableAutoRenew(signer bind.Signer) bind.SendBuilder {
+	return s.contract.Method("enableAutoRenew").Send().WithSigner(signer)
 }
 
 // ---- Event Filterers ----
@@ -167,7 +167,7 @@ func (s *Stargate) filterEvents(name string, from, to uint32) ([]events.Filtered
 		From: &from64,
 		To:   &to64,
 	}
-	return s.contract.FilterEvents(name, rnge, nil, logdb.ASC)
+	return s.contract.FilterEvent(name).InRange(rnge).Execute()
 }
 
 type ClaimedRewardsEvent struct {
@@ -185,7 +185,7 @@ func (s *Stargate) ParseClaimedRewards(topics []*thor.Bytes32, data string) (*Cl
 
 	validationID := thor.Bytes32(topics[1][:])     // indexed
 	delegator := thor.BytesToAddress(topics[2][:]) // indexed
-	dataFields := make([]interface{}, 3)
+	dataFields := make([]any, 3)
 	dataFields[0] = new(*big.Int)
 	dataFields[1] = new(uint32)
 	dataFields[2] = new(uint32)
@@ -238,7 +238,7 @@ func (s *Stargate) ParseClaimParams(topics []*thor.Bytes32, data string) (*Claim
 	}
 
 	delegationID := thor.Bytes32(topics[1][:]) // indexed
-	dataFields := make([]interface{}, 6)
+	dataFields := make([]any, 6)
 	dataFields[0] = new(common.Address)
 	dataFields[1] = new(uint32)
 	dataFields[2] = new(uint32)
@@ -292,7 +292,7 @@ func (s *Stargate) ParseClaimOutputs(topics []*thor.Bytes32, data string) (*Clai
 	}
 
 	delegationID := thor.Bytes32(topics[1][:]) // indexed
-	dataFields := make([]interface{}, 2)
+	dataFields := make([]any, 2)
 	dataFields[0] = new(common.Address)
 	dataFields[1] = new(*big.Int)
 	bytes, err := hexutil.Decode(data)
@@ -341,7 +341,7 @@ func (s *Stargate) ParseWeightsPopulated(topics []*thor.Bytes32, data string) (*
 	}
 
 	validationID := thor.Bytes32(topics[1][:]) // indexed
-	dataFields := make([]interface{}, 5)
+	dataFields := make([]any, 5)
 	dataFields[0] = new(uint32)
 	dataFields[1] = new(*big.Int)
 	dataFields[2] = new(*big.Int)
@@ -394,7 +394,7 @@ func (s *Stargate) ParseRewardsPopulated(topics []*thor.Bytes32, data string) (*
 	}
 
 	validationID := thor.Bytes32(topics[1][:]) // indexed
-	dataFields := make([]interface{}, 4)
+	dataFields := make([]any, 4)
 	dataFields[0] = new(uint32)
 	dataFields[1] = new(*big.Int)
 	dataFields[2] = new(*big.Int)
@@ -448,7 +448,7 @@ func (s *Stargate) ParseRewardsCalculated(topics []*thor.Bytes32, data string) (
 	}
 
 	validationID := thor.Bytes32(topics[1][:]) // indexed
-	dataFields := make([]interface{}, 4)
+	dataFields := make([]any, 4)
 	dataFields[0] = new(uint32)
 	dataFields[1] = new(*big.Int)
 	dataFields[2] = new(*big.Int)

@@ -10,7 +10,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
@@ -40,15 +39,15 @@ func TestEnergy(t *testing.T) {
 
 	require.NoError(t, utils.WaitForFork(staker, config.ForkBlock))
 
-	senders := &bind.Senders{}
+	senders := &utils.Senders{}
 	validators := 3
 	stake := builtin.MinStake()
-	for i := 0; i < validators; i++ {
+	for i := range validators {
 		acc := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(acc, acc.Address(), stake, config.MinStakingPeriod, true)
+		sender := staker.AddValidator(acc.Address(), stake, config.MinStakingPeriod, true).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
-	receipts, _, err := senders.Send(testutil.TxContext(t), testutil.TxOptions())
+	receipts, _, err := senders.Send(testutil.TxContext(t))
 	require.NoError(t, err)
 
 	genesisVET := big.NewInt(0)
@@ -67,12 +66,12 @@ func TestEnergy(t *testing.T) {
 
 	require.NoError(t, utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod))
 
-	genesisBlock, err := client.GetBlock("0")
+	genesisBlock, err := client.Block("0")
 	require.NoError(t, err)
 
 	// check PoA + transition period growth -> Should use legacy growth rate
 	for i := uint32(1); i < config.ForkBlock+config.TransitionPeriod; i++ {
-		currentBlock, err := client.GetBlock(strconv.FormatUint(uint64(i), 10))
+		currentBlock, err := client.Block(strconv.FormatUint(uint64(i), 10))
 		require.NoError(t, err)
 
 		growth := new(big.Int).SetUint64(currentBlock.Timestamp - genesisBlock.Timestamp)

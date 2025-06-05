@@ -10,19 +10,19 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/vechain/networkhub/environments"
-	"github.com/vechain/thor/v2/test/datagen"
-	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/httpclient"
+	"github.com/vechain/thor/v2/thorclient"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/networkhub/entrypoint/client"
+	"github.com/vechain/networkhub/environments"
 	"github.com/vechain/networkhub/genesisbuilder"
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/network/node/genesis"
 	"github.com/vechain/networkhub/thorbuilder"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/bind"
 
 	networkhubNetwork "github.com/vechain/networkhub/network"
 	thorgenesis "github.com/vechain/thor/v2/genesis"
@@ -53,7 +53,7 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 		Build()
 }
 
-func StartNetwork(config *Config) (*httpclient.Client, environments.Actions, func(), error) {
+func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, func(), error) {
 	if config.Nodes < 2 {
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
@@ -135,7 +135,7 @@ func StartNetwork(config *Config) (*httpclient.Client, environments.Actions, fun
 	}
 
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
-	client := httpclient.New(nodes[1].GetHTTPAddr())
+	client := thorclient.New(nodes[1].GetHTTPAddr())
 
 	return client, hayabusaNetwork, func() {
 		if err := hayabusaNetwork.StopNetwork(); err != nil {
