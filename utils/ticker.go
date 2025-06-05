@@ -82,3 +82,26 @@ func (t *Ticker) WaitForBlock(blockNumber uint32) error {
 		}
 	}
 }
+
+type ConditionFunc func() (bool, error)
+
+func (t *Ticker) WaitForCondition(timeout time.Duration, conditionalFunc ConditionFunc) error {
+	ticker := time.NewTicker(timeout)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			return errors.New("timeout waiting for block")
+		default:
+			resp, err := conditionalFunc()
+			if err != nil {
+				return err
+			}
+			if resp {
+				return nil
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}
+}

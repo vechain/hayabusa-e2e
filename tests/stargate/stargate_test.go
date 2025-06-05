@@ -42,9 +42,20 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(10)) // very large stake
-	receipt, _, err := stargate.AddDelegator(acc, validationID, true, 200, stake).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
+	tx, err := stargate.AddDelegator(acc, validationID, true, 200, stake).WithOptions(testutil.TxOptions()).Submit()
 	require.NoError(t, err)
-	delegationID := receiptToDelegationID(receipt)
+	txId := tx.ID()
+	err = ticker.WaitForCondition(time.Second*120, func() (bool, error) {
+		receipt, err := staker.Raw().Client().TransactionReceipt(&txId)
+		if err != nil || receipt == nil || receipt.Reverted {
+			return false, nil
+		}
+		return true, nil
+	})
+	require.NoError(t, err)
+	receipt, err := staker.Raw().Client().TransactionReceipt(&txId)
+	require.NoError(t, err)
+	delegationID := receiptToDelegationID(t, receipt)
 
 	// assert correct start period
 	completed, err = staker.GetCompletedPeriods(validationID)
@@ -160,7 +171,7 @@ func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_Off(t *testing.T) {
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(3)) // very large stake
 	receipt, _, err := stargate.AddDelegator(acc, validationID, false, 200, stake).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
 	require.NoError(t, err)
-	delegationID := receiptToDelegationID(receipt)
+	delegationID := receiptToDelegationID(t, receipt)
 
 	// assert correct start period
 	completed, err = staker.GetCompletedPeriods(validationID)
@@ -247,7 +258,7 @@ func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_On_And_Off(t *testin
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(3))
 	receipt, _, err := stargate.AddDelegator(acc, validationID, true, 200, stake).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
 	require.NoError(t, err)
-	delegationID := receiptToDelegationID(receipt)
+	delegationID := receiptToDelegationID(t, receipt)
 
 	// assert correct start period
 	completed, err = staker.GetCompletedPeriods(validationID)
@@ -482,7 +493,8 @@ func receiptToID(receipt *transactions.Receipt) thor.Bytes32 {
 	return receipt.Outputs[0].Events[0].Topics[3]
 }
 
-func receiptToDelegationID(receipt *transactions.Receipt) thor.Bytes32 {
+func receiptToDelegationID(t *testing.T, receipt *transactions.Receipt) thor.Bytes32 {
+	require.False(t, receipt.Reverted)
 	return receipt.Outputs[0].Events[0].Topics[2]
 }
 

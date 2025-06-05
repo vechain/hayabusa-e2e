@@ -92,19 +92,15 @@ func Test_MissedSlot(t *testing.T) {
 	require.NoError(t, network.Nodes()[validator1.GetID()].Start())
 
 	// wait for the validator to be back online
-	online := false
-	for range 20 {
-		best, err := ticker.Wait(50 * time.Second)
+	err = ticker.WaitForCondition(time.Second*120, func() (bool, error) {
+		validation, err := staker.Get(validationID)
 		require.NoError(t, err)
-		if best.Signer == *validation.Master {
-			online = true
-			break
-		}
-	}
+		return validation.Online, nil
+	})
+	require.NoError(t, err)
 
 	validation, err = staker.Get(validationID)
 	require.NoError(t, err)
 	require.True(t, validation.Online)
-	require.True(t, online, "validator not back online")
 	t.Log("✅ - validator back online")
 }
