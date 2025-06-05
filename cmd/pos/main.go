@@ -121,7 +121,7 @@ func main() {
 
 	fmt.Printf("✅ Successfully registered %d of 10 validators - PoS is now active\n", len(validators))
 
-	best, err := client.Block("0")
+	best, err := client.Block("best")
 	if err != nil {
 		fmt.Printf("Error fetching best block: %v\n", err)
 		os.Exit(1)
