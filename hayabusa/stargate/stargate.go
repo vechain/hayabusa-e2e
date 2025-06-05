@@ -79,10 +79,6 @@ func (s *Stargate) GetClaimable(delegator thor.Address) (*big.Int, uint32, uint3
 		return nil, 0, 0, err
 	}
 
-	if err := s.contract.CallInto("getClaimable", &out, delegator); err != nil {
-		return nil, 0, 0, err
-	}
-
 	return *(out[0].(**big.Int)), *(out[1].(*uint32)), *(out[2].(*uint32)), nil
 }
 
