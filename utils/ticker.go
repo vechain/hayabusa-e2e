@@ -59,7 +59,7 @@ func (t *Ticker) WaitForBlock(blockNumber uint32) error {
 		best.Timestamp = uint64(time.Now().Unix())
 	}
 	expectedTime := best.Timestamp + uint64(blockNumber-best.Number)*10
-	timeout := time.Until(time.Unix(int64(expectedTime), 0).Add(12 * time.Second))
+	timeout := time.Until(time.Unix(int64(expectedTime), 0).Add(20 * time.Second))
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
 
