@@ -74,7 +74,7 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 		thorBuilder = &thorbuilder.Config{
 			DownloadConfig: &thorbuilder.DownloadConfig{
 				RepoUrl:    repo,
-				Branch:     "vanja/bugfix/queud-weight-not-included-for-delegators",
+				Branch:     "release/hayabusa",
 				IsReusable: true,
 			},
 		}
