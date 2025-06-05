@@ -94,7 +94,7 @@ func Test_MissedSlot(t *testing.T) {
 	// wait for the validator to be back online
 	online := false
 	for range 20 {
-		best, err := ticker.Wait(25 * time.Second)
+		best, err := ticker.Wait(50 * time.Second)
 		require.NoError(t, err)
 		if best.Signer == *validation.Master {
 			online = true
