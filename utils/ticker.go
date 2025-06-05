@@ -59,7 +59,7 @@ func (t *Ticker) WaitForBlock(blockNumber uint32) error {
 		best.Timestamp = uint64(time.Now().Unix())
 	}
 	expectedTime := best.Timestamp + uint64(blockNumber-best.Number)*10
-	timeout := time.Until(time.Unix(int64(expectedTime), 0).Add(12 * time.Second))
+	timeout := time.Until(time.Unix(int64(expectedTime), 0).Add(20 * time.Second))
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
 
@@ -79,6 +79,29 @@ func (t *Ticker) WaitForBlock(blockNumber uint32) error {
 			}
 			time.Sleep(1 * time.Second)
 			slog.Warn("waiting for block...", "block", blockNumber, "timeout", time.Until(time.Unix(int64(expectedTime), 0).Add(2*time.Second)))
+		}
+	}
+}
+
+type ConditionFunc func() (bool, error)
+
+func (t *Ticker) WaitForCondition(timeout time.Duration, conditionalFunc ConditionFunc) error {
+	ticker := time.NewTicker(timeout)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			return errors.New("timeout waiting for block")
+		default:
+			resp, err := conditionalFunc()
+			if err != nil {
+				return err
+			}
+			if resp {
+				return nil
+			}
+			time.Sleep(10 * time.Second)
 		}
 	}
 }
