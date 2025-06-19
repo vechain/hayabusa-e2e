@@ -416,7 +416,6 @@ func TestHayabusaTotalStakeDecreased(t *testing.T) {
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
-	//periodStart := block
 	require.NoError(t, utils.WaitForPOS(staker, block))
 
 	_, validatorID, err = staker.FirstActive()
@@ -436,7 +435,6 @@ func TestHayabusaTotalStakeDecreased(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(4)), totalWeight)
 
 	block += config.MinStakingPeriod
-	//periodEnd := block
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusExited, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 
