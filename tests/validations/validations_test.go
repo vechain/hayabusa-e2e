@@ -442,13 +442,13 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 
 	// Check initial queued stake and weight
 	validatorStake := big.NewInt(1e18)
-	validatorStake = big.NewInt(0).Mul(validatorStake, big.NewInt(1e6))
-	validatorStake = big.NewInt(0).Mul(validatorStake, big.NewInt(25))
+	validatorStake = new(big.Int).Mul(validatorStake, big.NewInt(1e6))
+	validatorStake = new(big.Int).Mul(validatorStake, big.NewInt(25))
 
 	queued, queuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(1)), queued)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(2)), queuedWeight)
+	assert.Equal(t, new(big.Int).Mul(validatorStake, big.NewInt(1)), queued)
+	assert.Equal(t, new(big.Int).Mul(validatorStake, big.NewInt(2)), queuedWeight)
 	t.Log("✅ - Initial queued stake and weight verified")
 
 	// Wait for first validator to exit (non-autoRenew)
@@ -460,8 +460,8 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 	// Check queued stake and weight after validator exit
 	queued, queuedWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
-	assert.True(t, queued.Cmp(big.NewInt(0)) == 0)
-	assert.True(t, queuedWeight.Cmp(big.NewInt(0)) == 0)
+	assert.True(t, queued.Cmp(new(big.Int)) == 0)
+	assert.True(t, queuedWeight.Cmp(new(big.Int)) == 0)
 	t.Log("✅ - Queued stake is decreased for the staked amount, queued weight is decreased for the 2x value of staked amount")
 
 	// Wait for second validator to exit
@@ -473,8 +473,8 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 	// Check queued stake and weight after second validator exit
 	queued, queuedWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
-	assert.True(t, queued.Cmp(big.NewInt(0)) == 0)
-	assert.True(t, queuedWeight.Cmp(big.NewInt(0)) == 0)
+	assert.True(t, queued.Cmp(new(big.Int)) == 0)
+	assert.True(t, queuedWeight.Cmp(new(big.Int)) == 0)
 	t.Log("✅ - All non-autoRenew validators have exited, queue is empty")
 }
 
