@@ -279,7 +279,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	id1 := addValidator(t, staker, validator1, true, config.MinStakingPeriod)
 	id2 := addValidator(t, staker, validator2, true, config.MinStakingPeriod)
 	id3 := addValidator(t, staker, validator3, true, config.MinStakingPeriod)
-	id4 := addValidator(t, staker, validator4, true, config.MinStakingPeriod)
+	id4 := addValidator(t, staker, validator4, false, config.MinStakingPeriod)
 
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -369,7 +369,20 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	t.Log("✅ - Three validators are activated, 2 are queued, queue order has changed based on weight")
 
-	block += config.CooldownPeriod
+	receipt, _, err = staker.UpdateAutoRenew(id4, true).
+		Send().
+		WithSigner(validator4).
+		WithOptions(testutil.TxOptions()).
+		SubmitAndConfirm(testutil.TxContext(t))
+	assert.NoError(t, err)
+	require.False(t, receipt.Reverted, "Transaction should not be reverted")
+	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
+	assert.Equal(t, validator4.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
+	assert.Equal(t, id4, receipt.Outputs[0].Events[0].Topics[2])
+
+	t.Log("✅ - AutoRenew updated for validator 4")
+
+	block += config.MinStakingPeriod
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusExited, block)
