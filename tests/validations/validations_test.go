@@ -392,6 +392,92 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	t.Log("✅ - Three validators are active one is queued and one has exited")
 }
 
+func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
+	config := &hayabusa.Config{
+		Nodes:             6,
+		MaxBlockProposers: 2,
+		ForkBlock:         0,
+		TransitionPeriod:  6,
+		EpochLength:       2,
+		CooldownPeriod:    2,
+		MinStakingPeriod:  4,
+		MidStakingPeriod:  12,
+		HighStakingPeriod: 259200,
+	}
+	client, _, cancel, err := hayabusa.StartNetwork(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cancel)
+
+	validator1 := hayabusa.ValidatorAccounts[0]
+	validator2 := hayabusa.ValidatorAccounts[1]
+	validator3 := hayabusa.ValidatorAccounts[2]
+
+	staker, err := builtin.NewStaker(client)
+	require.NoError(t, err)
+	require.NoError(t, utils.WaitForFork(staker, config.ForkBlock))
+
+	// Add validators to queue
+	id1 := addValidator(t, staker, validator1, false, config.MinStakingPeriod)
+	id2 := addValidator(t, staker, validator2, false, config.MinStakingPeriod)
+	id3 := addValidator(t, staker, validator3, false, config.MinStakingPeriod)
+
+	_, validatorID, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, id1, validatorID)
+	t.Log("✅ - Queued validators OK")
+
+	block := config.ForkBlock + config.TransitionPeriod
+	require.NoError(t, utils.WaitForPOS(staker, block))
+
+	_, validatorID, err = staker.FirstActive()
+	assert.NoError(t, err)
+	assert.Equal(t, id1, validatorID)
+	t.Log("✅ - Validator is active")
+
+	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id3, builtin.StakerStatusQueued, block)
+
+	// Check initial queued stake and weight
+	validatorStake := big.NewInt(1e18)
+	validatorStake = big.NewInt(0).Mul(validatorStake, big.NewInt(1e6))
+	validatorStake = big.NewInt(0).Mul(validatorStake, big.NewInt(25))
+
+	queued, queuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(1)), queued)
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(2)), queuedWeight)
+	t.Log("✅ - Initial queued stake and weight verified")
+
+	// Wait for first validator to exit (non-autoRenew)
+	block += config.MinStakingPeriod
+	assertValidatorStatus(t, staker, id1, builtin.StakerStatusExited, block)
+	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
+
+	// Check queued stake and weight after validator exit
+	queued, queuedWeight, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.True(t, queued.Cmp(big.NewInt(0)) == 0)
+	assert.True(t, queuedWeight.Cmp(big.NewInt(0)) == 0)
+	t.Log("✅ - Queued stake is decreased for the staked amount, queued weight is decreased for the 2x value of staked amount")
+
+	// Wait for second validator to exit
+	block += config.EpochLength
+	assertValidatorStatus(t, staker, id1, builtin.StakerStatusExited, block)
+	assertValidatorStatus(t, staker, id2, builtin.StakerStatusExited, block)
+	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
+
+	// Check queued stake and weight after second validator exit
+	queued, queuedWeight, err = staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.True(t, queued.Cmp(big.NewInt(0)) == 0)
+	assert.True(t, queuedWeight.Cmp(big.NewInt(0)) == 0)
+	t.Log("✅ - All non-autoRenew validators have exited, queue is empty")
+}
+
 func TestHayabusaTotalStakeDecreased(t *testing.T) {
 	config := &hayabusa.Config{
 		Nodes:             6,
