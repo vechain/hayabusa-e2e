@@ -412,8 +412,8 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 	finalQueued, finalQueuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.True(t, big.NewInt(0).Cmp(finalQueued) == 0)
-	assert.True(t, big.NewInt(0).Cmp(finalQueuedWeight) == 0)
 	t.Log("✅ - Queued stake is decreased for the staked amount")
+	assert.True(t, big.NewInt(0).Cmp(finalQueuedWeight) == 0)
 	t.Log("✅ - Queued weight is decreased for the 2x value of staked amount")
 
 	finalTotal, finalTotalWeight, err := staker.TotalStake()
@@ -421,9 +421,59 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 	expectedFinalTotal := new(big.Int).Mul(validatorStake, big.NewInt(3))
 	expectedFinalTotalWeight := new(big.Int).Mul(validatorStake, big.NewInt(6))
 	assert.Equal(t, expectedFinalTotal, finalTotal)
-	assert.Equal(t, expectedFinalTotalWeight, finalTotalWeight)
 	t.Log("✅ - Total stake is increased for the value of stake")
+	assert.Equal(t, expectedFinalTotalWeight, finalTotalWeight)
 	t.Log("✅ - Total weight is increased for the 2x value of staked amount")
+}
+
+func TestHayabusaQueuedStakeAndWeightIncreasedWhenNewDelegatorAdded(t *testing.T) {
+	config, client, cancel := setupTestNetwork(t, 1)
+	t.Cleanup(cancel)
+
+	staker := setupStakerAndWaitForFork(t, client, config)
+
+	validator1 := hayabusa.ValidatorAccounts[0]
+	validator2 := hayabusa.ValidatorAccounts[1]
+
+	id1 := addValidator(t, staker, validator1, true, config.MinStakingPeriod)
+	id2 := addValidator(t, staker, validator2, true, config.MinStakingPeriod)
+
+	_, validatorID, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, id1, validatorID)
+	t.Log("✅ - Queued validators OK")
+
+	block := waitForPoSAndAssertFirstActive(t, staker, config, id1)
+
+	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id2, builtin.StakerStatusQueued, block)
+
+	initialQueued, initialQueuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	expectedInitialQueued := calculateValidatorStake()
+	expectedInitialQueuedWeight := new(big.Int).Mul(expectedInitialQueued, big.NewInt(2))
+	assert.Equal(t, expectedInitialQueued, initialQueued)
+	assert.Equal(t, expectedInitialQueuedWeight, initialQueuedWeight)
+	t.Log("✅ - Initial queued stake and weight verified")
+
+	delegatorStake := new(big.Int).Mul(big.NewInt(1e18), big.NewInt(1e6))
+	delegatorStake = new(big.Int).Mul(delegatorStake, big.NewInt(10))
+
+	receipt, _, err := staker.AddDelegation(id2, delegatorStake, true, 100).
+		Send().WithOptions(testutil.TxOptions()).WithSigner(hayabusa.Stargate).SubmitAndConfirm(testutil.TxContext(t))
+	assert.NoError(t, err)
+	assert.False(t, receipt.Reverted)
+	t.Log("✅ - New delegator added to queued validator")
+
+	finalQueued, finalQueuedWeight, err := staker.QueuedStake()
+
+	assert.NoError(t, err)
+	expectedFinalQueued := new(big.Int).Add(expectedInitialQueued, delegatorStake)
+	expectedFinalQueuedWeight := new(big.Int).Add(initialQueuedWeight, delegatorStake)
+	assert.Equal(t, expectedFinalQueued, finalQueued)
+	t.Log("✅ - Queued stake is increased for the staked amount")
+	assert.Equal(t, expectedFinalQueuedWeight, finalQueuedWeight)
+	t.Log("✅ - Queued weight is increased for value of delegators stake")
 }
 
 func TestHayabusaTotalStakeDecreased(t *testing.T) {
