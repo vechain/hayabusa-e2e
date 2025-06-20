@@ -426,7 +426,7 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 	t.Log("✅ - Total weight is increased for the 2x value of staked amount")
 }
 
-func TestHayabusaQueuedStakeAndWeightIncreasedWhenNewDelegatorAdded(t *testing.T) {
+func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	config, client, cancel := setupTestNetwork(t, 1)
 	t.Cleanup(cancel)
 
@@ -459,21 +459,43 @@ func TestHayabusaQueuedStakeAndWeightIncreasedWhenNewDelegatorAdded(t *testing.T
 	delegatorStake := new(big.Int).Mul(big.NewInt(1e18), big.NewInt(1e6))
 	delegatorStake = new(big.Int).Mul(delegatorStake, big.NewInt(10))
 
-	receipt, _, err := staker.AddDelegation(id2, delegatorStake, true, 100).
+	// Add delegator
+	receipt, _, err := staker.AddDelegation(id2, delegatorStake, false, 100).
 		Send().WithOptions(testutil.TxOptions()).WithSigner(hayabusa.Stargate).SubmitAndConfirm(testutil.TxContext(t))
 	assert.NoError(t, err)
 	assert.False(t, receipt.Reverted)
 	t.Log("✅ - New delegator added to queued validator")
 
+	// Get delegation ID from receipt
+	delegationID := receipt.Outputs[0].Events[0].Topics[2]
+
 	finalQueued, finalQueuedWeight, err := staker.QueuedStake()
 
 	assert.NoError(t, err)
 	expectedFinalQueued := new(big.Int).Add(expectedInitialQueued, delegatorStake)
+	// The multiplier formula divides by 100 so the weight is just the stake
 	expectedFinalQueuedWeight := new(big.Int).Add(initialQueuedWeight, delegatorStake)
 	assert.Equal(t, expectedFinalQueued, finalQueued)
 	t.Log("✅ - Queued stake is increased for the staked amount")
 	assert.Equal(t, expectedFinalQueuedWeight, finalQueuedWeight)
 	t.Log("✅ - Queued weight is increased for value of delegators stake")
+
+	// Remove delegator
+	receipt, _, err = staker.WithdrawDelegation(delegationID).
+		Send().WithOptions(testutil.TxOptions()).WithSigner(hayabusa.Stargate).SubmitAndConfirm(testutil.TxContext(t))
+	assert.NoError(t, err)
+	assert.False(t, receipt.Reverted)
+	delegation, err := staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.True(t, delegation.Stake.Sign() == 0)
+	t.Log("✅ - Delegator removed from queued validator")
+
+	afterRemovalQueued, afterRemovalQueuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	assert.Equal(t, initialQueued, afterRemovalQueued)
+	t.Log("✅ - Queued stake is decreased after delegator removal")
+	assert.Equal(t, initialQueuedWeight, afterRemovalQueuedWeight)
+	t.Log("✅ - Queued weight is decreased after delegator removal")
 }
 
 func TestHayabusaTotalStakeDecreased(t *testing.T) {
