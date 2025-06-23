@@ -27,10 +27,6 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 	staker := setupStakerAndWaitForFork(t, client, config)
 
-	block := config.ForkBlock
-	ticker := utils.NewTicker(client)
-	assert.NoError(t, utils.WaitForFork(staker, block))
-
 	stake := calculateValidatorStake()
 	firstStake := new(big.Int).Mul(stake, big.NewInt(2))
 
@@ -48,14 +44,15 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	t.Log("✅ - Queued validator OK")
 
 	id2 := addValidator(t, staker, validator2PoA, true, config.MinStakingPeriod)
-	assertValidatorStatus(t, staker, id2, builtin.StakerStatusQueued, block)
+	assertValidatorStatus(t, staker, id2, builtin.StakerStatusQueued, config.ForkBlock)
 
 	t.Log("✅ - Queued validator OK")
 
 	currentBlock, err := client.Block("best")
 	assert.NoError(t, err)
 
-	block = currentBlock.Number
+	ticker := utils.NewTicker(client)
+	block := currentBlock.Number
 	block += config.TransitionPeriod
 	assert.NoError(t, ticker.WaitForBlock(block))
 
@@ -78,7 +75,6 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	validator3 := hayabusa.ValidatorAccounts[2]
 
 	staker := setupStakerAndWaitForFork(t, client, config)
-	ticker := utils.NewTicker(client)
 
 	id1 := addValidator(t, staker, validator1, false, config.MinStakingPeriod)
 
@@ -88,6 +84,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
+	ticker := utils.NewTicker(client)
 	require.NoError(t, ticker.WaitForBlock(block))
 
 	_, validatorID, err := staker.FirstActive()
