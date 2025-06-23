@@ -312,6 +312,85 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	t.Log("✅ - Three validators are active one is queued and one has exited")
 }
 
+func TestHayabusaValidatorStakeChanges(t *testing.T) {
+	config, client, cancel := setupTestNetwork(t, 3)
+	t.Cleanup(cancel)
+
+	validator1 := hayabusa.ValidatorAccounts[0]
+	validator2 := hayabusa.ValidatorAccounts[1]
+	validator3 := hayabusa.ValidatorAccounts[2]
+	validator4 := hayabusa.ValidatorAccounts[3]
+
+	staker := setupStakerAndWaitForFork(t, client, config)
+
+	id1 := addValidator(t, staker, validator1, true, config.MinStakingPeriod)
+	id2 := addValidator(t, staker, validator2, true, config.MinStakingPeriod)
+	id3 := addValidator(t, staker, validator3, true, config.MinStakingPeriod)
+	id4 := addValidator(t, staker, validator4, false, config.MinStakingPeriod)
+
+	_, validatorID, err := staker.FirstQueued()
+	assert.NoError(t, err)
+	assert.Equal(t, id1, validatorID)
+	t.Log("✅ - Queued validator OK")
+
+	block := waitForPoSAndAssertFirstActive(t, staker, config, id1)
+
+	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id4, builtin.StakerStatusQueued, block)
+	t.Log("✅ - Three validators are activated one is queued")
+
+	assertTotalStakeAndWeight(t, staker, 3)
+	assertQueuedStakeAndWeight(t, staker, 1)
+
+	// validator 1 increases the stake
+	increase := big.NewInt(1e18)
+	increase = big.NewInt(0).Mul(increase, big.NewInt(1e6))
+	increase = big.NewInt(0).Mul(increase, big.NewInt(5))
+	receipt, _, err := staker.IncreaseStake(id1, increase).
+		Send().
+		WithSigner(validator1).
+		WithOptions(testutil.TxOptions()).
+		SubmitAndConfirm(testutil.TxContext(t))
+	assert.NoError(t, err)
+	require.False(t, receipt.Reverted, "Transaction should not be reverted")
+	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
+	assert.Equal(t, validator1.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
+	assert.Equal(t, id1, receipt.Outputs[0].Events[0].Topics[2])
+
+	t.Log("✅ - Validator 1 stake increased tx sent")
+
+	// Total stake and weight should not have changed
+	validatorStake := calculateValidatorStake()
+	total, totalWeight, err := staker.TotalStake()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), total)
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(6)), totalWeight)
+	queued, queuedWeight, err := staker.QueuedStake()
+	assert.NoError(t, err)
+	// the pending vet increases the queued stake
+	assert.Equal(t, big.NewInt(0).Add(validatorStake, increase), queued)
+	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).Add(validatorStake, increase), big.NewInt(2)), queuedWeight)
+
+	block += config.MinStakingPeriod
+	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
+	assertValidatorStatus(t, staker, id4, builtin.StakerStatusQueued, block)
+
+	total, totalWeight, err = staker.TotalStake()
+	assert.NoError(t, err)
+	expectedTotal := big.NewInt(0).Mul(validatorStake, big.NewInt(3))
+	expectedTotalWeight := big.NewInt(0).Mul(validatorStake, big.NewInt(6))
+	increaseWeight := big.NewInt(0).Mul(increase, big.NewInt(2))
+	assert.Equal(t, expectedTotal.Add(expectedTotal, increase), total)
+	assert.Equal(t, expectedTotalWeight.Add(expectedTotalWeight, increaseWeight), totalWeight)
+	assertQueuedStakeAndWeight(t, staker, 1)
+
+	t.Log("✅ - Validator 1 stake increased")
+}
+
 func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 	t.Parallel()
 	config, client, cancel := setupTestNetwork(t, 2)
