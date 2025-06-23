@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"math/rand"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -609,6 +611,9 @@ func assertRewards(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes3
 }
 
 func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config, *thorclient.Client, func()) {
+	// Add random delay to avoid race conditions when multiple tests start simultaneously
+	time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
+
 	config := &hayabusa.Config{
 		Nodes:             6,
 		MaxBlockProposers: maxBlockProposers,
@@ -621,8 +626,8 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		HighStakingPeriod: 259200,
 	}
 
-	// Generate unique ID for this test
-	testID := fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())
+	// Generate unique ID for this test with more entropy to avoid conflicts
+	testID := fmt.Sprintf("%s-%d-%d", t.Name(), time.Now().UnixNano(), os.Getpid())
 	client, _, cancel, err := hayabusa.StartNetworkWithID(config, testID)
 
 	if err != nil {

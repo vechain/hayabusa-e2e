@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/vechain/thor/v2/thorclient"
@@ -34,6 +35,10 @@ var (
 	ParamsStargateKey  = nameToBytes32("stargate-contract-address")
 	Executor           = (*bind.PrivateKeySigner)(thorgenesis.DevAccounts()[0].PrivateKey)
 	AdditionalAccounts = mustParseKeys(additionalKeys)
+
+	// Global port management to avoid race conditions
+	portMutex       sync.Mutex
+	globalUsedPorts = make(map[int]bool)
 )
 
 func Genesis(config *Config) *genesis.CustomGenesis {
@@ -91,7 +96,8 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 
 	customGenesis := Genesis(config)
 	nodes := make([]node.Config, config.Nodes)
-	used := make(map[int]bool)
+	usedPorts := make([]int, 0, config.Nodes*2) // Track ports for cleanup
+
 	for i := range config.Nodes {
 		additionalArgs := map[string]string{
 			"txpool-limit-per-account": "100000",
@@ -105,14 +111,19 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 		// Create unique node ID that includes the network ID to avoid conflicts
 		nodeID := fmt.Sprintf("%s-Node-%d", networkID, i)
 
+		// Use global port management
+		apiPort := rndPort()
+		p2pPort := rndPort()
+		usedPorts = append(usedPorts, apiPort, p2pPort)
+
 		nodes[i] = &node.BaseNode{
 			ID:             nodeID,
 			Key:            common.Bytes2Hex(ValidatorAccounts[i].D.Bytes()),
 			Genesis:        customGenesis,
 			Verbosity:      verbosity,
 			AdditionalArgs: additionalArgs,
-			APIAddr:        fmt.Sprintf("127.0.0.1:%d", rndPort(used)),
-			P2PListenPort:  rndPort(used),
+			APIAddr:        fmt.Sprintf("127.0.0.1:%d", apiPort),
+			P2PListenPort:  p2pPort,
 		}
 	}
 	networkCfg := &networkhubNetwork.Network{
@@ -125,21 +136,31 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	networkHub := client.New()
 	networkIDResult, err := networkHub.Config(networkCfg)
 	if err != nil {
+		// Cleanup ports on error
+		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
 
 	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
 	if err != nil {
+		// Cleanup ports on error
+		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
 
 	err = hayabusaNetwork.StartNetwork()
 	if err != nil {
 		hayabusaNetwork.StopNetwork()
+		// Cleanup ports on error
+		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
 
-	if err = networkCfg.HealthCheck(0, 20*time.Second); err != nil {
+	// Increase health check timeout to avoid race conditions
+	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
+		hayabusaNetwork.StopNetwork()
+		// Cleanup ports on error
+		cleanupPorts(usedPorts)
 		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
 
@@ -147,6 +168,9 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	client := thorclient.New(nodes[1].GetHTTPAddr())
 
 	return client, hayabusaNetwork, func() {
+		// Cleanup ports when network stops
+		cleanupPorts(usedPorts)
+
 		if err := hayabusaNetwork.StopNetwork(); err != nil {
 			slog.Error("failed to stop network", "error", err)
 		}
@@ -233,7 +257,11 @@ func mustParseKeys(hexKeys []string) []*bind.PrivateKeySigner {
 	return keys
 }
 
-func rndPort(used map[int]bool) int {
+// rndPort generates a random port using global synchronization to avoid race conditions
+func rndPort() int {
+	portMutex.Lock()
+	defer portMutex.Unlock()
+
 	const (
 		minPort = 49152
 		maxPort = 65535
@@ -246,9 +274,19 @@ func rndPort(used map[int]bool) int {
 		// Convert 2 bytes to a 16-bit number, then mod by the range size.
 		n := int(buf[0])<<8 | int(buf[1])
 		port := minPort + (n % (maxPort - minPort + 1))
-		if _, ok := used[port]; !ok {
-			used[port] = true
+		if !globalUsedPorts[port] {
+			globalUsedPorts[port] = true
 			return port
 		}
+	}
+}
+
+// cleanupPorts releases the specified ports back to the global pool
+func cleanupPorts(ports []int) {
+	portMutex.Lock()
+	defer portMutex.Unlock()
+
+	for _, port := range ports {
+		delete(globalUsedPorts, port)
 	}
 }
