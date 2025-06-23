@@ -8,9 +8,9 @@ Hayabusa E2E is a testing suite for the Hayabusa fork of `vechain/thor`. It leve
 
 It allows easy testing of local `hayabusa` repos by setting the `THOR_WORKING_DIR` environment variable.
 
-Eg:
+Eg (replace `tests/validations` by your own test directory, for instance `tests/delegations`):
 
 ```bash
 export THOR_WORKING_DIR=/path/to/your/hayabusa
-go test ./builtins
+go test -v -failfast -timeout 3600s ./tests/validations
 ```
