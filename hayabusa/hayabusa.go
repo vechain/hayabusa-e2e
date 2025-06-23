@@ -104,7 +104,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 
 	customGenesis := Genesis(config)
 	nodes := make([]node.Config, config.Nodes)
-	usedPorts := make([]int, 0, config.Nodes*2) // Track ports for cleanup
+	usedPorts := make([]int, 0, config.Nodes*2) // API and P2P ports
 
 	for i := range config.Nodes {
 		additionalArgs := map[string]string{
