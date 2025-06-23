@@ -15,7 +15,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
-	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
@@ -30,10 +29,7 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	validator2PoA := hayabusa.ValidatorAccounts[1]
 
 	staker := setupStakerAndWaitForFork(t, client, config)
-	staker := setupStakerAndWaitForFork(t, client, config)
 
-	stake := calculateValidatorStake()
-	firstStake := new(big.Int).Mul(stake, big.NewInt(2))
 	stake := calculateValidatorStake()
 	firstStake := new(big.Int).Mul(stake, big.NewInt(2))
 
@@ -60,8 +56,6 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 	ticker := utils.NewTicker(client)
 	block := currentBlock.Number
-	ticker := utils.NewTicker(client)
-	block := currentBlock.Number
 	block += config.TransitionPeriod
 	assert.NoError(t, ticker.WaitForBlock(block))
 
@@ -85,7 +79,6 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	validator3 := hayabusa.ValidatorAccounts[2]
 
 	staker := setupStakerAndWaitForFork(t, client, config)
-	staker := setupStakerAndWaitForFork(t, client, config)
 
 	id1 := addValidator(t, staker, validator1, false, config.MinStakingPeriod)
 
@@ -94,8 +87,6 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	assert.Equal(t, *firstQueued.Endorsor, validator1.Address())
 	t.Log("✅ - Queued validator OK")
 
-	block := config.ForkBlock + config.TransitionPeriod
-	ticker := utils.NewTicker(client)
 	block := config.ForkBlock + config.TransitionPeriod
 	ticker := utils.NewTicker(client)
 	require.NoError(t, ticker.WaitForBlock(block))
@@ -136,7 +127,6 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	validator2 := hayabusa.ValidatorAccounts[1]
 	validator3 := hayabusa.ValidatorAccounts[2]
 
-	staker := setupStakerAndWaitForFork(t, client, config)
 	staker := setupStakerAndWaitForFork(t, client, config)
 	ticker := utils.NewTicker(client)
 
@@ -214,7 +204,6 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	validator4 := hayabusa.ValidatorAccounts[3]
 	validator5 := hayabusa.ValidatorAccounts[4]
 
-	staker := setupStakerAndWaitForFork(t, client, config)
 	staker := setupStakerAndWaitForFork(t, client, config)
 
 	stake := big.NewInt(1e18)
@@ -335,7 +324,6 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	validator3 := hayabusa.ValidatorAccounts[2]
 	validator4 := hayabusa.ValidatorAccounts[3]
 
-	staker := setupStakerAndWaitForFork(t, client, config)
 	staker := setupStakerAndWaitForFork(t, client, config)
 
 	id1 := addValidator(t, staker, validator1, true, config.MinStakingPeriod)
@@ -606,7 +594,6 @@ func TestHayabusaTotalStakeDecreased(t *testing.T) {
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
 
-	staker := setupStakerAndWaitForFork(t, client, config)
 	staker := setupStakerAndWaitForFork(t, client, config)
 
 	stake := big.NewInt(1e18)
