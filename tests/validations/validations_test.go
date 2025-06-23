@@ -335,15 +335,8 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusQueued, block)
 	t.Log("✅ - Three validators are activated one is queued")
 
-	validatorStake := calculateValidatorStake()
-	total, totalWeight, err := staker.TotalStake()
-	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), total)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(6)), totalWeight)
-	queued, queuedWeight, err := staker.QueuedStake()
-	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(1)), queued)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(2)), queuedWeight)
+	assertTotalStakeAndWeight(t, staker, 3)
+	assertQueuedStakeAndWeight(t, staker, 1)
 
 	// validator 1 increases the stake
 	increase := big.NewInt(1e18)
@@ -363,11 +356,12 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	t.Log("✅ - Validator 1 stake increased tx sent")
 
 	// Total stake and weight should not have changed
-	total, totalWeight, err = staker.TotalStake()
+	validatorStake := calculateValidatorStake()
+	total, totalWeight, err := staker.TotalStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), total)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(6)), totalWeight)
-	queued, queuedWeight, err = staker.QueuedStake()
+	queued, queuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	// the pending vet increases the queued stake
 	assert.Equal(t, big.NewInt(0).Add(validatorStake, increase), queued)
@@ -386,10 +380,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	increaseWeight := big.NewInt(0).Mul(increase, big.NewInt(2))
 	assert.Equal(t, expectedTotal.Add(expectedTotal, increase), total)
 	assert.Equal(t, expectedTotalWeight.Add(expectedTotalWeight, increaseWeight), totalWeight)
-	queued, queuedWeight, err = staker.QueuedStake()
-	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(1)), queued)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(2)), queuedWeight)
+	assertQueuedStakeAndWeight(t, staker, 1)
 
 	t.Log("✅ - Validator 1 stake increased")
 }
