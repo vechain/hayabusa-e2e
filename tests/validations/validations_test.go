@@ -209,8 +209,6 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	stake := big.NewInt(1e18)
 	stake = new(big.Int).Mul(stake, big.NewInt(1e6))
 	stake = new(big.Int).Mul(stake, big.NewInt(26))
-	stake = new(big.Int).Mul(stake, big.NewInt(1e6))
-	stake = new(big.Int).Mul(stake, big.NewInt(26))
 	id1 := addValidator(t, staker, validator1, true, config.MinStakingPeriod)
 	id2 := addValidator(t, staker, validator2, true, config.MinStakingPeriod)
 	id3 := addValidator(t, staker, validator3, true, config.MinStakingPeriod)
