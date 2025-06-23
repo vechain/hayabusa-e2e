@@ -313,6 +313,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 }
 
 func TestHayabusaValidatorStakeChanges(t *testing.T) {
+	t.Parallel()
 	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
