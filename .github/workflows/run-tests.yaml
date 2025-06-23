@@ -45,8 +45,6 @@ jobs:
           - tests/energy
           - tests/stargate
       fail-fast: false
-      # Reduce parallelism to avoid race conditions
-      max-parallel: 2
 
     steps:
       - name: Checkout E2E
