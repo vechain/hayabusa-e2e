@@ -161,7 +161,6 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 		return nil, nil, nil, err
 	}
 
-	// Increase health check timeout to avoid race conditions
 	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
 		hayabusaNetwork.StopNetwork()
 
