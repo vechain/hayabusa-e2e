@@ -70,7 +70,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
 
-	// Synchronize Thor binary building to prevent "text file busy" errors
+	// Synchronize Thor binary build
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
@@ -116,10 +116,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 			additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
 		}
 
-		// Create unique node ID that includes the network ID to avoid conflicts
 		nodeID := fmt.Sprintf("%s-Node-%d", networkID, i)
-
-		// Use global port management
 		apiPort := rndPort()
 		p2pPort := rndPort()
 		usedPorts = append(usedPorts, apiPort, p2pPort)
