@@ -621,7 +621,6 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		HighStakingPeriod: 259200,
 	}
 
-	// Generate unique ID for this test
 	testID := fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())
 	client, _, cancel, err := hayabusa.StartNetworkWithID(config, testID)
 
