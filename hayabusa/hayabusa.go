@@ -136,14 +136,14 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	networkHub := client.New()
 	networkIDResult, err := networkHub.Config(networkCfg)
 	if err != nil {
-		// Cleanup ports on error
+
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
 
 	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
 	if err != nil {
-		// Cleanup ports on error
+
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
@@ -151,7 +151,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	err = hayabusaNetwork.StartNetwork()
 	if err != nil {
 		hayabusaNetwork.StopNetwork()
-		// Cleanup ports on error
+
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
@@ -159,7 +159,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	// Increase health check timeout to avoid race conditions
 	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
 		hayabusaNetwork.StopNetwork()
-		// Cleanup ports on error
+
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
