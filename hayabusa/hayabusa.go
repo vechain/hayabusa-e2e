@@ -54,6 +54,10 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 }
 
 func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, func(), error) {
+	return StartNetworkWithID(config, "default")
+}
+
+func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, environments.Actions, func(), error) {
 	if config.Nodes < 2 {
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
@@ -97,8 +101,12 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 		if i == 0 { // enable verbose staker logs for 1 node
 			additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
 		}
+
+		// Create unique node ID that includes the network ID to avoid conflicts
+		nodeID := fmt.Sprintf("%s-Node-%d", networkID, i)
+
 		nodes[i] = &node.BaseNode{
-			ID:             "Node-" + strconv.Itoa(i),
+			ID:             nodeID,
 			Key:            common.Bytes2Hex(ValidatorAccounts[i].D.Bytes()),
 			Genesis:        customGenesis,
 			Verbosity:      verbosity,
@@ -109,18 +117,18 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 	}
 	networkCfg := &networkhubNetwork.Network{
 		Environment: "local",
-		BaseID:      "test-id",
+		BaseID:      networkID,
 		Nodes:       nodes,
 		ThorBuilder: thorBuilder,
 	}
 
 	networkHub := client.New()
-	networkID, err := networkHub.Config(networkCfg)
+	networkIDResult, err := networkHub.Config(networkCfg)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	hayabusaNetwork, err := networkHub.GetNetwork(networkID.ID())
+	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
 	if err != nil {
 		return nil, nil, nil, err
 	}

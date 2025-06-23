@@ -21,7 +21,6 @@ import (
 
 func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	t.Parallel()
-
 	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
@@ -79,7 +78,6 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	t.Parallel()
-
 	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
@@ -134,7 +132,6 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Parallel()
-
 	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
@@ -214,7 +211,6 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 
 func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	t.Parallel()
-
 	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
@@ -349,8 +345,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 func TestHayabusaTotalStakeDecreased(t *testing.T) {
 	t.Parallel()
-
-	config, client, cancel := setupTestNetwork(t, 2)
+	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
@@ -402,7 +397,6 @@ func TestHayabusaTotalStakeDecreased(t *testing.T) {
 
 func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 	t.Parallel()
-
 	config, client, cancel := setupTestNetwork(t, 2)
 	t.Cleanup(cancel)
 
@@ -455,7 +449,6 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 
 func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *testing.T) {
 	t.Parallel()
-
 	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
@@ -512,8 +505,7 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 
 func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	t.Parallel()
-
-	config, client, cancel := setupTestNetwork(t, 1)
+	_, _, cancel := setupTestNetwork(t, 1)
 	t.Cleanup(cancel)
 }
 
@@ -599,11 +591,8 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		HighStakingPeriod: 259200,
 	}
 
-	testID := fmt.Sprintf("test-%s-%d", t.Name(), time.Now().UnixNano())
-
-	uniqueGenesis := fmt.Sprintf("unique-genesis-%d", time.Now().UnixNano())
-	config.GenesisID = uniqueGenesis
-
+	// Generate unique ID for this test
+	testID := fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())
 	client, _, cancel, err := hayabusa.StartNetworkWithID(config, testID)
 	if err != nil {
 		t.Fatal(err)
