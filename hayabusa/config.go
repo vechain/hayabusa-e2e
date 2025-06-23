@@ -27,16 +27,11 @@ type Config struct {
 	Verbosity         int          // Verbosity level for the nodes
 	StakerVerbosity   int          // Staker verbosity level
 	Debug             bool         // Debug mode for the nodes
-	GenesisID         string       // Unique genesis identifier to avoid database conflicts
 }
 
 // Apply the configuration to the genesis file.
 func (h Config) Apply(genesis *genesis.CustomGenesis) {
 	genesis.LaunchTime = uint64(time.Now().Unix())
-
-	if h.GenesisID != "" {
-		genesis.LaunchTime = uint64(time.Now().Unix()) + uint64(len(h.GenesisID))
-	}
 
 	genesis.ForkConfig.AddField("HAYABUSA", h.ForkBlock)
 	genesis.ForkConfig.AddField("HAYABUSA_TP", h.TransitionPeriod)
