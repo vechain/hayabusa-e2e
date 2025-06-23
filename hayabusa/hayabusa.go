@@ -176,7 +176,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	client := thorclient.New(nodes[1].GetHTTPAddr())
 
 	return client, hayabusaNetwork, func() {
-		// Cleanup ports when network stops
+
 		cleanupPorts(usedPorts)
 
 		if err := hayabusaNetwork.StopNetwork(); err != nil {
