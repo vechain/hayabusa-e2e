@@ -39,6 +39,9 @@ var (
 	// Global port management to avoid race conditions
 	portMutex       sync.Mutex
 	globalUsedPorts = make(map[int]bool)
+
+	// Global build mutex to prevent multiple Thor binary builds simultaneously
+	buildMutex sync.Mutex
 )
 
 func Genesis(config *Config) *genesis.CustomGenesis {
@@ -66,6 +69,11 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	if config.Nodes < 2 {
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
+
+	// Synchronize Thor binary building to prevent "text file busy" errors
+	buildMutex.Lock()
+	defer buildMutex.Unlock()
+
 	repo := "git@github.com:vechain/thor.git"
 
 	// reimplement this logic
