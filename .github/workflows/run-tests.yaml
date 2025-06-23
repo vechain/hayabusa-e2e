@@ -3,7 +3,7 @@ name: Run Hayabusa Tests
 on:
   push:
     branches:
-      - main
+      - test/optimisations
   pull_request:
   workflow_dispatch:
     inputs:
