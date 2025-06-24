@@ -671,7 +671,7 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
 	if validator.Status == builtin.StakerStatusUnknown {
-		slog.Info("❌ - validator status unknown", 
+		slog.Info("❌ - validator status unknown, retrying for up to 2 minutes",
 			"validatorID", validatorID.String(),
 			"status", validator.Status,
 			"master", validator.Master,
@@ -681,6 +681,23 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 			"online", validator.Online,
 			"BLOCK", waitForBlock,
 		)
+
+		ticker := utils.NewTicker(staker.Raw().Client())
+		err := ticker.WaitForCondition(2*time.Minute, func() (bool, error) {
+			validator, err := staker.Get(validatorID)
+			if err != nil {
+				return false, err
+			}
+			if validator.Status != builtin.StakerStatusUnknown {
+				slog.Info("✅ - validator status changed from unknown",
+					"validatorID", validatorID.String(),
+					"newStatus", validator.Status,
+				)
+				return true, nil
+			}
+			return false, nil
+		})
+		assert.NoError(t, err, "Validator %s status remained unknown after 2 minutes", validatorID.String())
 	}
 	assert.Equal(t, expectedStatus, validator.Status)
 }
