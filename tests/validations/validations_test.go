@@ -671,6 +671,18 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
+	if validator.Status == builtin.StakerStatusUnknown {
+		slog.Info("❌ - validator status unknown", 
+			"validatorID", validatorID.String(),
+			"status", validator.Status,
+			"master", validator.Master,
+			"endorsor", validator.Endorsor,
+			"stake", validator.Stake,
+			"autoRenew", validator.AutoRenew,
+			"online", validator.Online,
+			"BLOCK", waitForBlock,
+		)
+	}
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
