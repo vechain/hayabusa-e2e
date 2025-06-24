@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/vechain/thor/v2/thorclient"
@@ -34,6 +35,13 @@ var (
 	ParamsStargateKey  = nameToBytes32("stargate-contract-address")
 	Executor           = (*bind.PrivateKeySigner)(thorgenesis.DevAccounts()[0].PrivateKey)
 	AdditionalAccounts = mustParseKeys(additionalKeys)
+
+	// Global port management to avoid race conditions
+	portMutex       sync.Mutex
+	globalUsedPorts = make(map[int]bool)
+
+	// Global build mutex to prevent multiple Thor binary builds simultaneously
+	buildMutex sync.Mutex
 )
 
 func Genesis(config *Config) *genesis.CustomGenesis {
@@ -54,9 +62,18 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 }
 
 func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, func(), error) {
+	return StartNetworkWithID(config, "default")
+}
+
+func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, environments.Actions, func(), error) {
 	if config.Nodes < 2 {
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
+
+	// Synchronize Thor binary build
+	buildMutex.Lock()
+	defer buildMutex.Unlock()
+
 	repo := "git@github.com:vechain/thor.git"
 
 	// reimplement this logic
@@ -87,7 +104,8 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 
 	customGenesis := Genesis(config)
 	nodes := make([]node.Config, config.Nodes)
-	used := make(map[int]bool)
+	usedPorts := make([]int, 0, config.Nodes*2) // API and P2P ports
+
 	for i := range config.Nodes {
 		additionalArgs := map[string]string{
 			"txpool-limit-per-account": "100000",
@@ -97,41 +115,56 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 		if i == 0 { // enable verbose staker logs for 1 node
 			additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
 		}
+
+		nodeID := fmt.Sprintf("%s-Node-%d", networkID, i)
+		apiPort := rndPort()
+		p2pPort := rndPort()
+		usedPorts = append(usedPorts, apiPort, p2pPort)
+
 		nodes[i] = &node.BaseNode{
-			ID:             "Node-" + strconv.Itoa(i),
+			ID:             nodeID,
 			Key:            common.Bytes2Hex(ValidatorAccounts[i].D.Bytes()),
 			Genesis:        customGenesis,
 			Verbosity:      verbosity,
 			AdditionalArgs: additionalArgs,
-			APIAddr:        fmt.Sprintf("127.0.0.1:%d", rndPort(used)),
-			P2PListenPort:  rndPort(used),
+			APIAddr:        fmt.Sprintf("127.0.0.1:%d", apiPort),
+			P2PListenPort:  p2pPort,
 		}
 	}
 	networkCfg := &networkhubNetwork.Network{
 		Environment: "local",
-		BaseID:      "test-id",
+		BaseID:      networkID,
 		Nodes:       nodes,
 		ThorBuilder: thorBuilder,
 	}
 
 	networkHub := client.New()
-	networkID, err := networkHub.Config(networkCfg)
+	networkIDResult, err := networkHub.Config(networkCfg)
 	if err != nil {
+
+		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
 
-	hayabusaNetwork, err := networkHub.GetNetwork(networkID.ID())
+	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
 	if err != nil {
+
+		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
 
 	err = hayabusaNetwork.StartNetwork()
 	if err != nil {
 		hayabusaNetwork.StopNetwork()
+
+		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
 
-	if err = networkCfg.HealthCheck(0, 20*time.Second); err != nil {
+	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
+		hayabusaNetwork.StopNetwork()
+
+		cleanupPorts(usedPorts)
 		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
 
@@ -139,6 +172,9 @@ func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, fun
 	client := thorclient.New(nodes[1].GetHTTPAddr())
 
 	return client, hayabusaNetwork, func() {
+
+		cleanupPorts(usedPorts)
+
 		if err := hayabusaNetwork.StopNetwork(); err != nil {
 			slog.Error("failed to stop network", "error", err)
 		}
@@ -225,7 +261,11 @@ func mustParseKeys(hexKeys []string) []*bind.PrivateKeySigner {
 	return keys
 }
 
-func rndPort(used map[int]bool) int {
+// rndPort generates a random port using global synchronization to avoid race conditions
+func rndPort() int {
+	portMutex.Lock()
+	defer portMutex.Unlock()
+
 	const (
 		minPort = 49152
 		maxPort = 65535
@@ -238,9 +278,19 @@ func rndPort(used map[int]bool) int {
 		// Convert 2 bytes to a 16-bit number, then mod by the range size.
 		n := int(buf[0])<<8 | int(buf[1])
 		port := minPort + (n % (maxPort - minPort + 1))
-		if _, ok := used[port]; !ok {
-			used[port] = true
+		if !globalUsedPorts[port] {
+			globalUsedPorts[port] = true
 			return port
 		}
+	}
+}
+
+// cleanupPorts releases the specified ports back to the global pool
+func cleanupPorts(ports []int) {
+	portMutex.Lock()
+	defer portMutex.Unlock()
+
+	for _, port := range ports {
+		delete(globalUsedPorts, port)
 	}
 }
