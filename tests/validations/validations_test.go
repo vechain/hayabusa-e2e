@@ -672,9 +672,14 @@ func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer,
 }
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
-	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
+	ticker := utils.NewTicker(staker.Raw().Client())
+	assert.NoError(t, ticker.WaitForBlock(waitForBlock))
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
+	if validator.Status == builtin.StakerStatusUnknown {
+		slog.Info("❌ - validator status unknown, waiting for next block", "validator", validatorID.String())
+		assert.NoError(t, ticker.WaitForBlock(waitForBlock + 1))
+	}
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
