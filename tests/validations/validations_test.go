@@ -52,8 +52,6 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
-	assert.NoError(t, utils.NewTicker(client).WaitForBlock(block))
-
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 
