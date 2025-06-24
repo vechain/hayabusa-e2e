@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/vechain/thor/v2/thorclient"
@@ -61,11 +62,7 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 		Build()
 }
 
-func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, func(), error) {
-	return StartNetworkWithID(config, "default")
-}
-
-func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, environments.Actions, func(), error) {
+func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environments.Actions, func(), error) {
 	if config.Nodes < 2 {
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
@@ -105,6 +102,11 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	customGenesis := Genesis(config)
 	nodes := make([]node.Config, config.Nodes)
 	usedPorts := make([]int, 0, config.Nodes*2) // API and P2P ports
+
+	networkID := "default"
+	if t != nil {
+		networkID = fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())
+	}
 
 	for i := range config.Nodes {
 		additionalArgs := map[string]string{

@@ -379,7 +379,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 24,
 	}
-	client, _, cancel, err := hayabusa.StartNetwork(config)
+	client, _, cancel, err := hayabusa.StartNetwork(t, config)
 	if err != nil {
 		t.Fatal(err)
 	}

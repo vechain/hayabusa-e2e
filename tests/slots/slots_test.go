@@ -28,7 +28,7 @@ func Test_MissedSlot(t *testing.T) {
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 	}
-	client, network, cancel, err := hayabusa.StartNetwork(config)
+	client, network, cancel, err := hayabusa.StartNetwork(t, config)
 	if err != nil {
 		t.Fatal(err)
 	}

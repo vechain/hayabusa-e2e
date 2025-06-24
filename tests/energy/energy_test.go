@@ -26,7 +26,7 @@ func TestEnergy(t *testing.T) {
 		HighStakingPeriod: 180,
 	}
 	genesis := hayabusa.Genesis(config)
-	client, _, cancel, err := hayabusa.StartNetwork(config)
+	client, _, cancel, err := hayabusa.StartNetwork(t, config)
 	if err != nil {
 		t.Fatal(err)
 	}

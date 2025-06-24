@@ -1,12 +1,10 @@
 package validations
 
 import (
-	"fmt"
 	"log/slog"
 	"math/big"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -711,8 +709,7 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		HighStakingPeriod: 259200,
 	}
 
-	testID := fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())
-	client, _, cancel, err := hayabusa.StartNetworkWithID(config, testID)
+	client, _, cancel, err := hayabusa.StartNetwork(t, config)
 
 	if err != nil {
 		t.Fatal(err)
