@@ -149,6 +149,23 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 
+	retrievedValidator2, retrievedValidator2Id, err := staker.Next(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, id2, retrievedValidator2Id)
+	assert.Equal(t, validator1.Address().String(), retrievedValidator2.Endorsor.String())
+	assert.Equal(t, validator1.Address().String(), retrievedValidator2.Master.String())
+
+	retrievedValidator3, retrievedValidator3Id, err := staker.Next(id2)
+	assert.NoError(t, err)
+	assert.Equal(t, id3, retrievedValidator3Id)
+	assert.Equal(t, validator2.Address().String(), retrievedValidator3.Endorsor.String())
+	assert.Equal(t, validator2.Address().String(), retrievedValidator3.Master.String())
+
+	retrievedValidator4, retrievedValidator4Id, err := staker.Next(id3)
+	assert.Error(t, err, "no next validator")
+	assert.Nil(t, retrievedValidator4)
+	assert.Equal(t, thor.Bytes32{}.String(), retrievedValidator4Id.String())
+
 	// assert validators staking periods
 	assertValidatorStakingPeriod(t, staker, id1, config.MinStakingPeriod)
 	assertValidatorStakingPeriod(t, staker, id2, config.MinStakingPeriod)
