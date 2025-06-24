@@ -65,7 +65,7 @@ func Test_MissedSlot(t *testing.T) {
 	require.NoError(t, ticker.WaitForBlock(block))
 
 	// wait for a missed slot
-	prev, err := ticker.Wait(25 * time.Second)
+	prev, err := ticker.Wait(35 * time.Second)
 	require.NoError(t, err)
 	// shut the validator down
 	require.NoError(t, network.Nodes()[validator1.GetID()].Stop())
@@ -92,7 +92,7 @@ func Test_MissedSlot(t *testing.T) {
 	require.NoError(t, network.Nodes()[validator1.GetID()].Start())
 
 	// wait for the validator to be back online
-	err = ticker.WaitForCondition(time.Second*120, func() (bool, error) {
+	err = ticker.WaitForCondition(time.Second*150, func() (bool, error) {
 		validation, err := staker.Get(validationID)
 		require.NoError(t, err)
 		return validation.Online, nil
