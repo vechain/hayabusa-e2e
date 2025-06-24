@@ -67,6 +67,13 @@ func Test_StargateRewards(t *testing.T) {
 
 	// assert plus1 is greater than N
 	assert.True(t, blockNPlus1Energy.Cmp(&blockNEnergy) > 0, "block N+1 energy should be greater than block N energy")
+
+	totals, err := staker.GetValidatorsTotals(validationIDs[0])
+	require.NoError(t, err)
+	assert.Equal(t, builtin.MinStake(), big.NewInt(0).Sub(totals.TotalLockedStake, totals.DelegationsLockedStake))
+	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)), big.NewInt(0).Sub(totals.TotalLockedWeight, totals.DelegationsLockedWeight))
+	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10)), totals.DelegationsLockedStake)
+	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(20)), totals.DelegationsLockedWeight)
 }
 
 func Test_Delegations(t *testing.T) {
