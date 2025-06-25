@@ -2,7 +2,6 @@ package stargate
 
 import (
 	"fmt"
-	"log/slog"
 	"math/big"
 	"strconv"
 	"strings"
@@ -418,14 +417,10 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		}
 	}
 
-	posBlock := config.ForkBlock + config.TransitionPeriod
+	// In case we have forks dPoS might be activated later than the transition period
+	posBlock := config.ForkBlock + 2*config.TransitionPeriod
 	if err := utils.WaitForPOS(staker, posBlock); err != nil {
-		slog.Info("❌ - failed to wait for PoS, waiting a bit more", "posBlock", posBlock)
-		// In principle fork block + transition period should be enough, but we add min staking period due to some flakiness
-		posBlock += config.MinStakingPeriod
-		if err := utils.WaitForPOS(staker, posBlock); err != nil {
-			t.Fatalf("failed to wait for PoS: %v", err)
-		}
+		t.Fatalf("failed to wait for PoS: %v", err)
 	}
 
 	wg.Wait()
