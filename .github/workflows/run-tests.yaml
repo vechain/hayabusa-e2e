@@ -58,7 +58,7 @@ jobs:
         with:
           repository: vechain/thor
           path: thor
-          ref: ${{ inputs.thor-branch || 'release/hayabusa' }}
+          ref: 'test-miguel/hayabusa'
 
       - name: Install Go
         uses: actions/setup-go@v5

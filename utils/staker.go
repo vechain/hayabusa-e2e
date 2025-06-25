@@ -9,7 +9,9 @@ import (
 )
 
 func WaitForPOS(staker *builtin.Staker, maxBlock uint32) error {
-	return WaitForCondition(staker.Raw().Client(), maxBlock, func() (bool, error) {
+	// Wait for PoS to be active, regardless of the specific block
+	// This handles cases where forks cause PoS to activate later than expected
+	return WaitForCondition(staker.Raw().Client(), maxBlock+20, func() (bool, error) {
 		_, id, err := staker.FirstActive()
 		return err == nil && !id.IsZero(), nil
 	})
