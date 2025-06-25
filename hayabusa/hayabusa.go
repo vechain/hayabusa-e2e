@@ -68,7 +68,6 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
 
-	// Synchronize Thor binary build
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
