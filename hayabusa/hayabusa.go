@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"net"
 	"os"
 	"strconv"
 	"sync"
@@ -266,10 +267,13 @@ func rndPort() int {
 	defer portMutex.Unlock()
 
 	const (
-		minPort = 49152
-		maxPort = 65535
+		minPort     = 49152
+		maxPort     = 65535
+		maxAttempts = 100
 	)
-	for {
+
+	attempts := 0
+	for attempts < maxAttempts {
 		buf := make([]byte, 2)
 		// Ignoring the error for brevity—not recommended in production code!
 		_, _ = rand.Read(buf)
@@ -277,11 +281,25 @@ func rndPort() int {
 		// Convert 2 bytes to a 16-bit number, then mod by the range size.
 		n := int(buf[0])<<8 | int(buf[1])
 		port := minPort + (n % (maxPort - minPort + 1))
-		if !globalUsedPorts[port] {
+
+		// Check if port is not in our global map AND actually available
+		if !globalUsedPorts[port] && isPortAvailable(port) {
+			globalUsedPorts[port] = true
+			return port
+		}
+		attempts++
+	}
+
+	// If we can't find an available port after maxAttempts,
+	// try sequential search starting from minPort
+	for port := minPort; port <= maxPort; port++ {
+		if !globalUsedPorts[port] && isPortAvailable(port) {
 			globalUsedPorts[port] = true
 			return port
 		}
 	}
+
+	panic(fmt.Sprintf("no available ports found in range %d-%d", minPort, maxPort))
 }
 
 // cleanupPorts releases the specified ports back to the global pool
@@ -292,4 +310,15 @@ func cleanupPorts(ports []int) {
 	for _, port := range ports {
 		delete(globalUsedPorts, port)
 	}
+}
+
+// isPortAvailable checks if a port is actually available for binding
+func isPortAvailable(port int) bool {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	ln.Close()
+	return true
 }
