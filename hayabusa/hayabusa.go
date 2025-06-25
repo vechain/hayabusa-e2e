@@ -259,7 +259,6 @@ func mustParseKeys(hexKeys []string) []*bind.PrivateKeySigner {
 	return keys
 }
 
-// isPortAvailable checks if a port is actually available for binding
 func isPortAvailable(port int) bool {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	ln, err := net.Listen("tcp", addr)
@@ -278,7 +277,7 @@ func rndPort() int {
 	const (
 		minPort     = 49152
 		maxPort     = 65535
-		maxAttempts = 100 // Prevent infinite loops
+		maxAttempts = 100
 	)
 
 	attempts := 0
@@ -308,8 +307,7 @@ func rndPort() int {
 		}
 	}
 
-	// This should never happen, but if it does, panic with a clear message
-	panic("no available ports found in range 49152-65535")
+	panic(fmt.Sprintf("no available ports found in range %d-%d", minPort, maxPort))
 }
 
 // cleanupPorts releases the specified ports back to the global pool
