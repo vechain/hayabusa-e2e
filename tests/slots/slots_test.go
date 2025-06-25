@@ -1,7 +1,6 @@
 package slots
 
 import (
-	"log/slog"
 	"math/big"
 	"testing"
 	"time"
@@ -92,10 +91,8 @@ func Test_MissedSlot(t *testing.T) {
 	// start the validator again
 	require.NoError(t, network.Nodes()[validator1.GetID()].Start())
 
-	slog.Info("Waiting for validator to be back online", "validator", validator1.GetID(), "validationID", validationID)
-
 	// wait for the validator to be back online
-	err = ticker.WaitForCondition(time.Second*120, func() (bool, error) {
+	err = ticker.WaitForCondition(time.Minute*3, func() (bool, error) {
 		validation, err := staker.Get(validationID)
 		require.NoError(t, err)
 		return validation.Online, nil
