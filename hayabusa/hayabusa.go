@@ -141,14 +141,12 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	networkHub := client.New()
 	networkIDResult, err := networkHub.Config(networkCfg)
 	if err != nil {
-
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
 
 	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
 	if err != nil {
-
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
@@ -161,7 +159,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 		return nil, nil, nil, err
 	}
 
-	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
+	if err = networkCfg.HealthCheck(0, 60*time.Second); err != nil {
 		hayabusaNetwork.StopNetwork()
 
 		cleanupPorts(usedPorts)
@@ -172,7 +170,6 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	client := thorclient.New(nodes[1].GetHTTPAddr())
 
 	return client, hayabusaNetwork, func() {
-
 		cleanupPorts(usedPorts)
 
 		if err := hayabusaNetwork.StopNetwork(); err != nil {
