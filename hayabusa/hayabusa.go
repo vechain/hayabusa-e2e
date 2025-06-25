@@ -104,9 +104,9 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 	nodes := make([]node.Config, config.Nodes)
 	usedPorts := make([]int, 0, config.Nodes*2) // API and P2P ports
 
-	networkID := "default"
+	testID := "default"
 	if t != nil {
-		networkID = fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())
+		testID = t.Name()
 	}
 
 	for i := range config.Nodes {
@@ -119,7 +119,7 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 			additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
 		}
 
-		nodeID := fmt.Sprintf("%s-Node-%d", networkID, i)
+		nodeID := fmt.Sprintf("%s-Node-%d", testID, i)
 		apiPort := rndPort()
 		p2pPort := rndPort()
 		usedPorts = append(usedPorts, apiPort, p2pPort)
@@ -136,7 +136,7 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 	}
 	networkCfg := &networkhubNetwork.Network{
 		Environment: "local",
-		BaseID:      networkID,
+		BaseID:      testID,
 		Nodes:       nodes,
 		ThorBuilder: thorBuilder,
 	}
