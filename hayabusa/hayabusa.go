@@ -159,7 +159,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 		return nil, nil, nil, err
 	}
 
-	if err = networkCfg.HealthCheck(0, 60*time.Second); err != nil {
+	if err = networkCfg.HealthCheck(0, 120*time.Second); err != nil {
 		hayabusaNetwork.StopNetwork()
 
 		cleanupPorts(usedPorts)
