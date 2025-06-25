@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"net"
 	"os"
 	"strconv"
 	"sync"
@@ -159,7 +160,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 		return nil, nil, nil, err
 	}
 
-	if err = networkCfg.HealthCheck(0, 5*time.Minute); err != nil {
+	if err = networkCfg.HealthCheck(0, 60*time.Second); err != nil {
 		hayabusaNetwork.StopNetwork()
 
 		cleanupPorts(usedPorts)
@@ -258,16 +259,30 @@ func mustParseKeys(hexKeys []string) []*bind.PrivateKeySigner {
 	return keys
 }
 
+// isPortAvailable checks if a port is actually available for binding
+func isPortAvailable(port int) bool {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	ln.Close()
+	return true
+}
+
 // rndPort generates a random port using global synchronization to avoid race conditions
 func rndPort() int {
 	portMutex.Lock()
 	defer portMutex.Unlock()
 
 	const (
-		minPort = 49152
-		maxPort = 65535
+		minPort     = 49152
+		maxPort     = 65535
+		maxAttempts = 100 // Prevent infinite loops
 	)
-	for {
+
+	attempts := 0
+	for attempts < maxAttempts {
 		buf := make([]byte, 2)
 		// Ignoring the error for brevity—not recommended in production code!
 		_, _ = rand.Read(buf)
@@ -275,11 +290,26 @@ func rndPort() int {
 		// Convert 2 bytes to a 16-bit number, then mod by the range size.
 		n := int(buf[0])<<8 | int(buf[1])
 		port := minPort + (n % (maxPort - minPort + 1))
-		if !globalUsedPorts[port] {
+
+		// Check if port is not in our global map AND actually available
+		if !globalUsedPorts[port] && isPortAvailable(port) {
+			globalUsedPorts[port] = true
+			return port
+		}
+		attempts++
+	}
+
+	// If we can't find an available port after maxAttempts,
+	// try sequential search starting from minPort
+	for port := minPort; port <= maxPort; port++ {
+		if !globalUsedPorts[port] && isPortAvailable(port) {
 			globalUsedPorts[port] = true
 			return port
 		}
 	}
+
+	// This should never happen, but if it does, panic with a clear message
+	panic("no available ports found in range 49152-65535")
 }
 
 // cleanupPorts releases the specified ports back to the global pool
