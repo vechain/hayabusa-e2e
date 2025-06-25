@@ -424,7 +424,8 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 			validationIDs[i] = receiptToID(receipts[i])
 		}
 	}
-	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
+	// In case we have forks dPoS might be activated later than the transition period
+	if err := utils.WaitForPOS(staker, config.ForkBlock+2*config.TransitionPeriod); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
 	}
 
