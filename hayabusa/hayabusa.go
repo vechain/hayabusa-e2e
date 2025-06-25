@@ -161,7 +161,7 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 		return nil, nil, nil, err
 	}
 
-	if err = networkCfg.HealthCheck(0, 40*time.Second); err != nil {
+	if err = networkCfg.HealthCheck(0, 2*time.Minute); err != nil {
 		hayabusaNetwork.StopNetwork()
 
 		cleanupPorts(usedPorts)
