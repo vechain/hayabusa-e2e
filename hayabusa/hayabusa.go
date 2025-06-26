@@ -130,7 +130,7 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 			Genesis:        customGenesis,
 			Verbosity:      verbosity,
 			AdditionalArgs: additionalArgs,
-			APIAddr:        fmt.Sprintf("127.0.0.1:%d", apiPort),
+			APIAddr:        fmt.Sprintf("0.0.0.0:%d", apiPort),
 			P2PListenPort:  p2pPort,
 		}
 	}
@@ -316,7 +316,7 @@ func cleanupPorts(ports []int) {
 
 // isPortAvailable checks if a port is actually available for binding
 func isPortAvailable(port int) bool {
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return false

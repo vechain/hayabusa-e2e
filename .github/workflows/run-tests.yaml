@@ -34,7 +34,7 @@ jobs:
     runs-on:
       - ${{ inputs.codebuild-name || 'codebuild-Hayabusa-E2E' }}-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-3.0
-      - instance-size:xlarge # xlarge=32 vCPUs, 64 GiB memory, large=8 vCPUs, 16 GiB memory
+      - instance-size:large # xlarge=32 vCPUs, 64 GiB memory, large=8 vCPUs, 16 GiB memory
 
     strategy:
       matrix:
