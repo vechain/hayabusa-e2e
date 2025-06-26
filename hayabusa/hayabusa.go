@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/thorclient"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -161,12 +162,14 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 		return nil, nil, nil, err
 	}
 
-	if err = networkCfg.HealthCheck(0, 2*time.Minute); err != nil {
+	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
 		hayabusaNetwork.StopNetwork()
 
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
+
+	pollingWhileConnectingPeers(t, nodes, config.Nodes)
 
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
 	client := thorclient.New(nodes[1].GetHTTPAddr())
@@ -320,4 +323,34 @@ func isPortAvailable(port int) bool {
 	}
 	ln.Close()
 	return true
+}
+
+func pollingWhileConnectingPeers(t *testing.T, nodes []node.Config, expectedPeersLen int) []*thorclient.Client {
+	// Polling approach with timeout
+	timeout := time.After(1 * time.Minute)
+	tick := time.Tick(5 * time.Second)
+
+	clients := make([]*thorclient.Client, 0)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timed out waiting for nodes to connect")
+		case <-tick:
+			allConnected := true
+			for _, node := range nodes {
+				c := thorclient.New(node.GetHTTPAddr())
+				peers, err := c.Peers()
+				assert.NoError(t, err)
+				if len(peers) != expectedPeersLen {
+					allConnected = false
+					clients = clients[:0]
+					break
+				}
+				clients = append(clients, c)
+			}
+			if allConnected {
+				return clients
+			}
+		}
+	}
 }
