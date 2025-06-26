@@ -417,8 +417,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		}
 	}
 
-	// In case we have forks dPoS might be activated later than the transition period
-	posBlock := config.ForkBlock + 2*config.TransitionPeriod
+	posBlock := config.ForkBlock + config.TransitionPeriod
 	if err := utils.WaitForPOS(staker, posBlock); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
 	}
