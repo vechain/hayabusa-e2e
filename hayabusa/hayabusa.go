@@ -341,6 +341,7 @@ func pollingWhileConnectingPeers(t *testing.T, nodes []node.Config, expectedPeer
 				c := thorclient.New(node.GetHTTPAddr())
 				peers, err := c.Peers()
 				assert.NoError(t, err)
+				fmt.Printf("LLEGA: expectedPeersLen: %d, peers: %+v\n", expectedPeersLen, peers)
 				if len(peers) != expectedPeersLen {
 					allConnected = false
 					clients = clients[:0]
