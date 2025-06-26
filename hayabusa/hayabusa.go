@@ -169,7 +169,7 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
 
-	pollingWhileConnectingPeers(t, nodes, config.Nodes)
+	pollingWhileConnectingPeers(t, nodes, config.Nodes - 1)
 
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
 	client := thorclient.New(nodes[1].GetHTTPAddr())
@@ -341,7 +341,6 @@ func pollingWhileConnectingPeers(t *testing.T, nodes []node.Config, expectedPeer
 				c := thorclient.New(node.GetHTTPAddr())
 				peers, err := c.Peers()
 				assert.NoError(t, err)
-				fmt.Printf("LLEGA: expectedPeersLen: %d, peers: %+v\n", expectedPeersLen, peers)
 				if len(peers) != expectedPeersLen {
 					allConnected = false
 					clients = clients[:0]
