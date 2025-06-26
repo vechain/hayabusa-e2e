@@ -37,6 +37,8 @@ func TestEnergy(t *testing.T) {
 	energy, err := builtin.NewEnergy(client)
 	require.NoError(t, err)
 
+	energy.Raw().Client().AccountStorage()
+
 	require.NoError(t, utils.WaitForFork(staker, config.ForkBlock))
 
 	senders := &utils.Senders{}

@@ -725,7 +725,7 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
-	assert.Equal(t, expectedStatus, validator.Status, "validatorID", validatorID.String())
+	assert.Equal(t, expectedStatus, validator.Status)
 }
 
 func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedPeriod uint32) {
