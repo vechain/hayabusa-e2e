@@ -2,6 +2,7 @@ package stargate
 
 import (
 	"fmt"
+	"log/slog"
 	"math/big"
 	"strconv"
 	"strings"
@@ -38,6 +39,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	require.NoError(t, ticker.WaitForBlock(block))
 	err = ticker.WaitForCondition(time.Minute*10, func() (bool, error) {
 		completed, err := staker.GetCompletedPeriods(validationID)
+		slog.Info("Completed periods, waiting for 1", "completed", completed)
 		if err != nil {
 			return false, err
 		}

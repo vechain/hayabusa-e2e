@@ -92,7 +92,7 @@ func (t *Ticker) WaitForCondition(timeout time.Duration, conditionalFunc Conditi
 	for {
 		select {
 		case <-ticker.C:
-			return errors.New("timeout waiting for block")
+			return errors.New("timeout waiting for condition")
 		default:
 			resp, err := conditionalFunc()
 			if err != nil {
