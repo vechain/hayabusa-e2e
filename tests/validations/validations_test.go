@@ -12,6 +12,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/environments"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -20,7 +21,7 @@ import (
 
 func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
+	config, hayabusaNetwork, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
 	validator1NonPoA := hayabusa.AdditionalAccounts[0]
@@ -51,8 +52,8 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	t.Log("✅ - Queued validator OK", "id", id2.String())
 
 	block := config.ForkBlock + config.TransitionPeriod
-	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
-	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
+	assertValidatorStatusHayabusa(t, hayabusaNetwork, staker, id1, builtin.StakerStatusActive, block)
+	assertValidatorStatusHayabusa(t, hayabusaNetwork, staker, id2, builtin.StakerStatusActive, block)
 
 	id3 := addValidator(t, staker, validator1NonPoA, false, config.MinStakingPeriod)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusQueued, block)
@@ -63,7 +64,7 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
+	config, _, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
@@ -112,7 +113,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
+	config, _, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
@@ -204,7 +205,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 
 func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
+	config, _,client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
@@ -323,7 +324,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
+	config, _, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
@@ -462,7 +463,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 
 func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 2)
+	config, _, client, cancel := setupTestNetwork(t, 2)
 	t.Cleanup(cancel)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
@@ -514,7 +515,7 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 
 func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
+	config, _, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
@@ -581,7 +582,7 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 
 func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 1)
+	config, _, client, cancel := setupTestNetwork(t, 1)
 	t.Cleanup(cancel)
 
 	staker := setupStakerAndWaitForFork(t, client, config)
@@ -654,7 +655,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 
 func TestHayabusaTotalStakeDecreased(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
+	config, _, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
@@ -745,6 +746,40 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
+func assertValidatorStatusHayabusa(t *testing.T,hayabusaNetwork environments.Actions, staker *builtin.Staker, validatorID thor.Bytes32, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
+	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
+	validator, err := staker.Get(validatorID)
+	assert.NoError(t, err)
+	if validator.Status == builtin.StakerStatusUnknown {
+		slog.Info("⚠️ - validator status is unknown, waiting for it to be set", "validator", validatorID.String())
+		err = utils.NewTicker(staker.Raw().Client()).WaitForCondition(time.Minute*10, func() (bool, error) {
+			unknownValidator, err := staker.Get(validatorID)
+			assert.NoError(t, err)
+			slog.Info("⚠️ - validator status set after unknown (1)", "validator", validatorID.String(), "status", unknownValidator.Status)
+			thorClient0 := thorclient.New(hayabusaNetwork.Config().Nodes[0].GetHTTPAddr())
+			staker2, _ := builtin.NewStaker(thorClient0)
+			unknownValidator2, err := staker2.Get(validatorID)
+			assert.NoError(t, err)
+			slog.Info("⚠️ - validator status set after unknown (2)", "validator", validatorID.String(), "status", unknownValidator2.Status)
+			thorClient2 := thorclient.New(hayabusaNetwork.Config().Nodes[2].GetHTTPAddr())
+			staker3, _ := builtin.NewStaker(thorClient2)
+			unknownValidator3, err := staker3.Get(validatorID)
+			assert.NoError(t, err)
+			slog.Info("⚠️ - validator status set after unknown (3)", "validator", validatorID.String(), "status", unknownValidator3.Status)
+			thorClient1 := thorclient.New(hayabusaNetwork.Config().Nodes[1].GetHTTPAddr())
+			staker4, _ := builtin.NewStaker(thorClient1)
+			unknownValidator4, err := staker4.Get(validatorID)
+			assert.NoError(t, err)
+			slog.Info("⚠️ - validator status set after unknown (4)", "validator", validatorID.String(), "status", unknownValidator4.Status)
+			return unknownValidator.Status != builtin.StakerStatusUnknown, nil
+		})
+		assert.NoError(t, err)
+		validator, err = staker.Get(validatorID)
+		assert.NoError(t, err)
+	}
+	assert.Equal(t, expectedStatus, validator.Status)
+}
+
 func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedPeriod uint32) {
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
@@ -772,7 +807,7 @@ func assertRewards(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes3
 	assert.Equal(t, big.NewInt(0).Mul(expectedReward, big.NewInt(int64(proposedBlocks))).String(), res.String())
 }
 
-func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config, *thorclient.Client, func()) {
+func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config, environments.Actions, *thorclient.Client, func()) {
 	config := &hayabusa.Config{
 		Nodes:             6,
 		MaxBlockProposers: maxBlockProposers,
@@ -785,12 +820,12 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		HighStakingPeriod: 259200,
 	}
 
-	client, _, cancel, err := hayabusa.StartNetwork(t, config)
+	client, hayabusaNetwork, cancel, err := hayabusa.StartNetwork(t, config)
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return config, client, cancel
+	return config, hayabusaNetwork, client, cancel
 }
 
 func setupStakerAndWaitForFork(t *testing.T, client *thorclient.Client, config *hayabusa.Config) *builtin.Staker {
