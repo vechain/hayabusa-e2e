@@ -169,7 +169,12 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
 
-	utils.WaitForPeersConnection(t, nodes, config.Nodes-1)
+	err = utils.WaitForPeersConnection(t, nodes, config.Nodes-1)
+	if err != nil {
+		hayabusaNetwork.StopNetwork()
+		cleanupPorts(usedPorts)
+		return nil, nil, nil, err
+	}
 
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
 	client := thorclient.New(nodes[1].GetHTTPAddr())
