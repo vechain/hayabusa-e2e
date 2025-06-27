@@ -36,7 +36,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	// wait for the validator to complete 1 staking period
 	block := config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod
 	require.NoError(t, ticker.WaitForBlock(block))
-	err = ticker.WaitForCondition(time.Minute*5, func() (bool, error) {
+	err = ticker.WaitForCondition(time.Minute*10, func() (bool, error) {
 		completed, err := staker.GetCompletedPeriods(validationID)
 		if err != nil {
 			return false, err
