@@ -113,9 +113,6 @@ func (t *Ticker) WaitForCondition(timeout time.Duration, conditionalFunc Conditi
 func WaitForPeersConnection(t *testing.T, nodes []node.Config, expectedPeersLen int) []*thorclient.Client {
 	// Timeout configuration
 	timeout := 5 * time.Minute
-	if os.Getenv("CI") == "true" {
-		timeout = 10 * time.Minute // Longer timeout for CI
-	}
 
 	timeoutChan := time.After(timeout)
 	tick := time.NewTicker(5 * time.Second)
