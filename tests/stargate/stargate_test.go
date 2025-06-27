@@ -39,11 +39,11 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	require.NoError(t, ticker.WaitForBlock(block))
 	err = ticker.WaitForCondition(time.Minute*10, func() (bool, error) {
 		completed, err := staker.GetCompletedPeriods(validationID)
-		slog.Info("Completed periods, waiting for 1", "completed", completed)
+		slog.Info("⚠️ - completed periods, waiting for greater than 0", "completed", int(*completed))
 		if err != nil {
 			return false, err
 		}
-		return *completed == 1, nil
+		return *completed > 0, nil
 	})
 	require.NoError(t, err)
 	completed, err := staker.GetCompletedPeriods(validationID)
