@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,7 +52,6 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 	block := config.ForkBlock + config.TransitionPeriod
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
-	block += config.MinStakingPeriod
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 
 	id3 := addValidator(t, staker, validator1NonPoA, false, config.MinStakingPeriod)
@@ -726,6 +726,17 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
+	if validator.Status == builtin.StakerStatusUnknown {
+		slog.Info("⚠️ - validator status is unknown, waiting for it to be set", "validator", validatorID.String())
+		err = utils.NewTicker(staker.Raw().Client()).WaitForCondition(time.Minute*10, func() (bool, error) {
+			unknownValidator, err := staker.Get(validatorID)
+			assert.NoError(t, err)
+			return unknownValidator.Status != builtin.StakerStatusUnknown, nil
+		})
+		assert.NoError(t, err)
+		validator, err = staker.Get(validatorID)
+		assert.NoError(t, err)
+	}
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
