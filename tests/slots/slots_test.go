@@ -95,6 +95,7 @@ func Test_MissedSlot(t *testing.T) {
 	err = ticker.WaitForCondition(time.Minute*10, func() (bool, error) {
 		validation, err := staker.Get(validationID)
 		require.NoError(t, err)
+		t.Logf("⚠️ - waiting for validator %s to be online, status: %v", validationID.String(), validation.Status)
 		return validation.Online, nil
 	})
 	require.NoError(t, err)
