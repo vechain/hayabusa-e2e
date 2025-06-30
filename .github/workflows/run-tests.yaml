@@ -3,7 +3,7 @@ name: Run Hayabusa Tests
 on:
   push:
     branches:
-      - fix/flaky-tests
+      - main
   pull_request:
   workflow_dispatch:
     inputs:
@@ -58,7 +58,7 @@ jobs:
         with:
           repository: vechain/thor
           path: thor
-          ref: 'test-miguel/hayabusa'
+          ref: ${{ inputs.thor-branch || 'release/hayabusa' }}
 
       - name: Install Go
         uses: actions/setup-go@v5
