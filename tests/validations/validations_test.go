@@ -731,11 +731,7 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 		err = utils.NewTicker(staker.Raw().Client()).WaitForCondition(time.Minute*10, func() (bool, error) {
 			unknownValidator, err := staker.Get(validatorID)
 			assert.NoError(t, err)
-			slog.Info("⚠️ - validator status set after unknown (1)", "validator", validatorID.String(), "status", unknownValidator.Status)
-			staker2, _ := builtin.NewStaker(staker.Raw().Client())
-			unknownValidator2, err := staker2.Get(validatorID)
-			assert.NoError(t, err)
-			slog.Info("⚠️ - validator status set after unknown (2)", "validator", validatorID.String(), "status", unknownValidator2.Status)
+			slog.Info("⚠️ - validator status set after unknown", "validator", validatorID.String(), "status", unknownValidator.Status)
 			return unknownValidator.Status != builtin.StakerStatusUnknown, nil
 		})
 		assert.NoError(t, err)
