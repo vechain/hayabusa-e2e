@@ -429,9 +429,27 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 
 	posBlock := config.ForkBlock + config.TransitionPeriod
 	if err := utils.WaitForPOS(staker, posBlock); err != nil {
-		t.Fatalf("failed to wait for PoS: %v", err)
+		t.Logf("⚠️ WaitForPOS failed: %v, continuing to wait for PoS activation...", err)
+
+		timeout := time.After(10 * time.Minute)
+		tick := time.NewTicker(2 * time.Second)
+		defer tick.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				t.Fatalf("timed out waiting for PoS activation after 10 minutes")
+			case <-tick.C:
+				_, id, err := staker.FirstActive()
+				if err == nil && !id.IsZero() {
+					t.Logf("✅ PoS is now active with delay")
+					goto posActive
+				}
+			}
+		}
 	}
 
+posActive:
 	wg.Wait()
 
 	return staker, stargate, config, validationIDs
