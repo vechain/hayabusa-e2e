@@ -25,7 +25,7 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 	validator1NonPoA := hayabusa.AdditionalAccounts[0]
 	validator1PoA := hayabusa.ValidatorAccounts[0]
-	validator2PoA := hayabusa.ValidatorAccounts[1]
+	validator2PoA := hayabusa.ValidatorAccounts[10]
 
 	staker := setupStakerAndWaitForFork(t, client, config)
 
