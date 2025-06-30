@@ -1,6 +1,7 @@
 package energy
 
 import (
+	"fmt"
 	"math/big"
 	"strconv"
 	"testing"
@@ -103,10 +104,14 @@ func TestEnergy(t *testing.T) {
 	}
 	t.Logf("✅ - PoS growth is as expected")
 
+	fmt.Printf("LLEGA RECEIPTS: %+v\n", receipts)
+
 	actualStakerRewards := new(big.Int)
 	for _, receipt := range receipts {
 		validatorID := receipt.Outputs[0].Events[0].Topics[3]
+		fmt.Printf("LLEGA validatorID: %s\n", validatorID.String())
 		rewards, err := staker.GetRewards(validatorID, 1)
+		fmt.Printf("LLEGA rewards: %s\n", rewards.String())
 		require.NoError(t, err)
 		actualStakerRewards = actualStakerRewards.Add(actualStakerRewards, rewards)
 	}
