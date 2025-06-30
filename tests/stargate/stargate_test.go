@@ -54,7 +54,6 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	if err != nil {
 		return testutil.StakerStatusUnknownError{ValidationID: validationID.String()}
 	}
-	require.NoError(t, err)
 	completed, err := staker.GetCompletedPeriods(validationID)
 	require.NoError(t, err)
 	assert.Equal(t, 1, int(*completed))
