@@ -110,6 +110,9 @@ func TestEnergy(t *testing.T) {
 	for _, receipt := range receipts {
 		validatorID := receipt.Outputs[0].Events[0].Topics[3]
 		fmt.Printf("LLEGA validatorID: %s\n", validatorID.String())
+		validator, err := staker.Get(validatorID)
+		require.NoError(t, err)
+		fmt.Printf("LLEGA validator: %+v\n", validator)
 		rewards, err := staker.GetRewards(validatorID, 1)
 		fmt.Printf("LLEGA rewards: %s\n", rewards.String())
 		require.NoError(t, err)
