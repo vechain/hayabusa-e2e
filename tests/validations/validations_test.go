@@ -19,6 +19,12 @@ import (
 
 func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	t.Parallel()
+	testutil.RunFlakyTest(t, func() error {
+		return runTestHayabusaAddNonPoAValidator(t)
+	})
+}
+
+func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
 	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
@@ -45,19 +51,26 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	t.Log("✅ - Queued validator OK", "id", id1.String())
 
 	id2 := addValidator(t, staker, validator2PoA, true, config.MinStakingPeriod)
+
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusQueued, config.ForkBlock)
 
 	t.Log("✅ - Queued validator OK", "id", id2.String())
 
 	block := config.ForkBlock + config.TransitionPeriod
-	assertValidatorStatusWithSigner(t, staker, validator1PoA, id1, builtin.StakerStatusActive, block)
-	assertValidatorStatusWithSigner(t, staker, validator2PoA, id2, builtin.StakerStatusActive, block)
+	if err := assertValidatorStatusUnknown(t, staker, id1, builtin.StakerStatusActive, block); err != nil {
+		return err
+	}
+	if err := assertValidatorStatusUnknown(t, staker, id2, builtin.StakerStatusActive, block); err != nil {
+		return err
+	}
 
 	id3 := addValidator(t, staker, validator1NonPoA, false, config.MinStakingPeriod)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusQueued, block)
 	t.Log("✅ - Not a PoA candidate joined")
 
 	t.Log("✅ - All 3 validators joined")
+
+	return nil
 }
 
 func TestHayabusaNoForkThenJoinLater(t *testing.T) {
@@ -725,19 +738,15 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
-func assertValidatorStatusWithSigner(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Bytes32, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
-	ticker := utils.NewTicker(staker.Raw().Client())
-	assert.NoError(t, ticker.WaitForBlock(waitForBlock))
+func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedStatus builtin.StakerStatus, waitForBlock uint32) error {
+	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
 	if validator.Status == builtin.StakerStatusUnknown {
-		slog.Info("⚠️ - validator status is unknown, adding it again", "validator", validatorID.String())
-		validatorID = addValidator(t, staker, signer, true, waitForBlock)
-		validator, err = staker.Get(validatorID)
-		assert.NoError(t, err)
-		assert.NoError(t, ticker.WaitForBlock(2*waitForBlock))
+		return testutil.StakerStatusUnknownError{ValidationID: validatorID.String()}
 	}
 	assert.Equal(t, expectedStatus, validator.Status)
+	return nil
 }
 
 func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedPeriod uint32) {

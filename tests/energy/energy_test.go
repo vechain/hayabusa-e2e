@@ -1,7 +1,6 @@
 package energy
 
 import (
-	"fmt"
 	"math/big"
 	"strconv"
 	"testing"
@@ -15,6 +14,12 @@ import (
 )
 
 func TestEnergy(t *testing.T) {
+	testutil.RunFlakyTest(t, func() error {
+		return runEnergyTest(t)
+	})
+}
+
+func runEnergyTest(t *testing.T) error {
 	config := &hayabusa.Config{
 		Nodes:             3,
 		MaxBlockProposers: 3,
@@ -104,17 +109,16 @@ func TestEnergy(t *testing.T) {
 	}
 	t.Logf("✅ - PoS growth is as expected")
 
-	fmt.Printf("LLEGA RECEIPTS: %+v\n", receipts)
-
 	actualStakerRewards := new(big.Int)
 	for _, receipt := range receipts {
 		validatorID := receipt.Outputs[0].Events[0].Topics[3]
-		fmt.Printf("LLEGA validatorID: %s\n", validatorID.String())
 		validator, err := staker.Get(validatorID)
 		require.NoError(t, err)
-		fmt.Printf("LLEGA validator: %+v\n", validator)
+
+		if validator.Status == builtin.StakerStatusUnknown {
+			return testutil.StakerStatusUnknownError{ValidationID: validatorID.String()}
+		}
 		rewards, err := staker.GetRewards(validatorID, 1)
-		fmt.Printf("LLEGA rewards: %s\n", rewards.String())
 		require.NoError(t, err)
 		actualStakerRewards = actualStakerRewards.Add(actualStakerRewards, rewards)
 	}
@@ -123,4 +127,6 @@ func TestEnergy(t *testing.T) {
 	expectedStakerRewards := new(big.Int).Mul(hayabusaGrowth, big.NewInt(int64(config.MinStakingPeriod)))
 	require.Equal(t, expectedStakerRewards, actualStakerRewards)
 	t.Logf("✅ - Staker rewards are as expected")
+
+	return nil
 }

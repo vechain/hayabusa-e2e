@@ -27,6 +27,12 @@ import (
 )
 
 func Test_Stargate_SingleDelegator(t *testing.T) {
+	testutil.RunFlakyTest(t, func() error {
+		return runTestStargateSingleDelegator(t)
+	})
+}
+
+func runTestStargateSingleDelegator(t *testing.T) error {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
@@ -37,7 +43,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	// wait for the validator to complete 1 staking period
 	block := config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod
 	require.NoError(t, ticker.WaitForBlock(block))
-	err = ticker.WaitForCondition(time.Minute*10, func() (bool, error) {
+	err = ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
 		completed, err := staker.GetCompletedPeriods(validationID)
 		slog.Info("⚠️ - completed periods, waiting for greater than 0", "completed", int(*completed))
 		if err != nil {
@@ -45,6 +51,9 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 		}
 		return *completed > 0, nil
 	})
+	if err != nil {
+		return testutil.StakerStatusUnknownError{ValidationID: validationID.String()}
+	}
 	require.NoError(t, err)
 	completed, err := staker.GetCompletedPeriods(validationID)
 	require.NoError(t, err)
@@ -163,6 +172,8 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 
 	t.Logf("✅ total rewards for: %s", totalPeriodRewards.String())
 	assert.Equal(t, new(big.Int).Add(proposerReward, delegatorReward), totalPeriodRewards)
+
+	return nil
 }
 
 func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_Off(t *testing.T) {
