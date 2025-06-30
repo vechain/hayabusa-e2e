@@ -704,10 +704,7 @@ func addValidatorWithStake(t *testing.T, staker *builtin.Staker, signer bind.Sig
 }
 
 func addValidator(t *testing.T, staker *builtin.Staker, signer bind.Signer, autoRenew bool, period uint32) thor.Bytes32 {
-	stake := big.NewInt(1e18)
-	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
-	stake = big.NewInt(0).Mul(stake, big.NewInt(25))
-	return addValidatorWithStake(t, staker, signer, autoRenew, stake, period)
+	return addValidatorWithStake(t, staker, signer, autoRenew, calculateValidatorStake(), period)
 }
 
 func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Bytes32) {

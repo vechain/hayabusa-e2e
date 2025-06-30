@@ -438,7 +438,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		for {
 			select {
 			case <-timeout:
-				t.Fatalf("timed out waiting for PoS activation after 10 minutes")
+				t.Fatalf("timed out waiting for PoS activation")
 			case <-tick.C:
 				_, id, err := staker.FirstActive()
 				if err == nil && !id.IsZero() {
