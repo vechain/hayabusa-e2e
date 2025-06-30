@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +24,7 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 	validator1NonPoA := hayabusa.AdditionalAccounts[0]
 	validator1PoA := hayabusa.ValidatorAccounts[0]
-	validator2PoA := hayabusa.ValidatorAccounts[10]
+	validator2PoA := hayabusa.ValidatorAccounts[1]
 
 	staker := setupStakerAndWaitForFork(t, client, config)
 
@@ -52,7 +51,7 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 
 	block := config.ForkBlock + config.TransitionPeriod
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
-	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
+	assertValidatorStatusWithSigner(t, staker, validator2PoA, id2, builtin.StakerStatusActive, block)
 
 	id3 := addValidator(t, staker, validator1NonPoA, false, config.MinStakingPeriod)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusQueued, block)
@@ -723,17 +722,20 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
+	assert.Equal(t, expectedStatus, validator.Status)
+}
+
+func assertValidatorStatusWithSigner(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Bytes32, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
+	ticker := utils.NewTicker(staker.Raw().Client())
+	assert.NoError(t, ticker.WaitForBlock(waitForBlock))
+	validator, err := staker.Get(validatorID)
+	assert.NoError(t, err)
 	if validator.Status == builtin.StakerStatusUnknown {
-		slog.Info("⚠️ - validator status is unknown, waiting for it to be set", "validator", validatorID.String())
-		err = utils.NewTicker(staker.Raw().Client()).WaitForCondition(time.Minute*10, func() (bool, error) {
-			unknownValidator, err := staker.Get(validatorID)
-			assert.NoError(t, err)
-			slog.Info("⚠️ - validator status set after unknown", "validator", validatorID.String(), "status", unknownValidator.Status)
-			return unknownValidator.Status != builtin.StakerStatusUnknown, nil
-		})
-		assert.NoError(t, err)
+		slog.Info("⚠️ - validator status is unknown, adding it again", "validator", validatorID.String())
+		validatorID = addValidator(t, staker, signer, true, waitForBlock)
 		validator, err = staker.Get(validatorID)
 		assert.NoError(t, err)
+		assert.NoError(t, ticker.WaitForBlock(2*waitForBlock))
 	}
 	assert.Equal(t, expectedStatus, validator.Status)
 }
