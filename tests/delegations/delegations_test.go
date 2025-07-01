@@ -254,64 +254,7 @@ func Test_Delegations(t *testing.T) {
 		assert.True(t, receipt.Reverted)
 	})
 
-	t.Run("Active delegator can increase their stake and increased stake will become active in next staking period", func(t *testing.T) {
-		t.Parallel()
-
-		// Create initial delegation
-		initialStake := builtin.MinStake()
-		receipt, _, err := staker.AddDelegation(validationIDs[5], initialStake, true, 100).
-			Send().
-			WithSigner(hayabusa.Stargate).
-			WithOptions(testutil.TxOptions()).
-			SubmitAndConfirm(testutil.TxContext(t))
-		require.NoError(t, err)
-		initialDelegationID := receiptToID(receipt)
-
-		// Verify initial delegation
-		delegation, err := staker.GetDelegation(initialDelegationID)
-		require.NoError(t, err)
-		assert.Equal(t, initialStake, delegation.Stake)
-		assert.Equal(t, uint8(100), delegation.Multiplier)
-		assert.True(t, delegation.AutoRenew)
-		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
-
-		// Add additional stake (increase delegation)
-		additionalStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
-		receipt, _, err = staker.AddDelegation(validationIDs[5], additionalStake, true, 100).
-			Send().
-			WithSigner(hayabusa.Stargate).
-			WithOptions(testutil.TxOptions()).
-			SubmitAndConfirm(testutil.TxContext(t))
-		require.NoError(t, err)
-		additionalDelegationID := receiptToID(receipt)
-
-		// Verify additional delegation was created
-		delegation, err = staker.GetDelegation(additionalDelegationID)
-		require.NoError(t, err)
-		assert.Equal(t, additionalStake, delegation.Stake)
-		assert.Equal(t, uint8(100), delegation.Multiplier)
-		assert.True(t, delegation.AutoRenew)
-
-		// Wait for next staking period to activate the increased stake
-		best, err := staker.Raw().Client().Block("best")
-		require.NoError(t, err)
-		currentBlock := best.Number
-		require.NoError(t, ticker.WaitForBlock(currentBlock+config.MinStakingPeriod*4))
-
-		// Verify validator totals reflect the increased stake
-		totals, err := staker.GetValidatorsTotals(validationIDs[5])
-		require.NoError(t, err)
-		expectedTotalStake := big.NewInt(0).Add(initialStake, additionalStake)
-
-		assert.Equal(t, expectedTotalStake, totals.DelegationsLockedStake,
-			"Validator should have exact total stake from both delegations")
-		assert.True(t, totals.DelegationsLockedWeight.Cmp(big.NewInt(0)) > 0,
-			"Validator should have positive weight")
-		assert.True(t, totals.DelegationsLockedWeight.Cmp(expectedTotalStake) >= 0,
-			"Validator weight should be at least equal to stake")
-	})
-
-	t.Run("Active delegator can decrease their stake and decreased amount can be withdrawn next period", func(t *testing.T) {
+	t.Run("Active delegator can increase and decrease their stake and get reflected in validator totals", func(t *testing.T) {
 		t.Parallel()
 
 		// Create first delegation
