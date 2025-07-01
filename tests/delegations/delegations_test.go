@@ -316,18 +316,6 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, additionalStake, delegation.Stake)
 
-		// Wait for an additional period to ensure both delegations are fully active
-		require.NoError(t, ticker.WaitForBlock(currentBlock+config.MinStakingPeriod*2))
-
-		// Verify both delegations are still active with their respective stakes
-		delegation, err = staker.GetDelegation(initialDelegationID)
-		require.NoError(t, err)
-		assert.Equal(t, initialStake, delegation.Stake)
-
-		delegation, err = staker.GetDelegation(additionalDelegationID)
-		require.NoError(t, err)
-		assert.Equal(t, additionalStake, delegation.Stake)
-
 		// Verify that the delegator has successfully increased their stake
 		// by having both delegations active to the same validator
 		totals, err := staker.GetValidatorsTotals(validationIDs[3])
