@@ -313,11 +313,7 @@ func Test_Delegations(t *testing.T) {
 			SubmitAndConfirm(testutil.TxContext(t))
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted, "Withdrawal should succeed")
-
-		// Wait for withdrawal to be processed and reflected in validator totals
-		best, err := staker.Raw().Client().Block("best")
-		require.NoError(t, err)
-		require.NoError(t, ticker.WaitForBlock(best.Number+config.MinStakingPeriod))
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 		// Verify that the validator has exactly the second delegation stake after withdrawal
 		totalsAfterWithdrawal, err := staker.GetValidatorsTotals(validationIDs[5])
