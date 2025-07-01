@@ -276,7 +276,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 		// Add additional stake (increase delegation)
-		additionalStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)) // Double the stake
+		additionalStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
 		receipt, _, err = staker.AddDelegation(validationIDs[5], additionalStake, true, 100).
 			Send().
 			WithSigner(hayabusa.Stargate).
