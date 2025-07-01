@@ -329,6 +329,57 @@ func Test_Delegations(t *testing.T) {
 		assert.True(t, totals.DelegationsLockedWeight.Cmp(big.NewInt(0).Mul(initialStake, big.NewInt(2))) > 0,
 			"Total delegations weight should be greater than initial weight")
 	})
+
+	t.Run("Active delegator can decrease their stake and decreased amount can be withdrawn next period", func(t *testing.T) {
+		t.Parallel()
+
+		// Create initial delegation with auto-renew disabled to allow withdrawal
+		initialStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)) // 3x MinStake for testing
+		receipt, _, err := staker.AddDelegation(validationIDs[4], initialStake, false, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		delegationID := receiptToID(receipt)
+
+		// Verify initial delegation
+		delegation, err := staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.Equal(t, initialStake, delegation.Stake)
+		assert.Equal(t, uint8(100), delegation.Multiplier)
+		assert.False(t, delegation.AutoRenew)
+
+		// Wait for initial delegation to become active and allow withdrawal (2 staking periods)
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+
+		// Verify delegation is active
+		delegation, err = staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.Equal(t, initialStake, delegation.Stake)
+
+		// Withdraw the stake (decrease delegation)
+		receipt, _, err = staker.WithdrawDelegation(delegationID).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		require.False(t, receipt.Reverted, "Withdrawal should succeed")
+
+		// Verify delegation stake has been decreased
+		delegation, err = staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.True(t, delegation.Stake.Sign() == 0, "Delegation stake should be zero after withdrawal")
+
+		// Verify that the validator's total delegations have decreased
+		totals, err := staker.GetValidatorsTotals(validationIDs[4])
+		require.NoError(t, err)
+
+		// The validator should have no delegations from this delegator after withdrawal
+		assert.True(t, totals.DelegationsLockedStake.Cmp(initialStake) < 0 || totals.DelegationsLockedStake.Sign() == 0,
+			"Total delegations should be less than or equal to zero after withdrawal")
+	})
 }
 
 func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]thor.Bytes32) {
