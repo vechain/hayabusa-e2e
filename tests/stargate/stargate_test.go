@@ -27,6 +27,7 @@ import (
 )
 
 func Test_Stargate_SingleDelegator(t *testing.T) {
+	t.Parallel()
 	testutil.RunFlakyTest(t, func() error {
 		return runTestStargateSingleDelegator(t)
 	})
@@ -176,6 +177,7 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 }
 
 func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_Off(t *testing.T) {
+	t.Parallel()
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
@@ -263,6 +265,7 @@ func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_Off(t *testing.T) {
 }
 
 func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_On_And_Off(t *testing.T) {
+	t.Parallel()
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
