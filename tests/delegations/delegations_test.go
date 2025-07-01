@@ -254,7 +254,7 @@ func Test_Delegations(t *testing.T) {
 		assert.True(t, receipt.Reverted)
 	})
 
-	t.Run("Active delegator can increase and decrease their stake and get reflected in validator totals", func(t *testing.T) {
+	t.Run("Active delegator can increase/decrease their stake and get reflected in validator totals", func(t *testing.T) {
 		t.Parallel()
 
 		// Create first delegation
@@ -267,7 +267,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		firstDelegationID := receiptToID(receipt)
 
-		// Create second delegation (additional stake)
+		// Create second delegation
 		secondStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3))
 		receipt, _, err = staker.AddDelegation(validationIDs[5], secondStake, true, 100).
 			Send().
