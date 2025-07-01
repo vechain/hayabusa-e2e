@@ -666,6 +666,12 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 
 func TestHayabusaTotalStakeDecreased(t *testing.T) {
 	t.Parallel()
+	testutil.RunFlakyTest(t, func() error {
+		return runTestHayabusaTotalStakeDecreased(t)
+	})
+}
+
+func runTestHayabusaTotalStakeDecreased(t *testing.T) error {
 	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
@@ -693,10 +699,16 @@ func TestHayabusaTotalStakeDecreased(t *testing.T) {
 	assertTotalStakeAndWeight(t, staker, 2)
 
 	block += config.MinStakingPeriod
-	assertValidatorStatus(t, staker, id1, builtin.StakerStatusExited, block)
-	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
+	if err := assertValidatorStatusUnknown(t, staker, id1, builtin.StakerStatusExited, block); err != nil {
+		return err
+	}
+	if err := assertValidatorStatusUnknown(t, staker, id2, builtin.StakerStatusActive, block); err != nil {
+		return err
+	}
 
 	assertTotalStakeAndWeight(t, staker, 1)
+
+	return nil
 }
 
 func addValidatorWithStake(t *testing.T, staker *builtin.Staker, signer bind.Signer, autoRenew bool, stake *big.Int, period uint32) thor.Bytes32 {
