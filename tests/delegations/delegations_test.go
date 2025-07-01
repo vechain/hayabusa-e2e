@@ -288,7 +288,7 @@ func Test_Delegations(t *testing.T) {
 		assert.Equal(t, secondStake, delegation.Stake)
 		assert.True(t, delegation.AutoRenew)
 
-		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*4))
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 		totalsBeforeWithdrawal, err := staker.GetValidatorsTotals(validationIDs[5])
 		require.NoError(t, err)
 		
