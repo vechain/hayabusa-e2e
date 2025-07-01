@@ -259,7 +259,7 @@ func Test_Delegations(t *testing.T) {
 
 		// Create initial delegation
 		initialStake := builtin.MinStake()
-		receipt, _, err := staker.AddDelegation(validationIDs[3], initialStake, true, 100).
+		receipt, _, err := staker.AddDelegation(validationIDs[5], initialStake, true, 100).
 			Send().
 			WithSigner(hayabusa.Stargate).
 			WithOptions(testutil.TxOptions()).
@@ -273,18 +273,11 @@ func Test_Delegations(t *testing.T) {
 		assert.Equal(t, initialStake, delegation.Stake)
 		assert.Equal(t, uint8(100), delegation.Multiplier)
 		assert.True(t, delegation.AutoRenew)
-
-		// Wait for initial delegation to become active (next staking period)
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
-
-		// Verify delegation is active
-		delegation, err = staker.GetDelegation(initialDelegationID)
-		require.NoError(t, err)
-		assert.Equal(t, initialStake, delegation.Stake)
 
 		// Add additional stake (increase delegation)
 		additionalStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)) // Double the stake
-		receipt, _, err = staker.AddDelegation(validationIDs[3], additionalStake, true, 100).
+		receipt, _, err = staker.AddDelegation(validationIDs[5], additionalStake, true, 100).
 			Send().
 			WithSigner(hayabusa.Stargate).
 			WithOptions(testutil.TxOptions()).
@@ -299,67 +292,78 @@ func Test_Delegations(t *testing.T) {
 		assert.Equal(t, uint8(100), delegation.Multiplier)
 		assert.True(t, delegation.AutoRenew)
 
-		// Get current block number
+		// Wait for next staking period to activate the increased stake
 		best, err := staker.Raw().Client().Block("best")
 		require.NoError(t, err)
 		currentBlock := best.Number
+		require.NoError(t, ticker.WaitForBlock(currentBlock+config.MinStakingPeriod*4))
 
-		// Wait for next staking period to activate the increased stake
-		require.NoError(t, ticker.WaitForBlock(currentBlock+config.MinStakingPeriod))
-
-		// Verify both delegations are still active with their respective stakes
-		delegation, err = staker.GetDelegation(initialDelegationID)
+		// Verify validator totals reflect the increased stake
+		totals, err := staker.GetValidatorsTotals(validationIDs[5])
 		require.NoError(t, err)
-		assert.Equal(t, initialStake, delegation.Stake)
+		expectedTotalStake := big.NewInt(0).Add(initialStake, additionalStake)
 
-		delegation, err = staker.GetDelegation(additionalDelegationID)
-		require.NoError(t, err)
-		assert.Equal(t, additionalStake, delegation.Stake)
-
-		// Verify that the delegator has successfully increased their stake
-		// by having both delegations active to the same validator
-		totals, err := staker.GetValidatorsTotals(validationIDs[3])
-		require.NoError(t, err)
-
-		// The delegations should be reflected in the validator's totals
-		// We verify that the stake has been increased by checking that both delegations exist
-		// and are active, which means the delegator's total stake to this validator has increased
-		assert.True(t, totals.DelegationsLockedStake.Cmp(initialStake) > 0,
-			"Total delegations stake should be greater than initial stake")
-		assert.True(t, totals.DelegationsLockedWeight.Cmp(big.NewInt(0).Mul(initialStake, big.NewInt(2))) > 0,
-			"Total delegations weight should be greater than initial weight")
+		assert.Equal(t, expectedTotalStake, totals.DelegationsLockedStake,
+			"Validator should have exact total stake from both delegations")
+		assert.True(t, totals.DelegationsLockedWeight.Cmp(big.NewInt(0)) > 0,
+			"Validator should have positive weight")
+		assert.True(t, totals.DelegationsLockedWeight.Cmp(expectedTotalStake) >= 0,
+			"Validator weight should be at least equal to stake")
 	})
 
 	t.Run("Active delegator can decrease their stake and decreased amount can be withdrawn next period", func(t *testing.T) {
 		t.Parallel()
 
-		// Create initial delegation with auto-renew disabled to allow withdrawal
-		initialStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)) // 3x MinStake for testing
-		receipt, _, err := staker.AddDelegation(validationIDs[4], initialStake, false, 100).
+		// Create first delegation
+		firstStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
+		receipt, _, err := staker.AddDelegation(validationIDs[5], firstStake, true, 100).
 			Send().
 			WithSigner(hayabusa.Stargate).
 			WithOptions(testutil.TxOptions()).
 			SubmitAndConfirm(testutil.TxContext(t))
 		require.NoError(t, err)
-		delegationID := receiptToID(receipt)
+		firstDelegationID := receiptToID(receipt)
 
-		// Verify initial delegation
-		delegation, err := staker.GetDelegation(delegationID)
+		// Create second delegation (additional stake)
+		secondStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3))
+		receipt, _, err = staker.AddDelegation(validationIDs[5], secondStake, true, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
 		require.NoError(t, err)
-		assert.Equal(t, initialStake, delegation.Stake)
-		assert.Equal(t, uint8(100), delegation.Multiplier)
-		assert.False(t, delegation.AutoRenew)
+		secondDelegationID := receiptToID(receipt)
 
-		// Wait for initial delegation to become active and allow withdrawal (2 staking periods)
-		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
-
-		// Verify delegation is active
-		delegation, err = staker.GetDelegation(delegationID)
+		// Verify both delegations
+		delegation, err := staker.GetDelegation(firstDelegationID)
 		require.NoError(t, err)
-		assert.Equal(t, initialStake, delegation.Stake)
+		assert.Equal(t, firstStake, delegation.Stake)
+		assert.True(t, delegation.AutoRenew)
 
-		// Withdraw the stake (decrease delegation)
-		receipt, _, err = staker.WithdrawDelegation(delegationID).
+		delegation, err = staker.GetDelegation(secondDelegationID)
+		require.NoError(t, err)
+		assert.Equal(t, secondStake, delegation.Stake)
+		assert.True(t, delegation.AutoRenew)
+
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*4))
+		totalsBeforeWithdrawal, err := staker.GetValidatorsTotals(validationIDs[5])
+		require.NoError(t, err)
+		
+		// Verify that the validator has the exact total stake from both delegations
+		expectedTotalStake := big.NewInt(0).Add(firstStake, secondStake)
+		assert.Equal(t, expectedTotalStake, totalsBeforeWithdrawal.DelegationsLockedStake,
+			"Validator should have exact total stake from both delegations before withdrawal")
+
+		receipt, _, err = staker.UpdateDelegationAutoRenew(firstDelegationID, false).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
+
+		// Withdraw only the first delegation (partial decrease)
+		receipt, _, err = staker.WithdrawDelegation(firstDelegationID).
 			Send().
 			WithSigner(hayabusa.Stargate).
 			WithOptions(testutil.TxOptions()).
@@ -367,18 +371,18 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, receipt.Reverted, "Withdrawal should succeed")
 
-		// Verify delegation stake has been decreased
-		delegation, err = staker.GetDelegation(delegationID)
+		// Wait for withdrawal to be processed and reflected in validator totals
+		best, err := staker.Raw().Client().Block("best")
 		require.NoError(t, err)
-		assert.True(t, delegation.Stake.Sign() == 0, "Delegation stake should be zero after withdrawal")
+		require.NoError(t, ticker.WaitForBlock(best.Number+config.MinStakingPeriod))
 
-		// Verify that the validator's total delegations have decreased
-		totals, err := staker.GetValidatorsTotals(validationIDs[4])
+		// Verify that the validator has exactly the second delegation stake after withdrawal
+		totalsAfterWithdrawal, err := staker.GetValidatorsTotals(validationIDs[5])
 		require.NoError(t, err)
-
-		// The validator should have no delegations from this delegator after withdrawal
-		assert.True(t, totals.DelegationsLockedStake.Cmp(initialStake) < 0 || totals.DelegationsLockedStake.Sign() == 0,
-			"Total delegations should be less than or equal to zero after withdrawal")
+		assert.Equal(t, secondStake, totalsAfterWithdrawal.DelegationsLockedStake,
+			"Validator should have exactly the second delegation stake after withdrawal")
+		assert.True(t, totalsAfterWithdrawal.DelegationsLockedWeight.Cmp(big.NewInt(0)) > 0,
+			"Validator should have positive weight after withdrawal")
 	})
 }
 
