@@ -254,6 +254,78 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, receipt.Reverted)
 	})
+
+	t.Run("Active delegator can increase their stake and increased stake will become active in next staking period", func(t *testing.T) {
+		t.Parallel()
+
+		// Create initial delegation
+		initialStake := builtin.MinStake()
+		receipt, _, err := staker.AddDelegation(validationIDs[3], initialStake, true, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		initialDelegationID := receiptToID(receipt)
+
+		// Verify initial delegation
+		delegation, err := staker.GetDelegation(initialDelegationID)
+		require.NoError(t, err)
+		assert.Equal(t, initialStake, delegation.Stake)
+		assert.Equal(t, uint8(100), delegation.Multiplier)
+		assert.True(t, delegation.AutoRenew)
+
+		// Wait for initial delegation to become active (next staking period)
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
+
+		// Verify delegation is active
+		delegation, err = staker.GetDelegation(initialDelegationID)
+		require.NoError(t, err)
+		assert.Equal(t, initialStake, delegation.Stake)
+
+		// Add additional stake (increase delegation)
+		additionalStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)) // Double the stake
+		receipt, _, err = staker.AddDelegation(validationIDs[3], additionalStake, true, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		additionalDelegationID := receiptToID(receipt)
+
+		// Verify additional delegation was created
+		delegation, err = staker.GetDelegation(additionalDelegationID)
+		require.NoError(t, err)
+		assert.Equal(t, additionalStake, delegation.Stake)
+		assert.Equal(t, uint8(100), delegation.Multiplier)
+		assert.True(t, delegation.AutoRenew)
+
+		// Get current block number
+		best, err := staker.Raw().Client().Block("best")
+		require.NoError(t, err)
+		currentBlock := best.Number
+
+		// Wait for next staking period to activate the increased stake
+		require.NoError(t, ticker.WaitForBlock(currentBlock+config.MinStakingPeriod))
+
+		// Verify both delegations are still active with their respective stakes
+		delegation, err = staker.GetDelegation(initialDelegationID)
+		require.NoError(t, err)
+		assert.Equal(t, initialStake, delegation.Stake)
+
+		delegation, err = staker.GetDelegation(additionalDelegationID)
+		require.NoError(t, err)
+		assert.Equal(t, additionalStake, delegation.Stake)
+
+		// Calculate total expected stake
+		totalExpectedStake := big.NewInt(0).Add(initialStake, additionalStake)
+
+		// Verify total stake for the validator includes both delegations
+		totals, err := staker.GetValidatorsTotals(validationIDs[3])
+		require.NoError(t, err)
+		assert.Equal(t, totalExpectedStake, totals.DelegationsLockedStake)
+		assert.Equal(t, big.NewInt(0).Mul(totalExpectedStake, big.NewInt(2)), totals.DelegationsLockedWeight)
+	})
 }
 
 func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]thor.Bytes32) {
