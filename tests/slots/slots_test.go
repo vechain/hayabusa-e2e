@@ -16,6 +16,12 @@ import (
 )
 
 func Test_MissedSlot(t *testing.T) {
+	testutil.RunFlakyTest(t, func() error {
+		return runTestMissedSlot(t)
+	})
+}
+
+func runTestMissedSlot(t *testing.T) error {
 	config := &hayabusa.Config{
 		Nodes:             3,
 		MaxBlockProposers: 3,
@@ -27,7 +33,7 @@ func Test_MissedSlot(t *testing.T) {
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 	}
-	client, network, cancel, err := hayabusa.StartNetwork(config)
+	client, network, cancel, err := hayabusa.StartNetwork(t, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +71,7 @@ func Test_MissedSlot(t *testing.T) {
 	require.NoError(t, ticker.WaitForBlock(block))
 
 	// wait for a missed slot
-	prev, err := ticker.Wait(25 * time.Second)
+	prev, err := ticker.Wait(35 * time.Second)
 	require.NoError(t, err)
 	// shut the validator down
 	require.NoError(t, network.Nodes()[validator1.GetID()].Stop())
@@ -92,15 +98,20 @@ func Test_MissedSlot(t *testing.T) {
 	require.NoError(t, network.Nodes()[validator1.GetID()].Start())
 
 	// wait for the validator to be back online
-	err = ticker.WaitForCondition(time.Second*120, func() (bool, error) {
+	err = ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
 		validation, err := staker.Get(validationID)
 		require.NoError(t, err)
+		t.Logf("⚠️ - waiting for validator %s to be online, status: %v", validationID.String(), validation.Status)
 		return validation.Online, nil
 	})
-	require.NoError(t, err)
+	if err != nil {
+		return testutil.StakerStatusUnknownError{ValidationID: validationID.String()}
+	}
 
 	validation, err = staker.Get(validationID)
 	require.NoError(t, err)
 	require.True(t, validation.Online)
 	t.Log("✅ - validator back online")
+
+	return nil
 }

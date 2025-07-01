@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"net"
 	"os"
 	"strconv"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/vechain/thor/v2/thorclient"
@@ -25,6 +27,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
 
+	"github.com/vechain/hayabusa-e2e/utils"
 	networkhubNetwork "github.com/vechain/networkhub/network"
 	thorgenesis "github.com/vechain/thor/v2/genesis"
 )
@@ -61,16 +64,11 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 		Build()
 }
 
-func StartNetwork(config *Config) (*thorclient.Client, environments.Actions, func(), error) {
-	return StartNetworkWithID(config, "default")
-}
-
-func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, environments.Actions, func(), error) {
+func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environments.Actions, func(), error) {
 	if config.Nodes < 2 {
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
 
-	// Synchronize Thor binary build
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
@@ -106,6 +104,11 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	nodes := make([]node.Config, config.Nodes)
 	usedPorts := make([]int, 0, config.Nodes*2) // API and P2P ports
 
+	testID := "default"
+	if t != nil {
+		testID = t.Name()
+	}
+
 	for i := range config.Nodes {
 		additionalArgs := map[string]string{
 			"txpool-limit-per-account": "100000",
@@ -116,7 +119,7 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 			additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
 		}
 
-		nodeID := fmt.Sprintf("%s-Node-%d", networkID, i)
+		nodeID := fmt.Sprintf("%s-Node-%d", testID, i)
 		apiPort := rndPort()
 		p2pPort := rndPort()
 		usedPorts = append(usedPorts, apiPort, p2pPort)
@@ -127,13 +130,13 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 			Genesis:        customGenesis,
 			Verbosity:      verbosity,
 			AdditionalArgs: additionalArgs,
-			APIAddr:        fmt.Sprintf("127.0.0.1:%d", apiPort),
+			APIAddr:        fmt.Sprintf("0.0.0.0:%d", apiPort),
 			P2PListenPort:  p2pPort,
 		}
 	}
 	networkCfg := &networkhubNetwork.Network{
 		Environment: "local",
-		BaseID:      networkID,
+		BaseID:      testID,
 		Nodes:       nodes,
 		ThorBuilder: thorBuilder,
 	}
@@ -141,14 +144,12 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 	networkHub := client.New()
 	networkIDResult, err := networkHub.Config(networkCfg)
 	if err != nil {
-
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
 
 	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
 	if err != nil {
-
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
 	}
@@ -168,11 +169,17 @@ func StartNetworkWithID(config *Config, networkID string) (*thorclient.Client, e
 		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
 
+	err = utils.WaitForPeersConnection(t, nodes, config.Nodes-1)
+	if err != nil {
+		hayabusaNetwork.StopNetwork()
+		cleanupPorts(usedPorts)
+		return nil, nil, nil, err
+	}
+
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
 	client := thorclient.New(nodes[1].GetHTTPAddr())
 
 	return client, hayabusaNetwork, func() {
-
 		cleanupPorts(usedPorts)
 
 		if err := hayabusaNetwork.StopNetwork(); err != nil {
@@ -267,10 +274,13 @@ func rndPort() int {
 	defer portMutex.Unlock()
 
 	const (
-		minPort = 49152
-		maxPort = 65535
+		minPort     = 49152
+		maxPort     = 65535
+		maxAttempts = 100
 	)
-	for {
+
+	attempts := 0
+	for attempts < maxAttempts {
 		buf := make([]byte, 2)
 		// Ignoring the error for brevity—not recommended in production code!
 		_, _ = rand.Read(buf)
@@ -278,11 +288,25 @@ func rndPort() int {
 		// Convert 2 bytes to a 16-bit number, then mod by the range size.
 		n := int(buf[0])<<8 | int(buf[1])
 		port := minPort + (n % (maxPort - minPort + 1))
-		if !globalUsedPorts[port] {
+
+		// Check if port is not in our global map AND actually available
+		if !globalUsedPorts[port] && isPortAvailable(port) {
+			globalUsedPorts[port] = true
+			return port
+		}
+		attempts++
+	}
+
+	// If we can't find an available port after maxAttempts,
+	// try sequential search starting from minPort
+	for port := minPort; port <= maxPort; port++ {
+		if !globalUsedPorts[port] && isPortAvailable(port) {
 			globalUsedPorts[port] = true
 			return port
 		}
 	}
+
+	panic(fmt.Sprintf("no available ports found in range %d-%d", minPort, maxPort))
 }
 
 // cleanupPorts releases the specified ports back to the global pool
@@ -293,4 +317,15 @@ func cleanupPorts(ports []int) {
 	for _, port := range ports {
 		delete(globalUsedPorts, port)
 	}
+}
+
+// isPortAvailable checks if a port is actually available for binding
+func isPortAvailable(port int) bool {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	ln.Close()
+	return true
 }

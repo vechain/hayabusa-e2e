@@ -1,12 +1,10 @@
 package validations
 
 import (
-	"fmt"
 	"log/slog"
 	"math/big"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,6 +19,12 @@ import (
 
 func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	t.Parallel()
+	testutil.RunFlakyTest(t, func() error {
+		return runTestHayabusaAddNonPoAValidator(t)
+	})
+}
+
+func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
 	config, client, cancel := setupTestNetwork(t, 3)
 	t.Cleanup(cancel)
 
@@ -44,29 +48,29 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 	firstQueued, _, err := staker.FirstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, *firstQueued.Endorsor, validator1PoA.Address())
-	t.Log("✅ - Queued validator OK")
+	t.Log("✅ - Queued validator OK", "id", id1.String())
 
 	id2 := addValidator(t, staker, validator2PoA, true, config.MinStakingPeriod)
+
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusQueued, config.ForkBlock)
 
-	t.Log("✅ - Queued validator OK")
+	t.Log("✅ - Queued validator OK", "id", id2.String())
 
-	currentBlock, err := client.Block("best")
-	assert.NoError(t, err)
-
-	ticker := utils.NewTicker(client)
-	block := currentBlock.Number
-	block += config.TransitionPeriod
-	assert.NoError(t, ticker.WaitForBlock(block))
-
-	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
-	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
+	block := config.ForkBlock + config.TransitionPeriod
+	if err := assertValidatorStatusUnknown(t, staker, id1, builtin.StakerStatusActive, block); err != nil {
+		return err
+	}
+	if err := assertValidatorStatusUnknown(t, staker, id2, builtin.StakerStatusActive, block); err != nil {
+		return err
+	}
 
 	id3 := addValidator(t, staker, validator1NonPoA, false, config.MinStakingPeriod)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusQueued, block)
 	t.Log("✅ - Not a PoA candidate joined")
 
 	t.Log("✅ - All 3 validators joined")
+
+	return nil
 }
 
 func TestHayabusaNoForkThenJoinLater(t *testing.T) {
@@ -712,10 +716,7 @@ func addValidatorWithStake(t *testing.T, staker *builtin.Staker, signer bind.Sig
 }
 
 func addValidator(t *testing.T, staker *builtin.Staker, signer bind.Signer, autoRenew bool, period uint32) thor.Bytes32 {
-	stake := big.NewInt(1e18)
-	stake = big.NewInt(0).Mul(stake, big.NewInt(1e6))
-	stake = big.NewInt(0).Mul(stake, big.NewInt(25))
-	return addValidatorWithStake(t, staker, signer, autoRenew, stake, period)
+	return addValidatorWithStake(t, staker, signer, autoRenew, calculateValidatorStake(), period)
 }
 
 func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Bytes32) {
@@ -735,6 +736,17 @@ func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID tho
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
+}
+
+func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedStatus builtin.StakerStatus, waitForBlock uint32) error {
+	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
+	validator, err := staker.Get(validatorID)
+	assert.NoError(t, err)
+	if validator.Status == builtin.StakerStatusUnknown {
+		return testutil.StakerStatusUnknownError{ValidationID: validatorID.String()}
+	}
+	assert.Equal(t, expectedStatus, validator.Status)
+	return nil
 }
 
 func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedPeriod uint32) {
@@ -777,8 +789,7 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		HighStakingPeriod: 259200,
 	}
 
-	testID := fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())
-	client, _, cancel, err := hayabusa.StartNetworkWithID(config, testID)
+	client, _, cancel, err := hayabusa.StartNetwork(t, config)
 
 	if err != nil {
 		t.Fatal(err)

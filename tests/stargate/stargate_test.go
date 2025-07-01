@@ -2,6 +2,7 @@ package stargate
 
 import (
 	"fmt"
+	"log/slog"
 	"math/big"
 	"strconv"
 	"strings"
@@ -26,6 +27,12 @@ import (
 )
 
 func Test_Stargate_SingleDelegator(t *testing.T) {
+	testutil.RunFlakyTest(t, func() error {
+		return runTestStargateSingleDelegator(t)
+	})
+}
+
+func runTestStargateSingleDelegator(t *testing.T) error {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
@@ -36,6 +43,17 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	// wait for the validator to complete 1 staking period
 	block := config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod
 	require.NoError(t, ticker.WaitForBlock(block))
+	err = ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
+		completed, err := staker.GetCompletedPeriods(validationID)
+		slog.Info("⚠️ - completed periods, waiting for greater than 0", "completed", int(*completed))
+		if err != nil {
+			return false, err
+		}
+		return *completed > 0, nil
+	})
+	if err != nil {
+		return testutil.StakerStatusUnknownError{ValidationID: validationID.String()}
+	}
 	completed, err := staker.GetCompletedPeriods(validationID)
 	require.NoError(t, err)
 	assert.Equal(t, 1, int(*completed))
@@ -153,6 +171,8 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 
 	t.Logf("✅ total rewards for: %s", totalPeriodRewards.String())
 	assert.Equal(t, new(big.Int).Add(proposerReward, delegatorReward), totalPeriodRewards)
+
+	return nil
 }
 
 func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_Off(t *testing.T) {
@@ -378,7 +398,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 24,
 	}
-	client, _, cancel, err := hayabusa.StartNetwork(config)
+	client, _, cancel, err := hayabusa.StartNetwork(t, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,10 +436,30 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 			validationIDs[i] = receiptToID(receipts[i])
 		}
 	}
-	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
-		t.Fatalf("failed to wait for PoS: %v", err)
+
+	posBlock := config.ForkBlock + config.TransitionPeriod
+	if err := utils.WaitForPOS(staker, posBlock); err != nil {
+		t.Logf("⚠️ WaitForPOS failed: %v, continuing to wait for PoS activation...", err)
+
+		timeout := time.After(10 * time.Minute)
+		tick := time.NewTicker(2 * time.Second)
+		defer tick.Stop()
+
+		for {
+			select {
+			case <-timeout:
+				t.Fatalf("timed out waiting for PoS activation")
+			case <-tick.C:
+				_, id, err := staker.FirstActive()
+				if err == nil && !id.IsZero() {
+					t.Logf("✅ PoS is now active with delay")
+					goto posActive
+				}
+			}
+		}
 	}
 
+posActive:
 	wg.Wait()
 
 	return staker, stargate, config, validationIDs

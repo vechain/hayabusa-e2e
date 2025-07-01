@@ -33,7 +33,7 @@ func main() {
 		HighStakingPeriod: 180,
 	}
 
-	client, net, cancel, err := hayabusa.StartNetwork(config)
+	client, net, cancel, err := hayabusa.StartNetwork(nil, config)
 	if err != nil {
 		panic(err)
 	}

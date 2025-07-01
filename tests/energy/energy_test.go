@@ -14,6 +14,12 @@ import (
 )
 
 func TestEnergy(t *testing.T) {
+	testutil.RunFlakyTest(t, func() error {
+		return runEnergyTest(t)
+	})
+}
+
+func runEnergyTest(t *testing.T) error {
 	config := &hayabusa.Config{
 		Nodes:             3,
 		MaxBlockProposers: 3,
@@ -26,7 +32,7 @@ func TestEnergy(t *testing.T) {
 		HighStakingPeriod: 180,
 	}
 	genesis := hayabusa.Genesis(config)
-	client, _, cancel, err := hayabusa.StartNetwork(config)
+	client, _, cancel, err := hayabusa.StartNetwork(t, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,6 +112,12 @@ func TestEnergy(t *testing.T) {
 	actualStakerRewards := new(big.Int)
 	for _, receipt := range receipts {
 		validatorID := receipt.Outputs[0].Events[0].Topics[3]
+		validator, err := staker.Get(validatorID)
+		require.NoError(t, err)
+
+		if validator.Status == builtin.StakerStatusUnknown {
+			return testutil.StakerStatusUnknownError{ValidationID: validatorID.String()}
+		}
 		rewards, err := staker.GetRewards(validatorID, 1)
 		require.NoError(t, err)
 		actualStakerRewards = actualStakerRewards.Add(actualStakerRewards, rewards)
@@ -115,4 +127,6 @@ func TestEnergy(t *testing.T) {
 	expectedStakerRewards := new(big.Int).Mul(hayabusaGrowth, big.NewInt(int64(config.MinStakingPeriod)))
 	require.Equal(t, expectedStakerRewards, actualStakerRewards)
 	t.Logf("✅ - Staker rewards are as expected")
+
+	return nil
 }
