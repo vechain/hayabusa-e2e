@@ -33,6 +33,21 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	})
 }
 
+func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, validationID thor.Bytes32, expectedPeriods uint32) error {
+	err := ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
+		completed, err := staker.GetCompletedPeriods(validationID)
+		slog.Info("⚠️ - completed periods, waiting for greater or equal than expected", "completed", int(*completed), "expected", expectedPeriods)
+		if err != nil {
+			return false, err
+		}
+		return *completed >= expectedPeriods, nil
+	})
+	if err != nil {
+		return testutil.StakerStatusUnknownError{ValidationID: validationID.String()}
+	}
+	return nil
+}
+
 func runTestStargateSingleDelegator(t *testing.T) error {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
 
@@ -44,16 +59,9 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	// wait for the validator to complete 1 staking period
 	block := config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod
 	require.NoError(t, ticker.WaitForBlock(block))
-	err = ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
-		completed, err := staker.GetCompletedPeriods(validationID)
-		slog.Info("⚠️ - completed periods, waiting for greater than 0", "completed", int(*completed))
-		if err != nil {
-			return false, err
-		}
-		return *completed > 0, nil
-	})
+	err = waitForCompletedPeriods(ticker, staker, validationID, 1)
 	if err != nil {
-		return testutil.StakerStatusUnknownError{ValidationID: validationID.String()}
+		return err
 	}
 	completed, err := staker.GetCompletedPeriods(validationID)
 	require.NoError(t, err)
@@ -101,6 +109,10 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	require.NoError(t, ticker.WaitForBlock(block))
 
 	// assert validator completed 1 more period
+	err = waitForCompletedPeriods(ticker, staker, validationID, 2)
+	if err != nil {
+		return err
+	}
 	completed, err = staker.GetCompletedPeriods(validationID)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, int(*completed))
@@ -152,6 +164,10 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 
 	// wait for housekeeping on first block of next staking period
 	require.NoError(t, ticker.WaitForBlock(block))
+	err = waitForCompletedPeriods(ticker, staker, validationID, 4)
+	if err != nil {
+		return err
+	}
 	completed, err = staker.GetCompletedPeriods(validationID)
 	assert.NoError(t, err)
 	assert.Equal(t, 4, int(*completed))
