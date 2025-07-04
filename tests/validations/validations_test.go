@@ -191,6 +191,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	stake := calculateValidatorStake()
 	totalStake := new(big.Int).Mul(stake, big.NewInt(3))
 	assertRewards(t, staker, id1, totalStake, periodStart, periodEnd)
+	assertTotalStakeAndWeight(t, staker, 2)
 
 	t.Log("✅ - Non-AutoRenew validators are on cooldown")
 
@@ -199,6 +200,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusExited, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusExited, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
+	assertTotalStakeAndWeight(t, staker, 1)
 
 	t.Log("✅ - One validator has exited")
 
@@ -208,6 +210,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusExited, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusExited, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
+	assertTotalStakeAndWeight(t, staker, 1)
 
 	t.Log("✅ - Second validator exited")
 
