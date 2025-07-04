@@ -114,6 +114,49 @@ func Test_Delegations(t *testing.T) {
 		assert.True(t, delegation.Stake.Sign() == 0)
 	})
 
+	t.Run("Delegate update auto renew after first period", func(t *testing.T) {
+		t.Parallel()
+
+		// add the delegation
+		receipt, _, err := staker.AddDelegation(validationIDs[0], builtin.MinStake(), true, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		delegationID := receiptToID(receipt)
+		delegation, err := staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.Equal(t, builtin.MinStake(), delegation.Stake)
+		assert.Equal(t, uint8(100), delegation.Multiplier)
+		assert.True(t, delegation.AutoRenew)
+
+		// wait for validators current period + 1 staking period
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+
+		_, _, err = staker.UpdateDelegationAutoRenew(delegationID, false).
+			Send().
+			WithSigner(hayabusa.Stargate).WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+
+		// wait for validators current period + 2 staking period
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*3))
+
+		// withdraw - should succeed since auto-renew is false
+		receipt, _, err = staker.WithdrawDelegation(delegationID).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		require.False(t, receipt.Reverted)
+
+		delegation, err = staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.True(t, delegation.Stake.Sign() == 0)
+	})
+
 	t.Run("Immediate enable auto-renew", func(t *testing.T) {
 		t.Parallel()
 
@@ -213,6 +256,87 @@ func Test_Delegations(t *testing.T) {
 		assert.True(t, delegation.Stake.Sign() == 0)
 	})
 
+	t.Run("Delegations are exited when validator exits", func(t *testing.T) {
+		t.Parallel()
+
+		validator, err := staker.Get(validationIDs[3])
+		require.NoError(t, err)
+		validatorAccount := hayabusa.ValidatorAccounts[0]
+
+		for _, acc := range hayabusa.ValidatorAccounts {
+			if acc.Address().String() == validator.Master.String() {
+				validatorAccount = acc
+				break
+			}
+		}
+		hayabusa.ValidatorAccounts[0].Address()
+
+		// add the delegation
+		receipt, _, err := staker.AddDelegation(validationIDs[3], builtin.MinStake(), true, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		delegationID1 := receiptToID(receipt)
+		delegation1, err := staker.GetDelegation(delegationID1)
+		require.NoError(t, err)
+		assert.Equal(t, builtin.MinStake(), delegation1.Stake)
+		assert.Equal(t, uint8(100), delegation1.Multiplier)
+		assert.True(t, delegation1.AutoRenew)
+
+		// add the delegation
+		receipt, _, err = staker.AddDelegation(validationIDs[3], builtin.MinStake(), true, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		delegationID2 := receiptToID(receipt)
+		delegation2, err := staker.GetDelegation(delegationID2)
+		require.NoError(t, err)
+		assert.Equal(t, builtin.MinStake(), delegation2.Stake)
+		assert.Equal(t, uint8(100), delegation2.Multiplier)
+		assert.True(t, delegation2.AutoRenew)
+
+		// wait for validators current period + 1 staking period
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*1))
+
+		receipt, _, err = staker.UpdateAutoRenew(validationIDs[3], false).
+			Send().
+			WithSigner(validatorAccount).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		assert.False(t, receipt.Reverted)
+
+		// wait for validators current period to end
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+
+		// withdraw - should succeed since validator exited
+		receipt, _, err = staker.WithdrawDelegation(delegationID1).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		require.False(t, receipt.Reverted)
+		delegation1, err = staker.GetDelegation(delegationID1)
+		require.NoError(t, err)
+		assert.True(t, delegation1.Stake.Sign() == 0)
+
+		receipt, _, err = staker.WithdrawDelegation(delegationID2).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		require.False(t, receipt.Reverted)
+		delegation2, err = staker.GetDelegation(delegationID2)
+		require.NoError(t, err)
+		assert.True(t, delegation2.Stake.Sign() == 0)
+	})
+
 	t.Run("Should not be able call with external account", func(t *testing.T) {
 		t.Parallel()
 		receipt, _, err := staker.AddDelegation(validationIDs[0], builtin.MinStake(), false, 100).
@@ -291,7 +415,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 		totalsBeforeWithdrawal, err := staker.GetValidatorsTotals(validationIDs[5])
 		require.NoError(t, err)
-		
+
 		// Verify that the validator has the exact total stake from both delegations
 		expectedTotalStake := big.NewInt(0).Add(firstStake, secondStake)
 		assert.Equal(t, expectedTotalStake, totalsBeforeWithdrawal.DelegationsLockedStake,
