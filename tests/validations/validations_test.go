@@ -85,6 +85,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	staker := setupStakerAndWaitForFork(t, client, config)
 
 	id1 := addValidator(t, staker, validator1, false, config.MinStakingPeriod)
+	assertMatchingValidators(t, staker, id1, validator1.Address())
 
 	firstQueued, _, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -101,6 +102,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	t.Log("✅ - Validator is not activated since min validator threshold is not met")
 
 	id2 := addValidator(t, staker, validator2, false, config.MinStakingPeriod)
+	assertMatchingValidators(t, staker, id2, validator2.Address())
 
 	block += config.TransitionPeriod
 	periodStart := block
@@ -137,6 +139,10 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	id1 := addValidator(t, staker, validator1, false, config.MinStakingPeriod)
 	id2 := addValidator(t, staker, validator2, false, config.MinStakingPeriod)
 	id3 := addValidator(t, staker, validator3, true, config.MinStakingPeriod)
+
+	assertMatchingValidators(t, staker, id1, validator1.Address())
+	assertMatchingValidators(t, staker, id2, validator2.Address())
+	assertMatchingValidators(t, staker, id3, validator3.Address())
 
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -744,6 +750,15 @@ func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer,
 	assert.Len(t, receipt.Outputs[0].Transfers, 1)
 	assert.Equal(t, receipt.Outputs[0].Transfers[0].Recipient, addr)
 	slog.Info("✅ - validator withdrawn", "validator", validatorID.String())
+}
+
+func assertMatchingValidators(t *testing.T, staker *builtin.Staker, id1 thor.Bytes32, masterAddress thor.Address) {
+	val1, err := staker.Get(id1)
+	assert.NoError(t, err)
+
+	val2, _, err := staker.LookupMaster(masterAddress)
+	assert.NoError(t, err)
+	assert.Equal(t, val1, val2)
 }
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
