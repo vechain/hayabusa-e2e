@@ -7,9 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thorclient"
-
-	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/thorclient/common"
 )
 
@@ -24,7 +23,7 @@ func NewTicker(client *thorclient.Client) *Ticker {
 }
 
 // Wait waits for a new best block to be available
-func (t *Ticker) Wait(timeout time.Duration) (*blocks.JSONExpandedBlock, error) {
+func (t *Ticker) Wait(timeout time.Duration) (*api.JSONExpandedBlock, error) {
 	best, err := t.client.ExpandedBlock("best")
 	if err != nil {
 		return nil, err

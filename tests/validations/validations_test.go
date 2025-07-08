@@ -756,7 +756,7 @@ func assertMatchingValidators(t *testing.T, staker *builtin.Staker, id1 thor.Byt
 	val1, err := staker.Get(id1)
 	assert.NoError(t, err)
 
-	val2, _, err := staker.LookupMaster(masterAddress)
+	val2, _, err := staker.LookupNode(masterAddress)
 	assert.NoError(t, err)
 	assert.Equal(t, val1, val2)
 }

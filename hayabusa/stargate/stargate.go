@@ -3,6 +3,7 @@ package stargate
 import (
 	_ "embed"
 	"fmt"
+	"github.com/vechain/thor/v2/api"
 	"log/slog"
 	"math/big"
 
@@ -10,8 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/v2/api/events"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
@@ -160,10 +159,10 @@ func (s *Stargate) EnableAutoRenew(signer bind.Signer) bind.SendBuilder {
 
 // ---- Event Filterers ----
 
-func (s *Stargate) filterEvents(name string, from, to uint32) ([]events.FilteredEvent, error) {
+func (s *Stargate) filterEvents(name string, from, to uint32) ([]api.FilteredEvent, error) {
 	from64 := uint64(from)
 	to64 := uint64(to)
-	rnge := &events.Range{
+	rnge := &api.Range{
 		From: &from64,
 		To:   &to64,
 	}
@@ -487,7 +486,7 @@ func (s *Stargate) FilterRewardsCalculated(from, to uint32) ([]*RewardsCalculate
 	return out, nil
 }
 
-func (s *Stargate) LogEventValues(events []*transactions.Event) {
+func (s *Stargate) LogEventValues(events []*api.Event) {
 	for _, event := range events {
 		name := ""
 		for _, abiEvent := range s.contract.ABI().Events {

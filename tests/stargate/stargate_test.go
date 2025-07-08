@@ -18,8 +18,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa/stargate"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
-	"github.com/vechain/thor/v2/api/accounts"
-	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -161,7 +160,7 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 
 	stargateAcc, err := staker.Raw().Client().Account(stargate.Address())
 	require.NoError(t, err)
-	stargateEnergy := (*big.Int)(&stargateAcc.Energy)
+	stargateEnergy := (*big.Int)(stargateAcc.Energy)
 	assert.Equal(t, delegatorReward, stargateEnergy, "stargate energy should be equal to the expected reward, difference: %s", new(big.Int).Sub(delegatorReward, stargateEnergy).String())
 
 	// wait for housekeeping on first block of next staking period
@@ -279,7 +278,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	assert.NoError(t, err)
 	fetchedAcc, err := staker.Raw().Client().Account(&accAddress)
 	assert.NoError(t, err)
-	amountBefore := (big.Int)(fetchedAcc.Energy)
+	amountBefore := (*big.Int)(fetchedAcc.Energy)
 
 	receipt, _, err = stargate.ClaimRewards(acc).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
 	claimedAmount := receiptToClaimedAmount(t, receipt)
@@ -287,10 +286,10 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
-	amountAfter := (big.Int)(fetchedAcc.Energy)
+	amountAfter := (*big.Int)(fetchedAcc.Energy)
 
 	gasUsed := big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
-	diff := big.NewInt(0).Sub(&amountAfter, &amountBefore)
+	diff := big.NewInt(0).Sub(amountAfter, amountBefore)
 	diff = diff.Add(diff, gasUsed)
 	assert.Equal(t, claimedAmount, diff)
 
@@ -385,7 +384,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	assert.NoError(t, err)
 	fetchedAcc, err := staker.Raw().Client().Account(&accAddress)
 	assert.NoError(t, err)
-	amountBefore := (big.Int)(fetchedAcc.Energy)
+	amountBefore := (*big.Int)(fetchedAcc.Energy)
 
 	receipt, _, err = stargate.ClaimRewards(acc).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
 	claimedAmount := receiptToClaimedAmount(t, receipt)
@@ -393,10 +392,10 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
-	amountAfter := (big.Int)(fetchedAcc.Energy)
+	amountAfter := (*big.Int)(fetchedAcc.Energy)
 
 	gasUsed := big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
-	diff := big.NewInt(0).Sub(&amountAfter, &amountBefore)
+	diff := big.NewInt(0).Sub(amountAfter, amountBefore)
 	diff = diff.Add(diff, gasUsed)
 	assert.Equal(t, claimedAmount, diff)
 
@@ -433,17 +432,17 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	assert.NoError(t, err)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
 	assert.NoError(t, err)
-	amountBefore = (big.Int)(fetchedAcc.Energy)
+	amountBefore = (*big.Int)(fetchedAcc.Energy)
 
 	receipt, _, err = stargate.ClaimRewards(acc).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
 
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
-	amountAfter = (big.Int)(fetchedAcc.Energy)
+	amountAfter = (*big.Int)(fetchedAcc.Energy)
 
 	gasUsed = big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
 	diff = big.NewInt(0).Sub(claimableAmount, gasUsed)
-	assert.Equal(t, diff, big.NewInt(0).Sub(&amountAfter, &amountBefore))
+	assert.Equal(t, diff, big.NewInt(0).Sub(amountAfter, amountBefore))
 
 	return nil
 }
@@ -551,9 +550,9 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 		Build()
 
 	caller := acc.Address()
-	inspection, err := staker.Raw().Client().InspectClauses(&accounts.BatchCallData{
+	inspection, err := staker.Raw().Client().InspectClauses(&api.BatchCallData{
 		Caller: &caller,
-		Clauses: []accounts.Clause{
+		Clauses: api.Clauses{
 			{
 				Data:  "0x" + bytecode,
 				Value: (*math.HexOrDecimal256)(trx.Clauses()[0].Value()),
@@ -569,7 +568,7 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 	res, err := staker.Raw().Client().SendTransaction(trx)
 	require.NoError(t, err)
 
-	var receipt *transactions.Receipt
+	var receipt *api.Receipt
 	for range 30 {
 		receipt, err = staker.Raw().Client().TransactionReceipt(res.ID)
 		if err == nil && receipt != nil {
@@ -596,16 +595,16 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 	return stargate
 }
 
-func receiptToID(receipt *transactions.Receipt) thor.Bytes32 {
+func receiptToID(receipt *api.Receipt) thor.Bytes32 {
 	return receipt.Outputs[0].Events[0].Topics[3]
 }
 
-func receiptToDelegationID(t *testing.T, receipt *transactions.Receipt) thor.Bytes32 {
+func receiptToDelegationID(t *testing.T, receipt *api.Receipt) thor.Bytes32 {
 	require.False(t, receipt.Reverted)
 	return receipt.Outputs[0].Events[0].Topics[2]
 }
 
-func receiptToClaimedAmount(t *testing.T, receipt *transactions.Receipt) *big.Int {
+func receiptToClaimedAmount(t *testing.T, receipt *api.Receipt) *big.Int {
 	amountBytes, err := thor.ParseBytes32(receipt.Outputs[0].Events[5].Data[2:66])
 	require.NoError(t, err)
 	return big.NewInt(0).SetBytes(amountBytes.Bytes())

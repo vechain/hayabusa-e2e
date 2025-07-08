@@ -3,9 +3,9 @@ package utils
 import (
 	"context"
 	"errors"
+	"github.com/vechain/thor/v2/api"
 	"sync"
 
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -27,12 +27,12 @@ func (s *Senders) Add(sender bind.SendBuilder) {
 }
 
 // Send all transactions in parallel and returns the transactions and receipts.
-func (s *Senders) Send(ctx context.Context) ([]*transactions.Receipt, []*tx.Transaction, error) {
+func (s *Senders) Send(ctx context.Context) ([]*api.Receipt, []*tx.Transaction, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	txs := make([]*tx.Transaction, len(s.senders))
-	receipts := make([]*transactions.Receipt, len(s.senders))
+	receipts := make([]*api.Receipt, len(s.senders))
 	errs := make([]error, len(s.senders))
 
 	var wg sync.WaitGroup
