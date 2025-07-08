@@ -83,7 +83,6 @@ func Test_Delegations(t *testing.T) {
 	t.Run("Delegate for 1 period only", func(t *testing.T) {
 		staker, config, validationIDs := newDelegationSetup(t)
 		ticker := utils.NewTicker(staker.Raw().Client())
-		//t.Parallel()
 
 		// add the delegation
 		multiplier := uint8(100)
@@ -122,6 +121,7 @@ func Test_Delegations(t *testing.T) {
 
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 		currentTotalStake, currentTotalWeight, err := staker.TotalStake()
+		require.NoError(t, err)
 		expectedTotalStake := big.NewInt(0).Sub(previousTotalStake, builtin.MinStake())
 		assert.Equal(t, expectedTotalStake, currentTotalStake,
 			"Wrong stake after exit")
