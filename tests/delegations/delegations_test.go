@@ -76,62 +76,61 @@ func Test_StargateRewards(t *testing.T) {
 	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(20)), totals.DelegationsLockedWeight)
 }
 
-func Test_Delegations(t *testing.T) {
+func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	staker, config, validationIDs := newDelegationSetup(t)
 	ticker := utils.NewTicker(staker.Raw().Client())
 
-	t.Run("Delegate for 1 period only", func(t *testing.T) {
-		staker, config, validationIDs := newDelegationSetup(t)
-		ticker := utils.NewTicker(staker.Raw().Client())
+	multiplier := uint8(100)
+	receipt, _, err := staker.AddDelegation(validationIDs[0], builtin.MinStake(), false, multiplier).
+		Send().
+		WithSigner(hayabusa.Stargate).
+		WithOptions(testutil.TxOptions()).
+		SubmitAndConfirm(testutil.TxContext(t))
+	require.NoError(t, err)
+	delegationID := receiptToID(receipt)
+	delegation, err := staker.GetDelegation(delegationID)
+	require.NoError(t, err)
+	assert.Equal(t, builtin.MinStake(), delegation.Stake)
+	assert.Equal(t, uint8(100), delegation.Multiplier)
+	assert.False(t, delegation.AutoRenew)
+	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
-		// add the delegation
-		multiplier := uint8(100)
-		receipt, _, err := staker.AddDelegation(validationIDs[0], builtin.MinStake(), false, multiplier).
-			Send().
-			WithSigner(hayabusa.Stargate).
-			WithOptions(testutil.TxOptions()).
-			SubmitAndConfirm(testutil.TxContext(t))
-		require.NoError(t, err)
-		delegationID := receiptToID(receipt)
-		delegation, err := staker.GetDelegation(delegationID)
-		require.NoError(t, err)
-		assert.Equal(t, builtin.MinStake(), delegation.Stake)
-		assert.Equal(t, uint8(100), delegation.Multiplier)
-		assert.False(t, delegation.AutoRenew)
-		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
+	previousTotalStake, previousTotalWeight, err := staker.TotalStake()
+	require.NoError(t, err)
 
-		previousTotalStake, previousTotalWeight, err := staker.TotalStake()
-		require.NoError(t, err)
+	// wait for validators current period + 1 staking period
+	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
-		// wait for validators current period + 1 staking period
-		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+	// withdraw - should succeed since auto-renew is false
+	receipt, _, err = staker.WithdrawDelegation(delegationID).
+		Send().
+		WithSigner(hayabusa.Stargate).
+		WithOptions(testutil.TxOptions()).
+		SubmitAndConfirm(testutil.TxContext(t))
+	require.NoError(t, err)
+	require.False(t, receipt.Reverted)
 
-		// withdraw - should succeed since auto-renew is false
-		receipt, _, err = staker.WithdrawDelegation(delegationID).
-			Send().
-			WithSigner(hayabusa.Stargate).
-			WithOptions(testutil.TxOptions()).
-			SubmitAndConfirm(testutil.TxContext(t))
-		require.NoError(t, err)
-		require.False(t, receipt.Reverted)
+	delegation, err = staker.GetDelegation(delegationID)
+	require.NoError(t, err)
+	assert.True(t, delegation.Stake.Sign() == 0)
 
-		delegation, err = staker.GetDelegation(delegationID)
-		require.NoError(t, err)
-		assert.True(t, delegation.Stake.Sign() == 0)
+	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
+	currentTotalStake, currentTotalWeight, err := staker.TotalStake()
+	require.NoError(t, err)
+	expectedTotalStake := big.NewInt(0).Sub(previousTotalStake, builtin.MinStake())
+	assert.Equal(t, expectedTotalStake, currentTotalStake,
+		"Wrong stake after exit")
 
-		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
-		currentTotalStake, currentTotalWeight, err := staker.TotalStake()
-		require.NoError(t, err)
-		expectedTotalStake := big.NewInt(0).Sub(previousTotalStake, builtin.MinStake())
-		assert.Equal(t, expectedTotalStake, currentTotalStake,
-			"Wrong stake after exit")
+	expectedWeight := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(int64(multiplier)))
+	expectedWeight = expectedWeight.Quo(expectedWeight, big.NewInt(100))
+	expectedWeight = big.NewInt(0).Sub(previousTotalWeight, expectedWeight)
+	assert.Equal(t, expectedWeight, currentTotalWeight,
+		"Wrong weight after exit")
+}
 
-		expectedWeight := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(int64(multiplier)))
-		expectedWeight = expectedWeight.Quo(expectedWeight, big.NewInt(100))
-		expectedWeight = big.NewInt(0).Sub(previousTotalWeight, expectedWeight)
-		assert.Equal(t, expectedWeight, currentTotalWeight,
-			"Wrong weight after exit")
-	})
+func Test_Delegations(t *testing.T) {
+	staker, config, validationIDs := newDelegationSetup(t)
+	ticker := utils.NewTicker(staker.Raw().Client())
 
 	t.Run("Immediate enable auto-renew", func(t *testing.T) {
 		t.Parallel()
