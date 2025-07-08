@@ -2,21 +2,21 @@ package delegations
 
 import (
 	"context"
+
 	"math/big"
 	"strconv"
 	"testing"
 	"time"
-
-	"github.com/vechain/thor/v2/thorclient"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
-	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
@@ -56,17 +56,17 @@ func Test_StargateRewards(t *testing.T) {
 	// block N energy
 	acc, err := staker.Raw().Client().Account(&stargateAddr, thorclient.Revision(strconv.Itoa(int(best.Number))))
 	require.NoError(t, err)
-	blockNEnergy := (big.Int)(acc.Energy)
+	blockNEnergy := (*big.Int)(acc.Energy)
 
 	assert.NoError(t, ticker.WaitForBlock(best.Number+1))
 
 	// block N+1 energy
 	acc, err = staker.Raw().Client().Account(&stargateAddr, thorclient.Revision(strconv.Itoa(int(best.Number+1))))
 	require.NoError(t, err)
-	blockNPlus1Energy := (big.Int)(acc.Energy)
+	blockNPlus1Energy := (*big.Int)(acc.Energy)
 
 	// assert plus1 is greater than N
-	assert.True(t, blockNPlus1Energy.Cmp(&blockNEnergy) > 0, "block N+1 energy should be greater than block N energy")
+	assert.True(t, blockNPlus1Energy.Cmp(blockNEnergy) > 0, "block N+1 energy should be greater than block N energy")
 
 	totals, err := staker.GetValidatorsTotals(validationIDs[0])
 	require.NoError(t, err)
@@ -507,7 +507,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 	return staker, config, validationIDs
 }
 
-func receiptToID(receipt *transactions.Receipt) thor.Bytes32 {
+func receiptToID(receipt *api.Receipt) thor.Bytes32 {
 	// 0 is the event, 1 is the validation ID
 	return receipt.Outputs[0].Events[0].Topics[2]
 }
