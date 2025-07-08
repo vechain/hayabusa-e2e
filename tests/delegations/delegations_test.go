@@ -81,10 +81,13 @@ func Test_Delegations(t *testing.T) {
 	ticker := utils.NewTicker(staker.Raw().Client())
 
 	t.Run("Delegate for 1 period only", func(t *testing.T) {
-		t.Parallel()
+		staker, config, validationIDs := newDelegationSetup(t)
+		ticker := utils.NewTicker(staker.Raw().Client())
+		//t.Parallel()
 
 		// add the delegation
-		receipt, _, err := staker.AddDelegation(validationIDs[0], builtin.MinStake(), false, 100).
+		multiplier := uint8(100)
+		receipt, _, err := staker.AddDelegation(validationIDs[0], builtin.MinStake(), false, multiplier).
 			Send().
 			WithSigner(hayabusa.Stargate).
 			WithOptions(testutil.TxOptions()).
@@ -96,6 +99,10 @@ func Test_Delegations(t *testing.T) {
 		assert.Equal(t, builtin.MinStake(), delegation.Stake)
 		assert.Equal(t, uint8(100), delegation.Multiplier)
 		assert.False(t, delegation.AutoRenew)
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
+
+		previousTotalStake, previousTotalWeight, err := staker.TotalStake()
+		require.NoError(t, err)
 
 		// wait for validators current period + 1 staking period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
@@ -112,6 +119,18 @@ func Test_Delegations(t *testing.T) {
 		delegation, err = staker.GetDelegation(delegationID)
 		require.NoError(t, err)
 		assert.True(t, delegation.Stake.Sign() == 0)
+
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
+		currentTotalStake, currentTotalWeight, err := staker.TotalStake()
+		expectedTotalStake := big.NewInt(0).Sub(previousTotalStake, builtin.MinStake())
+		assert.Equal(t, expectedTotalStake, currentTotalStake,
+			"Wrong stake after exit")
+
+		expectedWeight := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(int64(multiplier)))
+		expectedWeight = expectedWeight.Quo(expectedWeight, big.NewInt(100))
+		expectedWeight = big.NewInt(0).Sub(previousTotalWeight, expectedWeight)
+		assert.Equal(t, expectedWeight, currentTotalWeight,
+			"Wrong weight after exit")
 	})
 
 	t.Run("Immediate enable auto-renew", func(t *testing.T) {
@@ -291,7 +310,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 		totalsBeforeWithdrawal, err := staker.GetValidatorsTotals(validationIDs[5])
 		require.NoError(t, err)
-		
+
 		// Verify that the validator has the exact total stake from both delegations
 		expectedTotalStake := big.NewInt(0).Add(firstStake, secondStake)
 		assert.Equal(t, expectedTotalStake, totalsBeforeWithdrawal.DelegationsLockedStake,
