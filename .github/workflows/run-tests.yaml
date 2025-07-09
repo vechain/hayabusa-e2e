@@ -30,20 +30,39 @@ permissions:
   contents: read
 
 jobs:
+
+  create-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      test-name: ${{ steps.output-matrix.outputs.test-names-json }}
+
+    steps:
+      - name: Checkout E2E
+        uses: actions/checkout@v4
+        with:
+          repository: vechain/hayabusa-e2e
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+      - name: Output Test Names
+        id: output-matrix
+        run: |
+          test_names_list=$(go test -list . ./... | grep '^Test')
+          test_names_json=$(echo "$test_names_list" | jq -R -s -c 'split("\n")[:-1]')
+          echo "test-names-json=$test_names_json" >> $GITHUB_OUTPUT
+
   run-tests:
     runs-on:
       - ${{ inputs.codebuild-name || 'codebuild-Hayabusa-E2E' }}-${{ github.run_id }}-${{ github.run_attempt }}
       - image:arm-3.0
-      - instance-size:large # xlarge=32 vCPUs, 64 GiB memory, large=8 vCPUs, 16 GiB memory
+      - instance-size:medium # xlarge=32 vCPUs, 64 GiB memory, large=8 vCPUs, 16 GiB memory
+
+    needs: create-matrix
 
     strategy:
       matrix:
-        packages:
-          - tests/validations
-          - tests/delegations
-          - tests/slots
-          - tests/energy
-          - tests/stargate
+        test-names: ${{ fromJSON(needs.create-matrix.outputs.test-name) }}
       fail-fast: false
 
     steps:
@@ -66,7 +85,7 @@ jobs:
           go-version: 1.24.x
 
       - name: Test
-        run: go test -v -failfast -timeout 3600s ./${{ matrix.packages }}
+        run: go test -v -failfast -timeout 3600s -run ${{ matrix.test-names }} ./... || exit 1
         working-directory: ${{ github.workspace }}/hayabusa-e2e
         env:
           THOR_WORKING_DIR: ${{ github.workspace }}/thor
