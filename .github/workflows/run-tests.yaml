@@ -3,7 +3,7 @@ name: Run Hayabusa Tests
 on:
   push:
     branches:
-      - chore/reduce-delegation-times
+      - main
   pull_request:
   workflow_dispatch:
     inputs:
