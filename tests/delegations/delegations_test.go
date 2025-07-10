@@ -99,8 +99,6 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 
 	// withdraw - should succeed since auto-renew is false
 	receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted)
 
 	delegation, err = staker.GetDelegation(delegationID)
 	require.NoError(t, err)
@@ -218,8 +216,6 @@ func Test_Delegations(t *testing.T) {
 		assert.Equal(t, builtin.MinStake(), delegation.Stake)
 
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.UpdateDelegationAutoRenew(delegationID, false))
-		require.NoError(t, err)
-
 		// wait for validators current period to end
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
@@ -364,8 +360,6 @@ func Test_Delegations(t *testing.T) {
 
 		// Withdraw only the first delegation (partial decrease)
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(firstDelegationID))
-		require.NoError(t, err)
-		require.False(t, receipt.Reverted, "Withdrawal should succeed")
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 		// Verify that the validator has exactly the second delegation stake after withdrawal
