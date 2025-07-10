@@ -177,7 +177,13 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
 		// withdraw - should fail since auto-renew is true
-		testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
+		receipt, _, err = staker.WithdrawDelegation(delegationID).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		assert.True(t, receipt.Reverted)
 		require.NoError(t, err)
 		delegation, err = staker.GetDelegation(delegationID)
 		require.NoError(t, err)
