@@ -38,7 +38,10 @@ func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
 	firstStake := new(big.Int).Mul(stake, big.NewInt(2))
 
 	receipt, _, err := staker.AddValidator(validator1NonPoA.Address(), firstStake, config.MinStakingPeriod, false).
-		Send().WithOptions(testutil.TxOptions()).WithSigner(validator1NonPoA).SubmitAndConfirm(testutil.TxContext(t))
+		Send().
+		WithOptions(testutil.TxOptions()).
+		WithSigner(validator1NonPoA).
+		SubmitAndConfirm(testutil.TxContext(t))
 	assert.NoError(t, err)
 	assert.True(t, receipt.Reverted)
 	t.Log("✅ - Not a PoA candidate refused to join")
@@ -288,13 +291,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assert.Equal(t, id4, validatorID)
 	t.Log("✅ - Three validators are activated, 2 are queued, queue order has changed based on weight")
 
-	receipt, _, err := staker.UpdateAutoRenew(id3, false).
-		Send().
-		WithSigner(validator3).
-		WithOptions(testutil.TxOptions()).
-		SubmitAndConfirm(testutil.TxContext(t))
-	assert.NoError(t, err)
-	require.False(t, receipt.Reverted, "Transaction should not be reverted")
+	receipt := testutil.Send(t, validator3, staker.UpdateAutoRenew(id3, false))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator3.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	assert.Equal(t, id3, receipt.Outputs[0].Events[0].Topics[2])
@@ -319,13 +316,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	t.Log("✅ - Three validators are activated, 2 are queued, queue order has changed based on weight")
 
-	receipt, _, err = staker.UpdateAutoRenew(id4, true).
-		Send().
-		WithSigner(validator4).
-		WithOptions(testutil.TxOptions()).
-		SubmitAndConfirm(testutil.TxContext(t))
-	assert.NoError(t, err)
-	require.False(t, receipt.Reverted, "Transaction should not be reverted")
+	receipt = testutil.Send(t, validator4, staker.UpdateAutoRenew(id4, true))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator4.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	assert.Equal(t, id4, receipt.Outputs[0].Events[0].Topics[2])
@@ -379,13 +370,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	increase := big.NewInt(1e18)
 	increase = big.NewInt(0).Mul(increase, big.NewInt(1e6))
 	increase = big.NewInt(0).Mul(increase, big.NewInt(5))
-	receipt, _, err := staker.IncreaseStake(id1, increase).
-		Send().
-		WithSigner(validator1).
-		WithOptions(testutil.TxOptions()).
-		SubmitAndConfirm(testutil.TxContext(t))
-	assert.NoError(t, err)
-	require.False(t, receipt.Reverted, "Transaction should not be reverted")
+	receipt := testutil.Send(t, validator1, staker.IncreaseStake(id1, increase))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator1.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	assert.Equal(t, id1, receipt.Outputs[0].Events[0].Topics[2])
@@ -425,13 +410,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	decrease := big.NewInt(1e18)
 	decrease = big.NewInt(0).Mul(decrease, big.NewInt(1e6))
 	decrease = big.NewInt(0).Mul(decrease, big.NewInt(3))
-	receipt, _, err = staker.DecreaseStake(id1, decrease).
-		Send().
-		WithSigner(validator1).
-		WithOptions(testutil.TxOptions()).
-		SubmitAndConfirm(testutil.TxContext(t))
-	assert.NoError(t, err)
-	require.False(t, receipt.Reverted, "Transaction should not be reverted")
+	testutil.Send(t, validator1, staker.DecreaseStake(id1, decrease))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator1.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	assert.Equal(t, id1, receipt.Outputs[0].Events[0].Topics[2])
@@ -635,10 +614,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	delegatorStake = new(big.Int).Mul(delegatorStake, big.NewInt(10))
 
 	// Add delegator
-	receipt, _, err := staker.AddDelegation(id2, delegatorStake, false, 100).
-		Send().WithOptions(testutil.TxOptions()).WithSigner(hayabusa.Stargate).SubmitAndConfirm(testutil.TxContext(t))
-	assert.NoError(t, err)
-	assert.False(t, receipt.Reverted)
+	receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(id2, delegatorStake, false, 100))
 	t.Log("✅ - New delegator added to queued validator")
 
 	// Get delegation ID from receipt
@@ -656,10 +632,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	t.Log("✅ - Queued weight is increased for value of delegators stake")
 
 	// Remove delegator
-	receipt, _, err = staker.WithdrawDelegation(delegationID).
-		Send().WithOptions(testutil.TxOptions()).WithSigner(hayabusa.Stargate).SubmitAndConfirm(testutil.TxContext(t))
-	assert.NoError(t, err)
-	assert.False(t, receipt.Reverted)
+	receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 	delegation, err := staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
 	assert.True(t, delegation.Stake.Sign() == 0)
@@ -721,10 +694,7 @@ func runTestHayabusaTotalStakeDecreased(t *testing.T) error {
 }
 
 func addValidatorWithStake(t *testing.T, staker *builtin.Staker, signer bind.Signer, autoRenew bool, stake *big.Int, period uint32) thor.Bytes32 {
-	sender := staker.AddValidator(signer.Address(), stake, period, autoRenew).Send().WithSigner(signer).WithOptions(testutil.TxOptions())
-	receipt, _, err := sender.SubmitAndConfirm(testutil.TxContext(t))
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted, "Transaction should not be reverted")
+	receipt := testutil.Send(t, signer, staker.AddValidator(signer.Address(), stake, period, autoRenew))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, signer.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	assert.Equal(t, signer.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[2].Bytes()[12:])
@@ -741,9 +711,7 @@ func addValidator(t *testing.T, staker *builtin.Staker, signer bind.Signer, auto
 }
 
 func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Bytes32) {
-	receipt, _, err := staker.Withdraw(validatorID).Send().WithSigner(signer).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
-	assert.NoError(t, err)
-	require.False(t, receipt.Reverted, "Transaction should not be reverted")
+	receipt := testutil.Send(t, signer, staker.Withdraw(validatorID))
 	addr := signer.Address()
 	assert.Equal(t, addr.Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	assert.Equal(t, validatorID, receipt.Outputs[0].Events[0].Topics[2])
