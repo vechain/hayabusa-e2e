@@ -31,6 +31,16 @@ func Send(t *testing.T, signer bind.Signer, sender bind.MethodBuilder) *api.Rece
 		WithSigner(signer).
 		SubmitAndConfirm(TxContext(t))
 	assert.NoError(t, err, "failed to send transaction")
-	assert.False(t, receipt.Reverted, "transaction reverted")
+	if receipt.Reverted {
+		_, err := sender.Call().
+			AtRevision(receipt.Meta.BlockID.String()).
+			Caller(&receipt.Meta.TxOrigin).
+			Execute()
+		if err != nil {
+			assert.Fail(t, "transaction reverted", err)
+		} else {
+			assert.Fail(t, "transaction reverted for unknown reason")
+		}
+	}
 	return receipt
 }
