@@ -17,6 +17,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/networkhub/entrypoint/client"
 	"github.com/vechain/networkhub/environments"
 	"github.com/vechain/networkhub/genesisbuilder"
@@ -64,7 +65,7 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 		Build()
 }
 
-func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environments.Actions, func(), error) {
+func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBranch *string) (*thorclient.Client, environments.Actions, func(), error) {
 	if config.Nodes < 2 {
 		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
@@ -134,6 +135,24 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 			P2PListenPort:  p2pPort,
 		}
 	}
+
+	var maliciousPath *string
+	if maliciousNodeBranch != nil {
+		maliciousBuilderConfig := &thorbuilder.Config{
+			DownloadConfig: &thorbuilder.DownloadConfig{
+				RepoUrl:    repo,
+				Branch:     *maliciousNodeBranch,
+				IsReusable: true,
+			},
+		}
+		maliciousBuilder := thorbuilder.New(maliciousBuilderConfig)
+		err := maliciousBuilder.Download()
+		assert.NoError(t, err)
+		execPath, err := maliciousBuilder.Build()
+		assert.NoError(t, err)
+		maliciousPath = &execPath
+	}
+
 	networkCfg := &networkhubNetwork.Network{
 		Environment: "local",
 		BaseID:      testID,
@@ -152,6 +171,10 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 	if err != nil {
 		cleanupPorts(usedPorts)
 		return nil, nil, nil, err
+	}
+
+	if maliciousPath != nil {
+		networkCfg.Nodes[0].SetExecArtifact(*maliciousPath)
 	}
 
 	err = hayabusaNetwork.StartNetwork()
@@ -186,6 +209,10 @@ func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environment
 			slog.Error("failed to stop network", "error", err)
 		}
 	}, nil
+}
+
+func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environments.Actions, func(), error) {
+	return StartNetworkWithMaliciousNode(t, config, nil)
 }
 
 func authorities() []thorgenesis.Authority {
@@ -321,7 +348,7 @@ func cleanupPorts(ports []int) {
 
 // isPortAvailable checks if a port is actually available for binding
 func isPortAvailable(port int) bool {
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return false
