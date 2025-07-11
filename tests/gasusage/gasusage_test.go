@@ -40,7 +40,7 @@ func Test_Staker_GasUsage(t *testing.T) {
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"Name", "Gas Used"})
 	t.Cleanup(func() {
-		tw.SortBy([]table.SortBy{{Name: "Gas Used", Mode: table.Dsc}})
+		tw.SortBy([]table.SortBy{{Name: "Name", Mode: table.Asc}})
 		fmt.Println(tw.Render())
 	})
 
