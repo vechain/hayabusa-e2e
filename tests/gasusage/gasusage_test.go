@@ -15,8 +15,6 @@ import (
 )
 
 func Test_Staker_GasUsage(t *testing.T) {
-	//t.Skip("This test is for gas usage analysis and should not be run in CI")
-
 	config, client := setupTestNetwork(t, 3)
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
