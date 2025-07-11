@@ -10,6 +10,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
@@ -39,39 +40,38 @@ func Test_Staker_GasUsage(t *testing.T) {
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"Name", "Gas Used"})
 	t.Cleanup(func() {
+		tw.SortBy([]table.SortBy{{Name: "Gas Used", Mode: table.Dsc}})
 		fmt.Println(tw.Render())
 	})
+
+	checkCallResult := func(t *testing.T, res *api.CallResult, err error, method string) {
+		require.NoError(t, err)
+		require.False(t, res.Reverted)
+		tw.AppendRow(table.Row{method, res.GasUsed})
+	}
 
 	t.Run("totalStake", func(t *testing.T) {
 		t.Parallel()
 		totalStake, err := staker.Raw().Method("totalStake").Call().Execute()
-		require.NoError(t, err)
-		require.False(t, totalStake.Reverted)
-		tw.AppendRow(table.Row{"totalStake", totalStake.GasUsed})
+		checkCallResult(t, totalStake, err, "totalStake")
 	})
 
 	t.Run("queuedStake", func(t *testing.T) {
 		t.Parallel()
 		queuedStake, err := staker.Raw().Method("queuedStake").Call().Execute()
-		require.NoError(t, err)
-		require.False(t, queuedStake.Reverted)
-		tw.AppendRow(table.Row{"queuedStake", queuedStake.GasUsed})
+		checkCallResult(t, queuedStake, err, "queuedStake")
 	})
 
 	t.Run("firstActive", func(t *testing.T) {
 		t.Parallel()
 		firstActive, err := staker.Raw().Method("firstActive").Call().Execute()
-		require.NoError(t, err)
-		require.False(t, firstActive.Reverted)
-		tw.AppendRow(table.Row{"firstActive", firstActive.GasUsed})
+		checkCallResult(t, firstActive, err, "firstActive")
 	})
 
 	t.Run("firstQueued", func(t *testing.T) {
 		t.Parallel()
 		firstQueued, err := staker.Raw().Method("firstQueued").Call().Execute()
-		require.NoError(t, err)
-		require.False(t, firstQueued.Reverted)
-		tw.AppendRow(table.Row{"firstQueued", firstQueued.GasUsed})
+		checkCallResult(t, firstQueued, err, "firstQueued")
 	})
 
 	t.Run("addValidator", func(t *testing.T) {
@@ -84,25 +84,19 @@ func Test_Staker_GasUsage(t *testing.T) {
 	t.Run("get", func(t *testing.T) {
 		t.Parallel()
 		res, err := staker.Raw().Method("get", id1).Call().Execute()
-		require.NoError(t, err)
-		require.False(t, res.Reverted)
-		tw.AppendRow(table.Row{"get", res.GasUsed})
+		checkCallResult(t, res, err, "get")
 	})
 
 	t.Run("lookupNode", func(t *testing.T) {
 		t.Parallel()
 		res, err := staker.Raw().Method("lookupNode", validator1.Address()).Call().Execute()
-		require.NoError(t, err)
-		require.False(t, res.Reverted)
-		tw.AppendRow(table.Row{"lookupNode", res.GasUsed})
+		checkCallResult(t, res, err, "lookupNode")
 	})
 
 	t.Run("next", func(t *testing.T) {
 		t.Parallel()
 		res, err := staker.Raw().Method("next", id1).Call().Execute()
-		require.NoError(t, err)
-		require.False(t, res.Reverted)
-		tw.AppendRow(table.Row{"next", res.GasUsed})
+		checkCallResult(t, res, err, "next")
 	})
 
 	t.Run("increase / autorenew / decrease ", func(t *testing.T) {
@@ -119,7 +113,6 @@ func Test_Staker_GasUsage(t *testing.T) {
 		t.Parallel()
 		receipt := testutil.Send(t, validator2, staker.UpdateAutoRenew(id2, false))
 		tw.AppendRow(table.Row{"updateAutoRenew", receipt.GasUsed})
-
 		receipt = testutil.Send(t, validator2, staker.Withdraw(id2))
 		tw.AppendRow(table.Row{"withdraw", receipt.GasUsed})
 	})
@@ -141,9 +134,7 @@ func Test_Staker_GasUsage(t *testing.T) {
 		tw.AppendRow(table.Row{"addDelegation-2", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
 		res, err := staker.Raw().Method("getDelegation", delegationID).Call().Execute()
-		require.NoError(t, err)
-		require.False(t, res.Reverted)
-		tw.AppendRow(table.Row{"getDelegation", res.GasUsed})
+		checkCallResult(t, res, err, "getDelegation")
 	})
 
 	t.Run("addDelegation-3 / withdrawDelegation", func(t *testing.T) {
