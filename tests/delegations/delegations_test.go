@@ -21,7 +21,7 @@ import (
 )
 
 func Test_StargateRewards(t *testing.T) {
-	// Setup
+	t.Parallel()
 	staker, config, validationIDs := newDelegationSetup(t)
 
 	expectedStake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(int64(len(validationIDs))))
@@ -77,6 +77,7 @@ func Test_StargateRewards(t *testing.T) {
 }
 
 func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
+	t.Parallel()
 	staker, config, validationIDs := newDelegationSetup(t)
 	ticker := utils.NewTicker(staker.Raw().Client())
 
