@@ -138,23 +138,23 @@ func (s *Stargate) Weights(validationID thor.Bytes32, period uint32) (*big.Int, 
 // ---- Transaction Methods ----
 
 // AddDelegator adds a delegator to a validation ID
-func (s *Stargate) AddDelegator(signer bind.Signer, validationID thor.Bytes32, autoRenew bool, multiplier uint8, amount *big.Int) bind.SendBuilder {
-	return s.contract.Method("addDelegator", validationID, autoRenew, multiplier).WithValue(amount).Send().WithSigner(signer)
+func (s *Stargate) AddDelegator(validationID thor.Bytes32, autoRenew bool, multiplier uint8, amount *big.Int) bind.MethodBuilder {
+	return s.contract.Method("addDelegator", validationID, autoRenew, multiplier).WithValue(amount)
 }
 
 // ClaimRewards claims rewards for the sender
-func (s *Stargate) ClaimRewards(signer bind.Signer) bind.SendBuilder {
-	return s.contract.Method("claimRewards").Send().WithSigner(signer)
+func (s *Stargate) ClaimRewards() bind.MethodBuilder {
+	return s.contract.Method("claimRewards")
 }
 
 // DisableAutoRenew disables auto renewal for the sender's delegation
-func (s *Stargate) DisableAutoRenew(signer bind.Signer) bind.SendBuilder {
-	return s.contract.Method("disableAutoRenew").Send().WithSigner(signer)
+func (s *Stargate) DisableAutoRenew() bind.MethodBuilder {
+	return s.contract.Method("disableAutoRenew")
 }
 
 // EnableAutoRenew enables auto renewal for the sender's delegation
-func (s *Stargate) EnableAutoRenew(signer bind.Signer) bind.SendBuilder {
-	return s.contract.Method("enableAutoRenew").Send().WithSigner(signer)
+func (s *Stargate) EnableAutoRenew() bind.MethodBuilder {
+	return s.contract.Method("enableAutoRenew")
 }
 
 // ---- Event Filterers ----

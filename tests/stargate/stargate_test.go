@@ -1,7 +1,6 @@
 package stargate
 
 import (
-	"fmt"
 	"log/slog"
 	"math/big"
 	"strconv"
@@ -70,21 +69,7 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(10)) // very large stake
-	tx, err := stargate.AddDelegator(acc, validationID, true, 200, stake).WithOptions(testutil.TxOptions()).Submit()
-	require.NoError(t, err)
-	txId := tx.ID()
-	err = ticker.WaitForCondition(time.Second*120, func() (bool, error) {
-		receipt, err := staker.Raw().Client().TransactionReceipt(&txId)
-		if err != nil || receipt == nil {
-			return false, nil
-		}
-		if receipt.Reverted {
-			return false, fmt.Errorf("Tx reverted %s", txId)
-		}
-		return true, nil
-	})
-	require.NoError(t, err)
-	receipt, err := staker.Raw().Client().TransactionReceipt(&txId)
+	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, true, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -224,7 +209,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(3)) // very large stake
-	receipt, _, err := stargate.AddDelegator(acc, validationID, false, 200, stake).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
+	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, false, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -280,7 +265,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	assert.NoError(t, err)
 	amountBefore := (*big.Int)(fetchedAcc.Energy)
 
-	receipt, _, err = stargate.ClaimRewards(acc).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
+	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
 	claimedAmount := receiptToClaimedAmount(t, receipt)
 	assert.Equal(t, claimableAmount, claimedAmount)
 
@@ -330,7 +315,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(3))
-	receipt, _, err := stargate.AddDelegator(acc, validationID, true, 200, stake).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
+	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, true, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -386,7 +371,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	assert.NoError(t, err)
 	amountBefore := (*big.Int)(fetchedAcc.Energy)
 
-	receipt, _, err = stargate.ClaimRewards(acc).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
+	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
 	claimedAmount := receiptToClaimedAmount(t, receipt)
 	assert.Equal(t, claimableAmount, claimedAmount)
 
@@ -403,9 +388,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	require.NoError(t, err)
 	assert.Equal(t, 0, claimable.Sign())
 
-	receipt, _, err = stargate.DisableAutoRenew(acc).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
-	require.NoError(t, err)
-	assert.Equal(t, false, receipt.Reverted)
+	receipt = testutil.Send(t, acc, stargate.DisableAutoRenew())
 
 	block += config.MinStakingPeriod * 2
 	require.NoError(t, ticker.WaitForBlock(block))
@@ -434,8 +417,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	assert.NoError(t, err)
 	amountBefore = (*big.Int)(fetchedAcc.Energy)
 
-	receipt, _, err = stargate.ClaimRewards(acc).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
-
+	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
 	amountAfter = (*big.Int)(fetchedAcc.Energy)
@@ -588,9 +570,7 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 	require.NoError(t, err)
 	key := thor.BytesToBytes32([]byte("stargate-contract-address"))
 	value := new(big.Int).SetBytes(contractAddr[:])
-	receipt, _, err = params.Set(key, value).Send().WithSigner(hayabusa.Executor).WithOptions(testutil.TxOptions()).SubmitAndConfirm(testutil.TxContext(t))
-	require.NoError(t, err)
-	require.False(t, receipt.Reverted, "receipt should not be reverted")
+	testutil.Send(t, hayabusa.Executor, params.Set(key, value))
 
 	return stargate
 }
