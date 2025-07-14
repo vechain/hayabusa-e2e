@@ -33,12 +33,12 @@ func runTestMissedSlot(t *testing.T) error {
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 	}
-	client, network, cancel, err := hayabusa.StartNetwork(t, config)
+	hayabusa := hayabusa.NewNetwork(t, config)
+	client, network, err := hayabusa.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(cancel)
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
 

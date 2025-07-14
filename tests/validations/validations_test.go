@@ -1,6 +1,7 @@
 package validations
 
 import (
+	"github.com/vechain/networkhub/thorbuilder"
 	"log/slog"
 	"math/big"
 	"strconv"
@@ -25,8 +26,7 @@ func TestHayabusaAddNonPoAValidator(t *testing.T) {
 }
 
 func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
-	config, client, cancel := setupTestNetwork(t, 3)
-	t.Cleanup(cancel)
+	config, client := setupTestNetwork(t, 3)
 
 	validator1NonPoA := hayabusa.AdditionalAccounts[0]
 	validator1PoA := hayabusa.ValidatorAccounts[0]
@@ -78,8 +78,7 @@ func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
 
 func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
-	t.Cleanup(cancel)
+	config, client := setupTestNetwork(t, 3)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
@@ -129,8 +128,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
-	t.Cleanup(cancel)
+	config, client := setupTestNetwork(t, 3)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
@@ -228,8 +226,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 
 func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
-	t.Cleanup(cancel)
+	config, client := setupTestNetwork(t, 3)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
@@ -335,8 +332,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
-	t.Cleanup(cancel)
+	config, client := setupTestNetwork(t, 3)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
@@ -462,8 +458,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 
 func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 2)
-	t.Cleanup(cancel)
+	config, client := setupTestNetwork(t, 2)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
@@ -514,8 +509,7 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 
 func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 3)
-	t.Cleanup(cancel)
+	config, client := setupTestNetwork(t, 3)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
@@ -581,8 +575,7 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 
 func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	t.Parallel()
-	config, client, cancel := setupTestNetwork(t, 1)
-	t.Cleanup(cancel)
+	config, client := setupTestNetwork(t, 1)
 
 	staker := setupStakerAndWaitForFork(t, client, config)
 
@@ -654,8 +647,7 @@ func TestHayabusaTotalStakeDecreased(t *testing.T) {
 }
 
 func runTestHayabusaTotalStakeDecreased(t *testing.T) error {
-	config, client, cancel := setupTestNetwork(t, 3)
-	t.Cleanup(cancel)
+	config, client := setupTestNetwork(t, 3)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
@@ -774,7 +766,7 @@ func assertRewards(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes3
 	assert.Equal(t, big.NewInt(0).Mul(expectedReward, big.NewInt(int64(proposedBlocks))).String(), res.String())
 }
 
-func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config, *thorclient.Client, func()) {
+func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config, *thorclient.Client) {
 	config := &hayabusa.Config{
 		Nodes:             6,
 		MaxBlockProposers: maxBlockProposers,
@@ -787,12 +779,25 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		HighStakingPeriod: 259200,
 	}
 
-	client, _, cancel, err := hayabusa.StartNetwork(t, config)
+	network := hayabusa.NewNetwork(t, config)
+	client, _, err := network.Start()
+
+	nodeBuild := &thorbuilder.Config{
+		DownloadConfig: &thorbuilder.DownloadConfig{
+			RepoUrl:    "git@github.com:vechain/hayabusa.git",
+			Branch:     "release/hayabusa",
+			IsReusable: true,
+		},
+	}
+
+	if err := network.AttachNode(nodeBuild, make(map[string]string)); err != nil {
+		t.Fatalf("failed to attach node: %v", err)
+	}
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return config, client, cancel
+	return config, client
 }
 
 func setupStakerAndWaitForFork(t *testing.T, client *thorclient.Client, config *hayabusa.Config) *builtin.Staker {

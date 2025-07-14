@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	_ "embed"
 	"fmt"
+	"path/filepath"
+
 	"log/slog"
 	"math/big"
 	"net"
@@ -13,24 +15,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/v2/thorclient"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/stretchr/testify/assert"
+	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/networkhub/entrypoint/client"
 	"github.com/vechain/networkhub/environments"
+	"github.com/vechain/networkhub/environments/local"
 	"github.com/vechain/networkhub/genesisbuilder"
+	networkhubNetwork "github.com/vechain/networkhub/network"
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/network/node/genesis"
 	"github.com/vechain/networkhub/thorbuilder"
+	thorgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
-
-	"github.com/vechain/hayabusa-e2e/utils"
-	networkhubNetwork "github.com/vechain/networkhub/network"
-	thorgenesis "github.com/vechain/thor/v2/genesis"
 )
 
 var (
@@ -65,14 +65,17 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 		Build()
 }
 
-func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBranch *string) (*thorclient.Client, environments.Actions, func(), error) {
-	if config.Nodes < 2 {
-		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
-	}
+type Network struct {
+	test      *testing.T
+	nodes     []node.Config
+	config    *Config
+	builder   *thorbuilder.Config
+	genesis   *genesis.CustomGenesis
+	hub       *networkhubNetwork.Network
+	usedPorts []int // to track used ports for cleanup
+}
 
-	buildMutex.Lock()
-	defer buildMutex.Unlock()
-
+func NewNetwork(t *testing.T, config *Config) *Network {
 	repo := "git@github.com:vechain/thor.git"
 
 	// reimplement this logic
@@ -136,23 +139,6 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 		}
 	}
 
-	var maliciousPath *string
-	if maliciousNodeBranch != nil {
-		maliciousBuilderConfig := &thorbuilder.Config{
-			DownloadConfig: &thorbuilder.DownloadConfig{
-				RepoUrl:    repo,
-				Branch:     *maliciousNodeBranch,
-				IsReusable: true,
-			},
-		}
-		maliciousBuilder := thorbuilder.New(maliciousBuilderConfig)
-		err := maliciousBuilder.Download()
-		assert.NoError(t, err)
-		execPath, err := maliciousBuilder.Build()
-		assert.NoError(t, err)
-		maliciousPath = &execPath
-	}
-
 	networkCfg := &networkhubNetwork.Network{
 		Environment: "local",
 		BaseID:      testID,
@@ -160,59 +146,122 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 		ThorBuilder: thorBuilder,
 	}
 
+	return &Network{
+		test:      t,
+		nodes:     nodes,
+		config:    config,
+		genesis:   customGenesis,
+		builder:   thorBuilder,
+		hub:       networkCfg,
+		usedPorts: usedPorts,
+	}
+}
+
+func (n *Network) Start() (*thorclient.Client, environments.Actions, error) {
+	buildMutex.Lock()
+	defer buildMutex.Unlock()
+
 	networkHub := client.New()
-	networkIDResult, err := networkHub.Config(networkCfg)
+	networkIDResult, err := networkHub.Config(n.hub)
 	if err != nil {
-		cleanupPorts(usedPorts)
-		return nil, nil, nil, err
+		cleanupPorts(n.usedPorts)
+		return nil, nil, err
 	}
 
 	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
 	if err != nil {
-		cleanupPorts(usedPorts)
-		return nil, nil, nil, err
+		cleanupPorts(n.usedPorts)
+		return nil, nil, err
 	}
 
-	if maliciousPath != nil {
-		networkCfg.Nodes[0].SetExecArtifact(*maliciousPath)
-	}
+	n.test.Cleanup(func() {
+		cleanupPorts(n.usedPorts)
+		if err := hayabusaNetwork.StopNetwork(); err != nil {
+			slog.Error("failed to stop network", "error", err)
+			n.test.Fatalf("failed to stop network: %v", err)
+		}
+	})
 
 	err = hayabusaNetwork.StartNetwork()
 	if err != nil {
-		hayabusaNetwork.StopNetwork()
-
-		cleanupPorts(usedPorts)
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
-		hayabusaNetwork.StopNetwork()
-
-		cleanupPorts(usedPorts)
-		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
+	if err = n.hub.HealthCheck(0, 30*time.Second); err != nil {
+		return nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
 
-	err = utils.WaitForPeersConnection(t, nodes, config.Nodes-1)
+	err = utils.WaitForPeersConnection(n.test, n.nodes, len(n.nodes)-1)
 	if err != nil {
-		hayabusaNetwork.StopNetwork()
-		cleanupPorts(usedPorts)
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
-	client := thorclient.New(nodes[1].GetHTTPAddr())
+	client := thorclient.New(n.nodes[1].GetHTTPAddr())
 
-	return client, hayabusaNetwork, func() {
-		cleanupPorts(usedPorts)
-
-		if err := hayabusaNetwork.StopNetwork(); err != nil {
-			slog.Error("failed to stop network", "error", err)
-		}
-	}, nil
+	return client, hayabusaNetwork, nil
 }
 
-func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environments.Actions, func(), error) {
-	return StartNetworkWithMaliciousNode(t, config, nil)
+func (n *Network) AttachNode(build *thorbuilder.Config, additionalArgs map[string]string) error {
+	buildMutex.Lock()
+	defer buildMutex.Unlock()
+
+	builder := thorbuilder.New(build)
+	if err := builder.Download(); err != nil {
+		return fmt.Errorf("failed to download Thor binary: %w", err)
+	}
+
+	path, err := builder.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build Thor binary: %w", err)
+	}
+
+	testID := n.test.Name()
+	nodeID := fmt.Sprintf("%s-Node-%d", testID, len(n.nodes))
+	verbosity := 3
+	if n.config.Verbosity > 0 {
+		verbosity = n.config.Verbosity
+	}
+	apiPort := rndPort()
+	p2pPort := rndPort()
+	n.usedPorts = append(n.usedPorts, apiPort, p2pPort)
+
+	node := &node.BaseNode{
+		ID:             nodeID,
+		Key:            common.Bytes2Hex(ValidatorAccounts[len(n.nodes)].D.Bytes()),
+		Genesis:        n.genesis,
+		Verbosity:      verbosity,
+		AdditionalArgs: additionalArgs,
+		APIAddr:        fmt.Sprintf("0.0.0.0:%d", apiPort),
+		P2PListenPort:  p2pPort,
+		ExecArtifact:   path,
+		ConfigDir:      fmt.Sprintf("%s/%s/config", filepath.Dir(path), nodeID),
+		DataDir:        fmt.Sprintf("%s/%s/data", filepath.Dir(path), nodeID),
+	}
+
+	var enodes []string
+	for _, node := range n.nodes {
+		enode, err := node.Enode("127.0.0.1")
+		if err != nil {
+			return err
+		}
+		enodes = append(enodes, enode)
+	}
+	localNode := local.NewLocalNode(node, enodes)
+
+	if err := localNode.Start(); err != nil {
+		return fmt.Errorf("failed to start local node: %w", err)
+	}
+
+	n.nodes = append(n.nodes, node)
+	n.hub.Nodes = append(n.hub.Nodes, node)
+	n.test.Cleanup(func() {
+		if err := localNode.Stop(); err != nil {
+			slog.Error("failed to stop local node", "error", err)
+		}
+	})
+
+	return nil
 }
 
 func authorities() []thorgenesis.Authority {
