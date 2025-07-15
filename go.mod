@@ -7,7 +7,7 @@ replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.202
 replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.15-0.20241126085506-c74017ec91b2
 
 // uncomment to test local versions
-replace github.com/vechain/networkhub => ../networkhub
+//replace github.com/vechain/networkhub => ../networkhub
 
 require (
 	github.com/cqroot/prompt v0.9.4
@@ -16,7 +16,7 @@ require (
 	github.com/vechain/thor/v2 v2.3.1-0.20250708154022-fe394e779405
 )
 
-require github.com/vechain/networkhub v0.0.0-20250530135136-c57dd785b5d1
+require github.com/vechain/networkhub v0.0.5-0.20250715121603-c6a5528950c3
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
