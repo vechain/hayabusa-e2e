@@ -33,9 +33,9 @@ func runEnergyTest(t *testing.T) error {
 		Name:              t.Name(),
 	}
 	genesis := hayabusa.Genesis(config)
-	network := hayabusa.NewNetwork(config)
-	client, _, cancel, err := network.Start()
-	t.Cleanup(cancel)
+	network := hayabusa.NewNetwork(config, t.Context())
+	client, _, err := network.Start()
+	require.NoError(t, err)
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)

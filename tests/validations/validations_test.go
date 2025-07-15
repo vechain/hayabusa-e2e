@@ -780,9 +780,9 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		Name:              t.Name(),
 	}
 
-	network := hayabusa.NewNetwork(config)
-	client, _, cancel, err := network.Start()
-	t.Cleanup(cancel)
+	network := hayabusa.NewNetwork(config, t.Context())
+	client, _, err := network.Start()
+	require.NoError(t, err, "failed to start network")
 
 	nodeBuild := &thorbuilder.Config{
 		DownloadConfig: &thorbuilder.DownloadConfig{

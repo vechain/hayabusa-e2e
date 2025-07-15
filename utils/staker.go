@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"context"
 	"errors"
+	"github.com/vechain/thor/v2/tx"
 	"log/slog"
 	"time"
 
@@ -49,19 +51,19 @@ func WaitForCondition(client *thorclient.Client, maxBlock uint32, condition func
 }
 
 // WaitForPeersConnection waits for all nodes to connect to each other
-func WaitForPeersConnection(nodes []node.Config, expectedPeersLen int) error {
+func WaitForPeersConnection(nodes []node.Config, expectedPeersLen int, ctx context.Context) error {
 	// Timeout configuration
 	timeout := 5 * time.Minute
-	timeoutChan := time.After(timeout)
+	context, cancel := context.WithTimeout(ctx, timeout)
 	tick := time.NewTicker(5 * time.Second)
-	defer tick.Stop()
+	defer cancel()
 	attempts := 0
 
 	slog.Info("waiting for peers to connect...", "expected_peers", expectedPeersLen, "timeout", timeout.Seconds())
 
 	for {
 		select {
-		case <-timeoutChan:
+		case <-context.Done():
 			// Log detailed information before failing
 			for i, node := range nodes {
 				c := thorclient.New(node.GetHTTPAddr())
@@ -86,7 +88,14 @@ func WaitForPeersConnection(nodes []node.Config, expectedPeersLen int) error {
 					allConnected = false
 					break
 				}
-				if len(peers) != expectedPeersLen {
+				if len(peers) > expectedPeersLen {
+					slog.Warn("too many peers connected", "attempt", attempts, "node", i, "peers", len(peers), "expected", expectedPeersLen)
+					for _, p := range peers {
+						slog.Warn("peer details", "address", p.NetAddr, "best", tx.NewBlockRefFromID(p.BestBlockID).Number())
+					}
+					return errors.New("too many peers connected")
+				}
+				if len(peers) < expectedPeersLen {
 					slog.Warn("incorrect peer count", "attempt", attempts, "node", i, "peers", len(peers), "expected", expectedPeersLen)
 					allConnected = false
 					break

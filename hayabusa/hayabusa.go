@@ -1,6 +1,7 @@
 package hayabusa
 
 import (
+	"context"
 	"crypto/rand"
 	_ "embed"
 	"fmt"
@@ -62,6 +63,7 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 }
 
 type Network struct {
+	ctx       context.Context
 	nodes     []node.Config
 	config    *Config
 	builder   *thorbuilder.Config
@@ -69,7 +71,7 @@ type Network struct {
 	usedPorts []int // to track used ports for cleanup
 }
 
-func NewNetwork(config *Config) *Network {
+func NewNetwork(config *Config, ctx context.Context) *Network {
 	repo := "git@github.com:vechain/thor.git"
 
 	// reimplement this logic
@@ -102,6 +104,7 @@ func NewNetwork(config *Config) *Network {
 	}
 
 	return &Network{
+		ctx:       ctx,
 		nodes:     nodes,
 		config:    config,
 		genesis:   customGenesis,
@@ -110,7 +113,7 @@ func NewNetwork(config *Config) *Network {
 	}
 }
 
-func (n *Network) Start() (*thorclient.Client, environments.Actions, func(), error) {
+func (n *Network) Start() (*thorclient.Client, environments.Actions, error) {
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
@@ -130,13 +133,13 @@ func (n *Network) Start() (*thorclient.Client, environments.Actions, func(), err
 	networkIDResult, err := networkHub.Config(networkCfg)
 	if err != nil {
 		cleanupPorts(n.usedPorts)
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
 	if err != nil {
 		cleanupPorts(n.usedPorts)
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	cleanup := func() {
@@ -146,24 +149,32 @@ func (n *Network) Start() (*thorclient.Client, environments.Actions, func(), err
 		}
 	}
 
+	go func() {
+		<-n.ctx.Done()
+		slog.Info("context done, cleaning up network")
+		cleanup()
+	}()
+
 	err = hayabusaNetwork.StartNetwork()
 	if err != nil {
-		return nil, nil, cleanup, err
+		return nil, nil, err
 	}
 
 	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
-		return nil, nil, cleanup, fmt.Errorf("health check failed: %w", err)
+		cleanup()
+		return nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
 
-	err = utils.WaitForPeersConnection(n.nodes, len(n.nodes)-1)
+	err = utils.WaitForPeersConnection(n.nodes, len(n.nodes)-1, n.ctx)
 	if err != nil {
-		return nil, nil, cleanup, err
+		cleanup()
+		return nil, nil, err
 	}
 
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
 	client := thorclient.New(n.nodes[1].GetHTTPAddr())
 
-	return client, hayabusaNetwork, cleanup, nil
+	return client, hayabusaNetwork, nil
 }
 
 func (n *Network) Nodes() []node.Config {

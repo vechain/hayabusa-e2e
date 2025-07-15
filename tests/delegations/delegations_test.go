@@ -387,9 +387,9 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		HighStakingPeriod: 259200,
 		Name:              t.Name(),
 	}
-	network := hayabusa.NewNetwork(config)
-	client, _, cancel, err := network.Start()
-	t.Cleanup(cancel)
+	t.Context()
+	network := hayabusa.NewNetwork(config, t.Context())
+	client, _, err := network.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
