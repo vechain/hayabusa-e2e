@@ -777,10 +777,12 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		MinStakingPeriod:  4,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
+		Name:              t.Name(),
 	}
 
-	network := hayabusa.NewNetwork(t, config)
-	client, _, err := network.Start()
+	network := hayabusa.NewNetwork(config)
+	client, _, cancel, err := network.Start()
+	t.Cleanup(cancel)
 
 	nodeBuild := &thorbuilder.Config{
 		DownloadConfig: &thorbuilder.DownloadConfig{

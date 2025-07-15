@@ -27,6 +27,7 @@ type Config struct {
 	Verbosity         int          // Verbosity level for the nodes
 	StakerVerbosity   int          // Staker verbosity level
 	Debug             bool         // Debug mode for the nodes
+	Name              string       // Name of the network
 }
 
 // Apply the configuration to the genesis file.

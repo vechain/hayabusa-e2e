@@ -7,7 +7,7 @@ replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.202
 replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.15-0.20241126085506-c74017ec91b2
 
 // uncomment to test local versions
-//replace github.com/vechain/networkhub => ../networkhub
+replace github.com/vechain/networkhub => ../networkhub
 
 require (
 	github.com/cqroot/prompt v0.9.4

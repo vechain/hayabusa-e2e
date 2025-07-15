@@ -3,7 +3,6 @@ package utils
 import (
 	"errors"
 	"log/slog"
-	"testing"
 	"time"
 
 	"github.com/vechain/networkhub/network/node"
@@ -50,7 +49,7 @@ func WaitForCondition(client *thorclient.Client, maxBlock uint32, condition func
 }
 
 // WaitForPeersConnection waits for all nodes to connect to each other
-func WaitForPeersConnection(t *testing.T, nodes []node.Config, expectedPeersLen int) error {
+func WaitForPeersConnection(nodes []node.Config, expectedPeersLen int) error {
 	// Timeout configuration
 	timeout := 5 * time.Minute
 	timeoutChan := time.After(timeout)

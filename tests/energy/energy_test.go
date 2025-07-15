@@ -30,13 +30,12 @@ func runEnergyTest(t *testing.T) error {
 		MinStakingPeriod:  4,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 180,
+		Name:              t.Name(),
 	}
 	genesis := hayabusa.Genesis(config)
-	network := hayabusa.NewNetwork(t, config)
-	client, _, err := network.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	network := hayabusa.NewNetwork(config)
+	client, _, cancel, err := network.Start()
+	t.Cleanup(cancel)
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
