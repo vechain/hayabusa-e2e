@@ -1,7 +1,6 @@
 package validations
 
 import (
-	"github.com/vechain/networkhub/thorbuilder"
 	"log/slog"
 	"math/big"
 	"strconv"
@@ -783,22 +782,6 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 	network := hayabusa.NewNetwork(config, t.Context())
 	client, _, err := network.Start()
 	require.NoError(t, err, "failed to start network")
-
-	nodeBuild := &thorbuilder.Config{
-		DownloadConfig: &thorbuilder.DownloadConfig{
-			RepoUrl:    "git@github.com:vechain/hayabusa.git",
-			Branch:     "release/hayabusa",
-			IsReusable: true,
-		},
-	}
-
-	if err := network.AttachNode(nodeBuild, make(map[string]string)); err != nil {
-		t.Fatalf("failed to attach node: %v", err)
-	}
-
-	if err != nil {
-		t.Fatal(err)
-	}
 	return config, client
 }
 
