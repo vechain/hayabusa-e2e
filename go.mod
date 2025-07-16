@@ -16,7 +16,10 @@ require (
 	github.com/vechain/thor/v2 v2.3.1-0.20250708154022-fe394e779405
 )
 
-require github.com/vechain/networkhub v0.0.0-20250530135136-c57dd785b5d1
+require (
+	github.com/jedib0t/go-pretty/v6 v6.6.7
+	github.com/vechain/networkhub v0.0.0-20250530135136-c57dd785b5d1
+)
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
@@ -55,7 +58,7 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
-	github.com/mattn/go-runewidth v0.0.15 // indirect
+	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mattn/go-sqlite3 v1.14.28 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/muesli/ansi v0.0.0-20211018074035-2e021307bc4b // indirect
