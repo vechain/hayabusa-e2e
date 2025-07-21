@@ -97,10 +97,12 @@ func NewNetwork(config *Config, ctx context.Context) *Network {
 
 	customGenesis := Genesis(config)
 	nodes := make([]node.Config, 0)
-	usedPorts := make([]int, 0, config.Nodes*2) // API and P2P ports
+	usedPorts := make([]int, 0)
 
 	for i := range config.Nodes {
-		nodes = append(nodes, makeNode(config, i, usedPorts, customGenesis))
+		node, apiPort, p2pPort := makeNode(config, i, customGenesis)
+		nodes = append(nodes, node)
+		usedPorts = append(usedPorts, apiPort, p2pPort)
 	}
 
 	return &Network{
@@ -142,11 +144,14 @@ func (n *Network) Start() (*thorclient.Client, environments.Actions, error) {
 		return nil, nil, err
 	}
 
+	var cleanupOnce sync.Once
 	cleanup := func() {
-		cleanupPorts(n.usedPorts)
-		if err := hayabusaNetwork.StopNetwork(); err != nil {
-			slog.Error("failed to stop network", "error", err)
-		}
+		cleanupOnce.Do(func() {
+			cleanupPorts(n.usedPorts)
+			if err := hayabusaNetwork.StopNetwork(); err != nil {
+				slog.Error("failed to stop network", "error", err)
+			}
+		})
 	}
 
 	go func() {
@@ -195,8 +200,9 @@ func (n *Network) AttachNode(build *thorbuilder.Config, additionalArgs map[strin
 		return fmt.Errorf("failed to build Thor binary: %w", err)
 	}
 
-	node := makeNode(n.config, len(n.nodes), n.usedPorts, n.genesis)
+	node, apiPort, p2pPort := makeNode(n.config, len(n.nodes), n.genesis)
 	node.SetExecArtifact(path)
+	n.usedPorts = append(n.usedPorts, apiPort, p2pPort)
 
 	args := node.GetAdditionalArgs()
 	for k, v := range additionalArgs {
@@ -209,7 +215,7 @@ func (n *Network) AttachNode(build *thorbuilder.Config, additionalArgs map[strin
 	return nil
 }
 
-func makeNode(config *Config, i int, usedPorts []int, customGenesis *genesis.CustomGenesis) node.Config {
+func makeNode(config *Config, i int, customGenesis *genesis.CustomGenesis) (node.Config, int, int) {
 	networkID := ""
 	if config.Name != "" {
 		networkID = config.Name
@@ -234,7 +240,6 @@ func makeNode(config *Config, i int, usedPorts []int, customGenesis *genesis.Cus
 
 	apiPort := rndPort()
 	p2pPort := rndPort()
-	usedPorts = append(usedPorts, apiPort, p2pPort)
 
 	return &node.BaseNode{
 		ID:             nodeID,
@@ -244,7 +249,7 @@ func makeNode(config *Config, i int, usedPorts []int, customGenesis *genesis.Cus
 		AdditionalArgs: additionalArgs,
 		APIAddr:        fmt.Sprintf("0.0.0.0:%d", apiPort),
 		P2PListenPort:  p2pPort,
-	}
+	}, apiPort, p2pPort
 }
 
 func authorities() []thorgenesis.Authority {

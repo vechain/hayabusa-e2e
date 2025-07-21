@@ -1,0 +1,240 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net"
+	"os"
+	"os/signal"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
+	"github.com/vechain/hayabusa-e2e/hayabusa"
+	utils2 "github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/thorbuilder"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/builtin"
+)
+
+func main() {
+	ctx := handleExitSignal()
+	config := &hayabusa.Config{
+		Nodes:             2,
+		MaxBlockProposers: 101,
+		ForkBlock:         0,
+		TransitionPeriod:  6,
+		EpochLength:       6,
+		CooldownPeriod:    6,
+		MinStakingPeriod:  6,
+		MidStakingPeriod:  48,
+		HighStakingPeriod: 259200,
+	}
+	os.Setenv("THOR_WORKING_DIR", "/Users/darren/workspace/vechain/thor")
+	network := hayabusa.NewNetwork(config, ctx)
+
+	if err := addManyKeyNode(network); err != nil {
+		slog.Error("failed to add many key node", "error", err)
+		os.Exit(1)
+	}
+
+	port := 8569
+	for i, node := range network.Nodes() {
+		if i == 0 {
+			additionalArgs := node.GetAdditionalArgs()
+			if additionalArgs == nil {
+				additionalArgs = make(map[string]string)
+			}
+			additionalArgs["enable-metrics"] = "true"
+			node.SetAdditionalArgs(additionalArgs)
+		}
+		addr := net.JoinHostPort("localhost", strconv.Itoa(port))
+		port++
+		node.SetAPIAddr(addr)
+		slog.Info("node API address", "node", node.GetID(), "address", addr)
+	}
+	client, _, err := network.Start()
+	if err != nil {
+		slog.Error("failed to start network", "error", err)
+		os.Exit(1)
+	}
+	staker, err := builtin.NewStaker(client)
+	if err != nil {
+		slog.Error("failed to create staker client", "error", err)
+		os.Exit(1)
+	}
+
+	validatorAccounts := make(map[thor.Address]bind.Signer)
+	for _, acc := range hayabusa.ValidatorAccounts {
+		validatorAccounts[acc.Address()] = acc
+	}
+	for _, acc := range hayabusa.AdditionalAccounts[0:20] {
+		validatorAccounts[acc.Address()] = acc
+	}
+
+	stack := stack.NewStack(ctx, staker, config, validatorAccounts, hayabusa.Stargate)
+
+	validators := validations.NewState(stack)
+	engine := lifecycle.NewEngine(stack, validators, hayabusa.Stargate)
+
+	defer printOutput(engine)
+
+	// initial seeding of validator accounts
+	count := 0
+	for i, acc := range hayabusa.ValidatorAccounts {
+		if i > 70 {
+			break
+		}
+		cycle := &lifecycle.ValidatorLifecycle{
+			BaseLifecycle: lifecycle.BaseLifecycle{
+				QueueDelay:     lifecycle.Delay{Blocks: 0, Epochs: 0},
+				Account:        acc,
+				StakingPeriods: uint32(utils.RandomBetween(6, 12)),
+				WithdrawDelay: lifecycle.Delay{
+					Blocks: uint32(utils.RandomBetween(0, int(config.EpochLength))),
+					Epochs: uint32(utils.RandomBetween(1, 3)),
+				},
+				StartBlock: 0,
+			},
+		}
+		count++
+		engine.AddLifecycle(cycle)
+	}
+
+	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
+		slog.Error("failed to wash validator lifecycles", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("✅ validator lifecycles flushed")
+
+	if err := utils2.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
+		slog.Error("failed to wait for POS", "error", err)
+		os.Exit(1)
+	}
+
+	best, err := client.Block("best")
+	if err != nil {
+		slog.Error("failed to get best block", "error", err)
+		os.Exit(1)
+	}
+
+	// initial seeding of delegator accounts
+	for range 300 {
+		engine.AddDelegatorLifecycle(best.Number)
+	}
+
+	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
+		slog.Error("failed to wash validator lifecycles", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("✅ delegator lifecycles flushed")
+	slog.Info("🚒 starting engine")
+
+	engine.Run()
+	<-ctx.Done()
+
+	slog.Info("exit signal received, flushing lifecycles")
+}
+
+func addManyKeyNode(network *hayabusa.Network) error {
+	nodeBuild := &thorbuilder.Config{
+		BuildConfig: &thorbuilder.BuildConfig{
+			ExistingPath: "/Users/darren/workspace/vechain/hayabusa",
+		},
+	}
+	args := make(map[string]string)
+	keys := ""
+	for i := 2; i < 101; i++ {
+		hex := hexutil.Encode(hayabusa.ValidatorAccounts[i].D.Bytes())
+		hex = strings.TrimPrefix(hex, "0x")
+		keys += hex + ","
+	}
+	for _, acc := range hayabusa.AdditionalAccounts {
+		hex := hexutil.Encode(acc.D.Bytes())
+		hex = strings.TrimPrefix(hex, "0x")
+		keys += hex + ","
+	}
+	keys = strings.TrimSuffix(keys, ",")
+	args["keys"] = keys
+	return network.AttachNode(nodeBuild, args)
+}
+
+func printOutput(engine *lifecycle.Engine) {
+	tw := table.NewWriter()
+	tw.AppendHeader(table.Row{"ID", "Type", "Status", "Queued Block", "Activated Block", "Exit Block", "Withdraw Block", "Validation ID"})
+	for _, info := range engine.Info() {
+		queued := -1
+		if info.QueuedReceipt != nil {
+			queued = int(info.QueuedReceipt.Meta.BlockNumber)
+		}
+		withdraw := -1
+		if info.WithdrawReceipt != nil {
+			withdraw = int(info.WithdrawReceipt.Meta.BlockNumber)
+		}
+		exit := -1
+		if info.ExitReceipt != nil {
+			exit = int(info.ExitReceipt.Meta.BlockNumber)
+		}
+
+		tw.AppendRow(table.Row{
+			info.ID,
+			info.Type.String(),
+			info.Status.String(),
+			queued,
+			info.ActivatedBlock,
+			exit,
+			withdraw,
+			info.ValidationID.String(),
+		})
+	}
+	tw.SortBy([]table.SortBy{
+		{Name: "Type", Mode: table.Dsc},   // Sort by Type first, Validators first
+		{Name: "Status", Mode: table.Asc}, //
+		{Name: "Activated", Mode: table.Asc},
+	})
+	content := tw.Render()
+
+	//create the dir for the file
+	if err := os.MkdirAll("fullnet-output", 0755); err != nil {
+		slog.Error("failed to create output directory", "error", err)
+		return
+	}
+	// create a file to write the table output
+	seconds := time.Now().Unix()
+	file, err := os.Create(fmt.Sprintf("./fullnet-output/lifecycle-%d.txt", seconds))
+	if err != nil {
+		slog.Error("failed to create output file", "error", err)
+		return
+	}
+	defer file.Close()
+	// write the table output to the file
+	if _, err := file.WriteString(content); err != nil {
+		slog.Error("failed to write to output file", "error", err)
+		return
+	}
+	println(tw.Render())
+}
+
+func handleExitSignal() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		exitSignalCh := make(chan os.Signal, 1)
+		signal.Notify(exitSignalCh, os.Interrupt, syscall.SIGTERM)
+
+		sig := <-exitSignalCh
+		slog.Info("exit signal received", "signal", sig)
+		cancel()
+	}()
+	return ctx
+}

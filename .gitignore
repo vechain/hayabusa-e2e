@@ -35,3 +35,4 @@ vendor
 debug
 tests/stargate
 hayabusa/stargate
+fullnet-output
