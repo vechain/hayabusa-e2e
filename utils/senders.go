@@ -3,8 +3,9 @@ package utils
 import (
 	"context"
 	"errors"
-	"github.com/vechain/thor/v2/api"
 	"sync"
+
+	"github.com/vechain/thor/v2/api"
 
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/tx"

@@ -50,7 +50,7 @@ func runEnergyTest(t *testing.T) error {
 	stake := builtin.MinStake()
 	for i := range validators {
 		acc := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(acc.Address(), stake, config.MinStakingPeriod, true).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidator(acc.Address(), stake, config.MinStakingPeriod).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 	receipts, _, err := senders.Send(testutil.TxContext(t))
