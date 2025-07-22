@@ -13,11 +13,12 @@ require (
 	github.com/cqroot/prompt v0.9.4
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/stretchr/testify v1.10.0
-	github.com/vechain/thor/v2 v2.3.1-0.20250708154022-fe394e779405
+	github.com/vechain/thor/v2 v2.3.2-0.20250722055215-bff9fb67a92b
 )
 
 require (
 	github.com/jedib0t/go-pretty/v6 v6.6.7
+	github.com/pkg/errors v0.9.1
 	github.com/vechain/networkhub v0.0.5-0.20250715121603-c6a5528950c3
 )
 
@@ -68,7 +69,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.22.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
