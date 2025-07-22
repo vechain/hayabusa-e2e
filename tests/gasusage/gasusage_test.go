@@ -125,7 +125,6 @@ func Test_Staker_GasUsage(t *testing.T) {
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.UpdateDelegationAutoRenew(delegationID, false))
 		tw.AppendRow(table.Row{"updateDelegationAutoRenew", receipt.GasUsed})
-
 	})
 
 	t.Run("addDelegation-2 / get", func(t *testing.T) {

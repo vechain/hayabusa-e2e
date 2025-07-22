@@ -273,12 +273,12 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
 		// withdraw - should succeed since validator exited
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID1))
+		testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID1))
 		delegation1, err = staker.GetDelegation(delegationID1)
 		require.NoError(t, err)
 		assert.True(t, delegation1.Stake.Sign() == 0)
 
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID2))
+		testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID2))
 		delegation2, err = staker.GetDelegation(delegationID2)
 		require.NoError(t, err)
 		assert.True(t, delegation2.Stake.Sign() == 0)
