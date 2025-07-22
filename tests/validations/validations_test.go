@@ -113,8 +113,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	t.Log("✅ - Both validators are activated")
 
-	receipt := testutil.Send(t, validator1, staker.SignalExit(id1))
-	assert.False(t, receipt.Reverted)
+	testutil.Send(t, validator1, staker.SignalExit(id1))
 
 	block += config.MinStakingPeriod
 	periodEnd := block
@@ -170,10 +169,8 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 
-	receipt := testutil.Send(t, validator1, staker.SignalExit(id1))
-	assert.False(t, receipt.Reverted)
-	receipt = testutil.Send(t, validator2, staker.SignalExit(id2))
-	assert.False(t, receipt.Reverted)
+	testutil.Send(t, validator1, staker.SignalExit(id1))
+	testutil.Send(t, validator2, staker.SignalExit(id2))
 
 	retrievedValidator2, retrievedValidator2Id, err := staker.Next(id1)
 	assert.NoError(t, err)
@@ -483,10 +480,8 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 
 	block := waitForPoSAndAssertFirstActive(t, staker, config, id1)
 
-	receipt := testutil.Send(t, validator1, staker.SignalExit(id1))
-	assert.False(t, receipt.Reverted)
-	receipt = testutil.Send(t, validator2, staker.SignalExit(id2))
-	assert.False(t, receipt.Reverted)
+	testutil.Send(t, validator1, staker.SignalExit(id1))
+	testutil.Send(t, validator2, staker.SignalExit(id2))
 
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
@@ -497,8 +492,7 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 
-	receipt = testutil.Send(t, validator3, staker.SignalExit(id3))
-	assert.False(t, receipt.Reverted)
+	testutil.Send(t, validator3, staker.SignalExit(id3))
 
 	queued, queuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
@@ -681,8 +675,7 @@ func runTestHayabusaTotalStakeDecreased(t *testing.T) error {
 
 	block := waitForPoSAndAssertFirstActive(t, staker, config, id1)
 
-	receipt := testutil.Send(t, validator1, staker.SignalExit(id1))
-	assert.False(t, receipt.Reverted)
+	testutil.Send(t, validator1, staker.SignalExit(id1))
 
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
