@@ -23,7 +23,7 @@ var Bin string
 
 // Stargate represents a wrapper to interact with the Stargate contract
 type Stargate struct {
-	contract bind.Contract
+	contract *bind.Contract
 }
 
 // NewStargate creates a new instance of the Stargate contract wrapper
@@ -38,7 +38,7 @@ func NewStargate(client *thorclient.Client, addr thor.Address) *Stargate {
 }
 
 // Raw returns the underlying caller for direct interactions
-func (s *Stargate) Raw() bind.Contract {
+func (s *Stargate) Raw() *bind.Contract {
 	return s.contract
 }
 
@@ -138,22 +138,22 @@ func (s *Stargate) Weights(validationID thor.Bytes32, period uint32) (*big.Int, 
 // ---- Transaction Methods ----
 
 // AddDelegator adds a delegator to a validation ID
-func (s *Stargate) AddDelegator(validationID thor.Bytes32, autoRenew bool, multiplier uint8, amount *big.Int) bind.MethodBuilder {
+func (s *Stargate) AddDelegator(validationID thor.Bytes32, autoRenew bool, multiplier uint8, amount *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("addDelegator", validationID, autoRenew, multiplier).WithValue(amount)
 }
 
 // ClaimRewards claims rewards for the sender
-func (s *Stargate) ClaimRewards() bind.MethodBuilder {
+func (s *Stargate) ClaimRewards() *bind.MethodBuilder {
 	return s.contract.Method("claimRewards")
 }
 
 // DisableAutoRenew disables auto renewal for the sender's delegation
-func (s *Stargate) DisableAutoRenew() bind.MethodBuilder {
+func (s *Stargate) DisableAutoRenew() *bind.MethodBuilder {
 	return s.contract.Method("disableAutoRenew")
 }
 
 // EnableAutoRenew enables auto renewal for the sender's delegation
-func (s *Stargate) EnableAutoRenew() bind.MethodBuilder {
+func (s *Stargate) EnableAutoRenew() *bind.MethodBuilder {
 	return s.contract.Method("enableAutoRenew")
 }
 

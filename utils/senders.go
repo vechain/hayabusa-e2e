@@ -11,17 +11,17 @@ import (
 )
 
 type Senders struct {
-	senders []bind.SendBuilder
+	senders []*bind.SendBuilder
 	mu      sync.Mutex
 }
 
 // Add a new sender to the collection.
-func (s *Senders) Add(sender bind.SendBuilder) {
+func (s *Senders) Add(sender *bind.SendBuilder) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.senders == nil {
-		s.senders = make([]bind.SendBuilder, 0)
+		s.senders = make([]*bind.SendBuilder, 0)
 	}
 	s.senders = append(s.senders, sender)
 }
@@ -38,7 +38,7 @@ func (s *Senders) Send(ctx context.Context) ([]*api.Receipt, []*tx.Transaction, 
 	var wg sync.WaitGroup
 	for i, sender := range s.senders {
 		wg.Add(1)
-		go func(i int, sender bind.SendBuilder) {
+		go func(i int, sender *bind.SendBuilder) {
 			defer wg.Done()
 			receipt, trx, err := sender.SubmitAndConfirm(ctx)
 			if err != nil {

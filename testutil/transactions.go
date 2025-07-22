@@ -25,7 +25,7 @@ func TxOptions() *bind.TxOptions {
 
 // Send a transaction with the method, signer and default transaction options/ context.
 // It asserts that the transaction is sent successfully and not reverted.
-func Send(t *testing.T, signer bind.Signer, sender bind.MethodBuilder) *api.Receipt {
+func Send(t *testing.T, signer bind.Signer, sender *bind.MethodBuilder) *api.Receipt {
 	receipt, _, err := sender.Send().
 		WithOptions(TxOptions()).
 		WithSigner(signer).
