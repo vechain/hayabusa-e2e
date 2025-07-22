@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -104,7 +105,7 @@ func (d *DelegatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	if validationID.IsZero() {
 		return nil
 	}
-	slog.Info("queuing delegator", "validation", validation.Master.String())
+	slog.Debug("queuing delegator", "validation", validation.Master.String())
 
 	position := delegations.RandomPosition()
 	eth := big.NewInt(1e18)
@@ -121,7 +122,7 @@ func (d *DelegatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	d.queuedReceipt = receipt
 	d.status = StatusQueued
 
-	slog.Info("delegator queued", "id", d.ID())
+	slog.Debug("delegator queued", "id", d.ID())
 	return nil
 }
 
@@ -147,7 +148,7 @@ func (d *DelegatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
 		slog.Error("failed to get validator for delegation", "error", err, "id", d.ID())
 		return err
 	}
-	slog.Info("delegation activated", "id", d.ID(), "block", block)
+	slog.Debug("delegation activated", "id", d.ID(), "block", block)
 
 	d.status = StatusActive
 	d.activatedBlock = validator.StartBlock +
@@ -176,17 +177,19 @@ func (d *DelegatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 	if block < lastActiveBlock && validation.Status < builtin.StakerStatusExited {
 		return nil
 	}
-	slog.Info("signalling exit for delegator", "id", d.ID())
+	slog.Debug("signalling exit for delegator", "id", d.ID())
 
 	sender := engine.stack.Staker().UpdateDelegationAutoRenew(d.id, false)
 	receipt, err := engine.stack.SendTransaction(sender, d.config.Account)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "withdraw is available") {
 		slog.Error("failed to signal exit for delegator", "error", err, "id", d.ID())
 		return err
 	}
-	slog.Info("delegator exit signalled", "id", d.ID())
+	if receipt != nil {
+		d.exitReceipt = receipt
+	}
+	slog.Debug("delegator exit signalled", "id", d.ID())
 	d.status = StatusExitSignalled
-	d.exitReceipt = receipt
 	return nil
 }
 
@@ -211,7 +214,7 @@ func (d *DelegatorLifecycle) ProcessExited(engine *Engine, block uint32) error {
 		return nil
 	}
 
-	slog.Info("withdrawing delegator", "id", d.ID())
+	slog.Debug("withdrawing delegator", "id", d.ID())
 
 	sender := engine.stack.Staker().WithdrawDelegation(d.id)
 	receipt, err := engine.stack.SendTransaction(sender, d.config.Account)
@@ -219,7 +222,7 @@ func (d *DelegatorLifecycle) ProcessExited(engine *Engine, block uint32) error {
 		slog.Error("failed to withdraw delegator", "error", err, "id", d.ID())
 		return err
 	}
-	slog.Info("delegator withdrawn", "id", d.ID())
+	slog.Debug("delegator withdrawn", "id", d.ID())
 	d.status = StatusWithdrawn
 	d.withdrawReceipt = receipt
 	return nil

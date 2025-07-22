@@ -6,7 +6,7 @@ import (
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
-func DebugRevert(method bind.MethodBuilder, receipt *api.Receipt) error {
+func DebugRevert(method *bind.MethodBuilder, receipt *api.Receipt) error {
 	_, err := method.Call().
 		AtRevision(receipt.Meta.BlockID.String()).
 		Caller(&receipt.Meta.TxOrigin).

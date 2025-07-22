@@ -95,7 +95,7 @@ func (v *ValidatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	if block < firstQueueBlock {
 		return nil
 	}
-	slog.Info("queuing validator", "account", v.Account.Address(), "block", block)
+	slog.Debug("queuing validator", "account", v.Account.Address(), "block", block)
 
 	id, receipt, err := engine.validators.QueueValidator(v.Account, true)
 	if err != nil {
@@ -126,7 +126,7 @@ func (v *ValidatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
 		return err
 	}
 	if validation.Status == builtin.StakerStatusActive {
-		slog.Info("validator activated", "account", v.Account.Address(), "block", block)
+		slog.Debug("validator activated", "account", v.Account.Address(), "block", block)
 		v.activatedBlock = validation.StartBlock
 		v.status = StatusActive
 	}
@@ -157,7 +157,7 @@ func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 	}
 	v.status = StatusExitSignalled
 	v.exitReceipt = receipt
-	slog.Info("validator exit signalled", "id", v.id, "account", v.Account.Address())
+	slog.Debug("validator exit signalled", "id", v.id, "account", v.Account.Address())
 	return nil
 }
 
@@ -188,6 +188,6 @@ func (v *ValidatorLifecycle) ProcessExited(engine *Engine, block uint32) error {
 	v.status = StatusWithdrawn
 	v.withdrawReceipt = receipt
 
-	slog.Info("validator withdrawn", "id", v.id, "account", v.Account.Address())
+	slog.Debug("validator withdrawn", "id", v.id, "account", v.Account.Address())
 	return nil
 }

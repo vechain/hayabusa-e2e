@@ -78,7 +78,7 @@ func (s *Stack) NextValidator() bind.Signer {
 	panic("stack: no validators available")
 }
 
-func (s *Stack) SendTransaction(method bind.MethodBuilder, signer bind.Signer) (*api.Receipt, error) {
+func (s *Stack) SendTransaction(method *bind.MethodBuilder, signer bind.Signer) (*api.Receipt, error) {
 	txCtx, cancel := context.WithTimeout(s.Context(), 2*time.Minute)
 	defer cancel()
 	receipt, _, err := method.Send().

@@ -2,14 +2,13 @@ package lifecycle
 
 import (
 	"log/slog"
-	"maps"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
-	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -67,63 +66,40 @@ func (e *Engine) AddLifecycle(lifecycle Lifecycle) {
 	e.lifecycles[datagen.RandomHash()] = lifecycle
 }
 
-func (e *Engine) AddValidatorLifecycle(acc bind.Signer, startBlock uint32) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	cycle := NewValidatorLifecycle(
-		Config{
-			QueueDelay:     Delay{Blocks: 0, Epochs: 0},
-			Account:        acc,
-			StakingPeriods: uint32(utils2.Random(6)),
-			WithdrawDelay: Delay{
-				Blocks: uint32(utils2.RandomBetween(0, int(e.stack.Config().EpochLength))),
-				Epochs: uint32(utils2.RandomBetween(1, 3)),
-			},
-			StartBlock: startBlock,
-		},
-	)
-
-	e.lifecycles[datagen.RandomHash()] = cycle
-}
-
-func (e *Engine) AddDelegatorLifecycle(startBlock uint32) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
+func (e *Engine) GenerateValidatorConfig(acc bind.Signer, startBlock uint32) Config {
 	config := e.stack.Config()
 
-	cycle := NewDelegatorLifecycle(
-		Config{
-			QueueDelay: Delay{
-				Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
-				Epochs: uint32(utils2.RandomBetween(0, 3)),
-			},
-			StakingPeriods: uint32(utils2.RandomBetween(2, 5)),
-			WithdrawDelay: Delay{
-				Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
-				Epochs: uint32(utils2.RandomBetween(1, 3)),
-			},
-			StartBlock: startBlock,
-			Account:    hayabusa.Stargate,
+	return Config{
+		QueueDelay: Delay{
+			Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
+			Epochs: uint32(utils2.RandomBetween(0, 3)),
 		},
-	)
-
-	e.lifecycles[datagen.RandomHash()] = cycle
+		Account:        acc,
+		StakingPeriods: uint32(utils2.RandomBetween(5, 100)),
+		WithdrawDelay: Delay{
+			Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
+			Epochs: uint32(utils2.RandomBetween(1, 3)),
+		},
+		StartBlock: startBlock,
+	}
 }
 
-func (e *Engine) RemoveLifecycle(id thor.Bytes32) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+func (e *Engine) GenerateDelegatorConfig(startBlock uint32) Config {
+	config := e.stack.Config()
 
-	delete(e.lifecycles, id)
-}
-
-func (e *Engine) Lifecycles() map[thor.Bytes32]Lifecycle {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	return maps.Clone(e.lifecycles)
+	return Config{
+		QueueDelay: Delay{
+			Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
+			Epochs: uint32(utils2.RandomBetween(0, 3)),
+		},
+		StakingPeriods: uint32(utils2.RandomBetween(3, 120)),
+		WithdrawDelay: Delay{
+			Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
+			Epochs: uint32(utils2.RandomBetween(1, 3)),
+		},
+		StartBlock: startBlock,
+		Account:    e.stargateAcc,
+	}
 }
 
 func (e *Engine) Run() {
@@ -240,20 +216,45 @@ func (e *Engine) Flush(status Status) error {
 
 // generateValidatorCycles looks for accounts that are not yet registered as validators and creates a lifecycle for them.
 func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
-	amount := utils2.RandomBetween(0, 2)
-	if e.validators.Len() < 105 {
-		amount = utils2.RandomBetween(4, 8)
-	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
 
-	slog.Info("generating validator cycles", "amount", amount, "block", block.Number)
+	lifecycles := 0
+	for _, lifecycle := range e.lifecycles {
+		if lifecycle.Type() == TypeValidator && lifecycle.Status() < StatusExitSignalled {
+			lifecycles++
+		}
+	}
+	desiredQueued := utils2.RandomBetween(0, 15)
+	spaces := 101 + desiredQueued - lifecycles
+	amount := utils2.RandomBetween(0, spaces)
+
+	slog.Info("generating validator cycles", "amount", amount, "lifecycles", lifecycles, "spaces", spaces)
+
 	for range amount {
 		account := e.stack.NextValidator()
-		e.AddValidatorLifecycle(account, block.Number)
+		cycle := NewValidatorLifecycle(e.GenerateValidatorConfig(account, block.Number))
+		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }
 
 func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
-	for i := 0; i < 3; i++ {
-		e.AddDelegatorLifecycle(block.Number)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	lifecycles := 0
+	for _, lifecycle := range e.lifecycles {
+		if lifecycle.Type() == TypeDelegator && lifecycle.Status() < StatusExitSignalled {
+			lifecycles++
+		}
+	}
+	upperLimit := math.Sqrt(1000 - float64(lifecycles))
+	amount := utils2.RandomBetween(0, int(upperLimit))
+
+	slog.Info("generating delegator cycles", "amount", amount, "lifecycles", lifecycles, "upperLimit", upperLimit)
+
+	for i := 0; i < amount; i++ {
+		cycle := NewDelegatorLifecycle(e.GenerateDelegatorConfig(block.Number))
+		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }

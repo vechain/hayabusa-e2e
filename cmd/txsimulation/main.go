@@ -17,7 +17,6 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/networkhub/thorbuilder"
@@ -41,6 +40,8 @@ func main() {
 	}
 	network := hayabusa.NewNetwork(config, ctx)
 	os.Setenv("THOR_WORKING_DIR", "/Users/darren/workspace/vechain/thor")
+
+	slog.SetLogLoggerLevel(slog.LevelInfo)
 
 	if err := addManyKeyNode(network); err != nil {
 		slog.Error("failed to add many key node", "error", err)
@@ -90,18 +91,9 @@ func main() {
 
 	// initial seeding of validator accounts
 	for _, acc := range initialValidators {
-		cycle := lifecycle.NewValidatorLifecycle(
-			lifecycle.Config{
-				QueueDelay:     lifecycle.Delay{Blocks: 0, Epochs: 0},
-				Account:        acc,
-				StakingPeriods: uint32(utils.RandomBetween(6, 12)),
-				WithdrawDelay: lifecycle.Delay{
-					Blocks: uint32(utils.RandomBetween(0, int(config.EpochLength))),
-					Epochs: uint32(utils.RandomBetween(1, 3)),
-				},
-				StartBlock: 0,
-			},
-		)
+		config := engine.GenerateValidatorConfig(acc, 0)
+		config.QueueDelay = lifecycle.Delay{Blocks: 0, Epochs: 0}
+		cycle := lifecycle.NewValidatorLifecycle(config)
 		engine.AddLifecycle(cycle)
 	}
 
@@ -124,8 +116,11 @@ func main() {
 	}
 
 	// initial seeding of delegator accounts
-	for range 300 {
-		engine.AddDelegatorLifecycle(best.Number)
+	for i := range uint32(200) {
+		config := engine.GenerateDelegatorConfig(best.Number)
+		config.QueueDelay = lifecycle.Delay{Blocks: i % 3, Epochs: 0}
+		cycle := lifecycle.NewDelegatorLifecycle(config)
+		engine.AddLifecycle(cycle)
 	}
 
 	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
@@ -135,10 +130,7 @@ func main() {
 
 	slog.Info("✅ delegator lifecycles flushed")
 	slog.Info("🚒 starting engine")
-
 	engine.Run()
-	<-ctx.Done()
-
 	slog.Info("exit signal received, flushing lifecycles")
 }
 
