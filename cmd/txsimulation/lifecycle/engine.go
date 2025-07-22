@@ -21,6 +21,7 @@ type Engine struct {
 	stack       *stack.Stack
 	validators  *validations.State
 	lifecycles  map[thor.Bytes32]Lifecycle
+	withdrawn   map[thor.Bytes32]Lifecycle
 	stargateAcc bind.Signer
 	mu          sync.Mutex
 }
@@ -33,6 +34,7 @@ func NewEngine(
 	return &Engine{
 		validators:  validators,
 		lifecycles:  make(map[thor.Bytes32]Lifecycle),
+		withdrawn:   make(map[thor.Bytes32]Lifecycle),
 		stargateAcc: stargateAcc,
 		stack:       stack,
 	}
@@ -42,12 +44,16 @@ func (e *Engine) Info() []*Info {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	info := make([]*Info, 0, len(e.lifecycles))
+	info := make([]*Info, 0, len(e.lifecycles)+len(e.withdrawn))
 	for _, lifecycle := range e.lifecycles {
 		i := lifecycle.Info()
 		if i.Status < StatusQueued {
 			continue // Skip lifecycles that are not queued yet
 		}
+		info = append(info, lifecycle.Info())
+	}
+
+	for _, lifecycle := range e.withdrawn {
 		info = append(info, lifecycle.Info())
 	}
 
@@ -65,8 +71,8 @@ func (e *Engine) AddValidatorLifecycle(acc bind.Signer, startBlock uint32) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	cycle := &ValidatorLifecycle{
-		BaseLifecycle: BaseLifecycle{
+	cycle := NewValidatorLifecycle(
+		Config{
 			QueueDelay:     Delay{Blocks: 0, Epochs: 0},
 			Account:        acc,
 			StakingPeriods: uint32(utils2.Random(6)),
@@ -76,7 +82,7 @@ func (e *Engine) AddValidatorLifecycle(acc bind.Signer, startBlock uint32) {
 			},
 			StartBlock: startBlock,
 		},
-	}
+	)
 
 	e.lifecycles[datagen.RandomHash()] = cycle
 }
@@ -87,8 +93,8 @@ func (e *Engine) AddDelegatorLifecycle(startBlock uint32) {
 
 	config := e.stack.Config()
 
-	cycle := &DelegatorLifecycle{
-		BaseLifecycle: BaseLifecycle{
+	cycle := NewDelegatorLifecycle(
+		Config{
 			QueueDelay: Delay{
 				Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
 				Epochs: uint32(utils2.RandomBetween(0, 3)),
@@ -101,7 +107,7 @@ func (e *Engine) AddDelegatorLifecycle(startBlock uint32) {
 			StartBlock: startBlock,
 			Account:    hayabusa.Stargate,
 		},
-	}
+	)
 
 	e.lifecycles[datagen.RandomHash()] = cycle
 }
@@ -140,8 +146,9 @@ func (e *Engine) Run() {
 
 			delegationStatus := make(map[Status]int)
 			validationStatus := make(map[Status]int)
+			toRemove := make([]thor.Bytes32, 0)
 			e.mu.Lock()
-			for _, lifecycle := range e.lifecycles {
+			for id, lifecycle := range e.lifecycles {
 				if lifecycle.Type() == TypeDelegator {
 					delegationStatus[lifecycle.Status()]++
 				}
@@ -150,8 +157,30 @@ func (e *Engine) Run() {
 				}
 				if lifecycle.Status() != StatusWithdrawn {
 					go lifecycle.Process(e, best.Number)
+				} else {
+					toRemove = append(toRemove, id)
 				}
 			}
+
+			// process withdraw lifecycles for logging
+			for _, lifecycle := range e.withdrawn {
+				if lifecycle.Type() == TypeDelegator {
+					delegationStatus[lifecycle.Status()]++
+				}
+				if lifecycle.Type() == TypeValidator {
+					validationStatus[lifecycle.Status()]++
+				}
+			}
+
+			for _, id := range toRemove {
+				slog.Info("removing lifecycle", "id", id)
+				existing, ok := e.lifecycles[id]
+				if ok {
+					delete(e.lifecycles, id)
+					e.withdrawn[id] = existing
+				}
+			}
+
 			e.mu.Unlock()
 
 			slog.Info("validations status",
@@ -193,7 +222,7 @@ func (e *Engine) Flush(status Status) error {
 				if l.Status() >= status {
 					return
 				}
-				l.Process(e, current.Number)
+				lifecycle.Process(e, best.Number)
 			}(lifecycle, best)
 		}
 		wg.Wait()
@@ -211,25 +240,14 @@ func (e *Engine) Flush(status Status) error {
 
 // generateValidatorCycles looks for accounts that are not yet registered as validators and creates a lifecycle for them.
 func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
-	amount := utils2.RandomBetween(0, 1)
+	amount := utils2.RandomBetween(0, 2)
 	if e.validators.Len() < 105 {
 		amount = utils2.RandomBetween(4, 8)
 	}
 
 	slog.Info("generating validator cycles", "amount", amount, "block", block.Number)
-
-	accounts := make([]bind.Signer, 0)
-	for _, account := range e.stack.ValidatorAccounts() {
-		if len(accounts) >= amount {
-			break
-		}
-		id, _, ok := e.validators.LookupAddress(account.Address())
-		if !ok || id.IsZero() {
-			accounts = append(accounts, account)
-		}
-	}
-
-	for _, account := range accounts {
+	for range amount {
+		account := e.stack.NextValidator()
 		e.AddValidatorLifecycle(account, block.Number)
 	}
 }

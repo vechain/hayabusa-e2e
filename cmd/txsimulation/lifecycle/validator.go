@@ -1,13 +1,32 @@
 package lifecycle
 
 import (
+	"errors"
 	"log/slog"
+	"sync"
 
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
 type ValidatorLifecycle struct {
-	BaseLifecycle
+	Config
+
+	status          Status
+	queuedReceipt   *api.Receipt // the receipt of the queued transaction
+	activatedBlock  uint32       // the block at which this lifecycle was activated
+	exitReceipt     *api.Receipt // the receipt of the exit transaction
+	withdrawReceipt *api.Receipt // the receipt of the withdraw transaction
+	id              thor.Bytes32
+
+	mu sync.Mutex
+}
+
+func NewValidatorLifecycle(config Config) *ValidatorLifecycle {
+	return &ValidatorLifecycle{
+		Config: config,
+	}
 }
 
 var _ Lifecycle = (*ValidatorLifecycle)(nil)
@@ -46,47 +65,30 @@ func (v *ValidatorLifecycle) Info() *Info {
 }
 
 func (v *ValidatorLifecycle) Process(engine *Engine, block uint32) error {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	if v.status == StatusUnknown {
-		v.status = StatusPending
+	switch v.status {
+	case StatusPending:
+		return v.ProcessPending(engine, block)
+	case StatusQueued:
+		return v.ProcessQueued(engine, block)
+	case StatusActive:
+		return v.ProcessActive(engine, block)
+	case StatusExitSignalled:
+		return v.ProcessExited(engine, block)
+	case StatusWithdrawn:
+
 	}
 
-	if v.queuedReceipt == nil || v.id.IsZero() {
-		return v.queue(engine, block)
-	}
-	validation, err := engine.stack.Staker().Get(v.id)
-	if err != nil {
-		slog.Error("failed to get validator", "error", err, "id", v.id)
-		return err
-	}
-	if v.activatedBlock == 0 && validation.Status == builtin.StakerStatusActive {
-		slog.Info("validator activated", "account", v.Account.Address(), "block", block)
-		v.activatedBlock = validation.StartBlock
-		v.status = StatusActive
-		return nil
-	}
-	lastActiveBlock := v.activatedBlock + (v.StakingPeriods * engine.stack.Config().EpochLength) + 1
-	if block < lastActiveBlock {
-		return nil
-	}
-	if validation.AutoRenew && block >= lastActiveBlock {
-		slog.Info("signalling exit for validator", "account", v.Account.Address(), "block", block)
-		return v.exit(engine)
-	}
-	firstWithdrawBlock := lastActiveBlock +
-		v.WithdrawDelay.Blocks +
-		(v.WithdrawDelay.Epochs * engine.stack.Config().EpochLength)
-	if v.exitReceipt != nil && // must have signalled exit
-		block >= firstWithdrawBlock && // must be past the withdraw delay
-		v.exitReceipt.Meta.BlockNumber+engine.stack.Config().MinStakingPeriod <= block { // must have completed the last staking period
-		slog.Info("withdrawing validator", "account", v.Account.Address(), "block", block)
-		return v.withdraw(engine)
-	}
 	return nil
 }
 
-func (v *ValidatorLifecycle) queue(engine *Engine, block uint32) error {
+func (v *ValidatorLifecycle) ProcessPending(engine *Engine, block uint32) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if v.queuedReceipt != nil {
+		return nil
+	}
+
 	firstQueueBlock := v.StartBlock +
 		v.QueueDelay.Blocks +
 		(v.QueueDelay.Epochs * engine.stack.Config().EpochLength)
@@ -108,12 +110,47 @@ func (v *ValidatorLifecycle) queue(engine *Engine, block uint32) error {
 	return nil
 }
 
-func (v *ValidatorLifecycle) exit(engine *Engine) error {
-	if v.status == StatusExitSignalled {
+func (v *ValidatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if v.queuedReceipt == nil {
+		return errors.New("cannot set activated block for validator that has not been queued")
+	}
+	if v.activatedBlock != 0 {
+		return nil
+	}
+	validation, err := engine.stack.Staker().Get(v.id)
+	if err != nil {
+		slog.Error("failed to get validator", "error", err, "id", v.id)
+		return err
+	}
+	if validation.Status == builtin.StakerStatusActive {
+		slog.Info("validator activated", "account", v.Account.Address(), "block", block)
+		v.activatedBlock = validation.StartBlock
+		v.status = StatusActive
+	}
+	return nil
+}
+
+func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if v.exitReceipt != nil {
 		return nil
 	}
 
-	receipt, err := engine.validators.DisableAutoRenew(v.id)
+	if v.status == StatusExitSignalled {
+		return nil
+	}
+	minExitBlock := v.activatedBlock +
+		(v.StakingPeriods * engine.stack.Config().MinStakingPeriod) + 1
+	if block < minExitBlock {
+		return nil
+	}
+
+	receipt, err := engine.validators.DisableAutoRenew(v.id, v.Account)
 	if err != nil {
 		slog.Error("failed to disable auto-renew for validator", "error", err, "id", v.id)
 		return err
@@ -124,13 +161,25 @@ func (v *ValidatorLifecycle) exit(engine *Engine) error {
 	return nil
 }
 
-func (v *ValidatorLifecycle) withdraw(engine *Engine) error {
-	if v.status != StatusExitSignalled {
-		slog.Error("cannot withdraw validator that is not in exit signalled state", "id", v.id)
+func (v *ValidatorLifecycle) ProcessExited(engine *Engine, block uint32) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if v.withdrawReceipt != nil {
 		return nil
 	}
 
-	receipt, err := engine.validators.Withdraw(v.id)
+	if v.status != StatusExitSignalled || v.exitReceipt == nil {
+		return errors.New("cannot withdraw validator that has not signalled exit")
+	}
+	minWithdrawBlock := v.exitReceipt.Meta.BlockNumber +
+		engine.stack.Config().MinStakingPeriod +
+		v.WithdrawDelay.Blocks +
+		(v.WithdrawDelay.Epochs * engine.stack.Config().MinStakingPeriod)
+	if block < minWithdrawBlock {
+		return nil
+	}
+	receipt, err := engine.validators.Withdraw(v.id, v.Account)
 	if err != nil {
 		slog.Error("failed to withdraw validator", "error", err, "id", v.id)
 		return err

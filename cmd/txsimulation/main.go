@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	utils2 "github.com/vechain/hayabusa-e2e/utils"
 	"log/slog"
 	"net"
 	"os"
@@ -19,7 +20,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
-	utils2 "github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/networkhub/thorbuilder"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -39,8 +39,8 @@ func main() {
 		MidStakingPeriod:  48,
 		HighStakingPeriod: 259200,
 	}
-	os.Setenv("THOR_WORKING_DIR", "/Users/darren/workspace/vechain/thor")
 	network := hayabusa.NewNetwork(config, ctx)
+	os.Setenv("THOR_WORKING_DIR", "/Users/darren/workspace/vechain/thor")
 
 	if err := addManyKeyNode(network); err != nil {
 		slog.Error("failed to add many key node", "error", err)
@@ -73,29 +73,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	validatorAccounts := make(map[thor.Address]bind.Signer)
-	for _, acc := range hayabusa.ValidatorAccounts {
-		validatorAccounts[acc.Address()] = acc
+	initialValidators := hayabusa.ValidatorAccounts[0:90]
+	extraValidators := make(map[thor.Address]bind.Signer)
+	for _, acc := range hayabusa.ValidatorAccounts[90:100] {
+		extraValidators[acc.Address()] = acc
 	}
-	for _, acc := range hayabusa.AdditionalAccounts[0:20] {
-		validatorAccounts[acc.Address()] = acc
+	for _, acc := range hayabusa.AdditionalAccounts {
+		extraValidators[acc.Address()] = acc
 	}
 
-	stack := stack.NewStack(ctx, staker, config, validatorAccounts, hayabusa.Stargate)
-
+	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
 	validators := validations.NewState(stack)
 	engine := lifecycle.NewEngine(stack, validators, hayabusa.Stargate)
 
 	defer printOutput(engine)
 
 	// initial seeding of validator accounts
-	count := 0
-	for i, acc := range hayabusa.ValidatorAccounts {
-		if i > 70 {
-			break
-		}
-		cycle := &lifecycle.ValidatorLifecycle{
-			BaseLifecycle: lifecycle.BaseLifecycle{
+	for _, acc := range initialValidators {
+		cycle := lifecycle.NewValidatorLifecycle(
+			lifecycle.Config{
 				QueueDelay:     lifecycle.Delay{Blocks: 0, Epochs: 0},
 				Account:        acc,
 				StakingPeriods: uint32(utils.RandomBetween(6, 12)),
@@ -105,8 +101,7 @@ func main() {
 				},
 				StartBlock: 0,
 			},
-		}
-		count++
+		)
 		engine.AddLifecycle(cycle)
 	}
 
@@ -149,6 +144,10 @@ func main() {
 
 func addManyKeyNode(network *hayabusa.Network) error {
 	nodeBuild := &thorbuilder.Config{
+		//DownloadConfig: &thorbuilder.DownloadConfig{
+		//	RepoUrl: "git@github.com:vechain/hayabusa.git",
+		//	Branch:  "darren/testing/multiple-keys",
+		//},
 		BuildConfig: &thorbuilder.BuildConfig{
 			ExistingPath: "/Users/darren/workspace/vechain/hayabusa",
 		},
@@ -172,7 +171,7 @@ func addManyKeyNode(network *hayabusa.Network) error {
 
 func printOutput(engine *lifecycle.Engine) {
 	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"ID", "Type", "Status", "Queued Block", "Activated Block", "Exit Block", "Withdraw Block", "Validation ID"})
+	tw.AppendHeader(table.Row{"ID", "Type", "Status", "Queued Block", "Activated Block", "Exit Block", "ProcessExited Block", "Validation ID"})
 	for _, info := range engine.Info() {
 		queued := -1
 		if info.QueuedReceipt != nil {

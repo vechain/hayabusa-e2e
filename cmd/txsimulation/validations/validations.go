@@ -2,6 +2,7 @@ package validations
 
 import (
 	"fmt"
+	utils2 "github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
 	"log/slog"
 	"math/big"
@@ -48,9 +49,8 @@ type State struct {
 	queued          map[thor.Bytes32]*builtin.Validator
 
 	// the below are static and do not change
-	signerLookup map[thor.Bytes32]bind.Signer
-	idLookup     map[thor.Bytes32]*builtin.Validator
-	exited       map[thor.Bytes32]*builtin.Validator
+	idLookup map[thor.Bytes32]*builtin.Validator
+	exited   map[thor.Bytes32]*builtin.Validator
 
 	mu sync.Mutex
 }
@@ -64,7 +64,6 @@ func NewState(stack *stack.Stack) *State {
 		queued:          make(map[thor.Bytes32]*builtin.Validator),
 		idLookup:        make(map[thor.Bytes32]*builtin.Validator),
 		exited:          make(map[thor.Bytes32]*builtin.Validator),
-		signerLookup:    make(map[thor.Bytes32]bind.Signer),
 	}
 	go s.poll()
 	return s
@@ -78,14 +77,14 @@ func (s *State) Len() int {
 }
 
 func (s *State) poll() {
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
+	ticker := utils2.NewTicker(s.stack.Client())
 
 	for {
 		select {
 		case <-s.stack.Context().Done():
 			return
-		case <-ticker.C:
+		default:
+			ticker.Wait(time.Second * 15)
 			ids := make(map[thor.Bytes32]builtin.StakerStatus)
 			s.mu.Lock()
 			for _, id := range s.idByAddress {
@@ -122,8 +121,7 @@ func (s *State) poll() {
 	}
 }
 
-func (s *State) Withdraw(id thor.Bytes32) (*api.Receipt, error) {
-	signer := s.signerLookup[id]
+func (s *State) Withdraw(id thor.Bytes32, signer bind.Signer) (*api.Receipt, error) {
 	sender := s.stack.Staker().Withdraw(id)
 	receipt, err := s.stack.SendTransaction(sender, signer)
 	if err != nil {
@@ -149,12 +147,10 @@ func (s *State) QueueValidator(acc bind.Signer, autoRenew bool) (thor.Bytes32, *
 	s.idByAddress[acc.Address()] = id
 	s.idLookup[id] = validation
 	s.queued[id] = validation
-	s.signerLookup[id] = acc
 	return id, receipt, nil
 }
 
-func (s *State) DisableAutoRenew(id thor.Bytes32) (*api.Receipt, error) {
-	signer := s.signerLookup[id]
+func (s *State) DisableAutoRenew(id thor.Bytes32, signer bind.Signer) (*api.Receipt, error) {
 	sender := s.stack.Staker().UpdateAutoRenew(id, false)
 	receipt, err := s.stack.SendTransaction(sender, signer)
 	if err != nil {

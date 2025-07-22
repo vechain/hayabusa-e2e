@@ -2,8 +2,7 @@ package stack
 
 import (
 	"context"
-	"github.com/vechain/thor/v2/thorclient"
-
+	"sync"
 	"time"
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
@@ -11,6 +10,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
@@ -21,6 +21,7 @@ type Stack struct {
 	config        *hayabusa.Config
 	validatorAccs map[thor.Address]bind.Signer
 	stargateAcc   bind.Signer
+	mu            sync.Mutex // protects the stack from concurrent access
 }
 
 func NewStack(
@@ -60,8 +61,21 @@ func (s *Stack) Stargate() bind.Signer {
 	return s.stargateAcc
 }
 
-func (s *Stack) ValidatorAccounts() map[thor.Address]bind.Signer {
-	return s.validatorAccs
+func (s *Stack) NextValidator() bind.Signer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// get any element from the map, delete it and return it
+	if len(s.validatorAccs) == 0 {
+		return nil
+	}
+
+	for addr, signer := range s.validatorAccs {
+		delete(s.validatorAccs, addr)
+		return signer
+	}
+
+	panic("stack: no validators available")
 }
 
 func (s *Stack) SendTransaction(method bind.MethodBuilder, signer bind.Signer) (*api.Receipt, error) {
