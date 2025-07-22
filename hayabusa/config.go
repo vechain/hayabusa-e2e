@@ -10,6 +10,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	devgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -35,6 +36,7 @@ func (h Config) Apply(genesis *genesis.CustomGenesis) {
 	genesis.LaunchTime = uint64(time.Now().Unix())
 	genesis.ForkConfig.AddField("HAYABUSA", h.ForkBlock)
 	genesis.ForkConfig.AddField("HAYABUSA_TP", h.TransitionPeriod)
+	genesis.ExtraData = datagen.RandomHash().String()
 
 	// staker config - set all values
 	stakerIndex := slices.IndexFunc(genesis.Accounts, func(acc devgenesis.Account) bool {

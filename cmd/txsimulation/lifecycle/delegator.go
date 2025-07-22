@@ -181,7 +181,7 @@ func (d *DelegatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 
 	sender := engine.stack.Staker().UpdateDelegationAutoRenew(d.id, false)
 	receipt, err := engine.stack.SendTransaction(sender, d.config.Account)
-	if err != nil && !strings.Contains(err.Error(), "withdraw is available") {
+	if err != nil && !strings.Contains(err.Error(), "delegation is not active") {
 		slog.Error("failed to signal exit for delegator", "error", err, "id", d.ID())
 		return err
 	}
