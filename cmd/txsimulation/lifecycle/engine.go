@@ -149,7 +149,7 @@ func (e *Engine) Run() {
 			}
 
 			for _, id := range toRemove {
-				slog.Info("removing lifecycle", "id", id)
+				slog.Debug("removing lifecycle", "id", id)
 				existing, ok := e.lifecycles[id]
 				if ok {
 					delete(e.lifecycles, id)

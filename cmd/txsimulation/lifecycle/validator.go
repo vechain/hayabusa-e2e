@@ -151,12 +151,15 @@ func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 	}
 
 	receipt, err := engine.validators.DisableAutoRenew(v.id, v.Account)
+	if receipt != nil {
+		v.status = StatusExitSignalled
+		v.exitReceipt = receipt
+	}
 	if err != nil {
 		slog.Error("failed to disable auto-renew for validator", "error", err, "id", v.id)
 		return err
 	}
 	v.status = StatusExitSignalled
-	v.exitReceipt = receipt
 	slog.Debug("validator exit signalled", "id", v.id, "account", v.Account.Address())
 	return nil
 }
