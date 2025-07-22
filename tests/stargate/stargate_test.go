@@ -254,6 +254,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	assert.False(t, delegation.Locked)
 
 	totalRewards, err := staker.GetRewards(validationID, 3)
+	assert.NoError(t, err)
 	expectedClaimable := big.NewInt(0).Mul(totalRewards, big.NewInt(7))
 	expectedClaimable = big.NewInt(0).Div(expectedClaimable, big.NewInt(10))
 	assert.Equal(t, expectedClaimable, claimableAmount)
@@ -271,6 +272,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
+	assert.NoError(t, err)
 	amountAfter := (*big.Int)(fetchedAcc.Energy)
 
 	gasUsed := big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
@@ -278,7 +280,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	diff = diff.Add(diff, gasUsed)
 	assert.Equal(t, claimedAmount, diff)
 
-	claimable, start, end, err = stargate.GetClaimable(acc.Address())
+	claimable, _, _, err = stargate.GetClaimable(acc.Address())
 	require.NoError(t, err)
 	assert.Equal(t, 0, claimable.Sign())
 
@@ -360,6 +362,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	assert.True(t, delegation.Locked)
 
 	totalRewards, err := staker.GetRewards(validationID, 3)
+	assert.NoError(t, err)
 	expectedClaimable := big.NewInt(0).Mul(totalRewards, big.NewInt(7))
 	expectedClaimable = big.NewInt(0).Div(expectedClaimable, big.NewInt(10))
 	assert.Equal(t, expectedClaimable, claimableAmount)
@@ -377,6 +380,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
+	assert.NoError(t, err)
 	amountAfter := (*big.Int)(fetchedAcc.Energy)
 
 	gasUsed := big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
@@ -384,11 +388,11 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	diff = diff.Add(diff, gasUsed)
 	assert.Equal(t, claimedAmount, diff)
 
-	claimable, start, end, err = stargate.GetClaimable(acc.Address())
+	claimable, _, _, err = stargate.GetClaimable(acc.Address())
 	require.NoError(t, err)
 	assert.Equal(t, 0, claimable.Sign())
 
-	receipt = testutil.Send(t, acc, stargate.DisableAutoRenew())
+	testutil.Send(t, acc, stargate.DisableAutoRenew())
 
 	block += config.MinStakingPeriod * 2
 	require.NoError(t, ticker.WaitForBlock(block))
@@ -420,6 +424,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
+	assert.NoError(t, err)
 	amountAfter = (*big.Int)(fetchedAcc.Energy)
 
 	gasUsed = big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
@@ -469,7 +474,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod, true).Send().WithSigner(account).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(account).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 

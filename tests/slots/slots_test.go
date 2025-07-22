@@ -51,7 +51,7 @@ func runTestMissedSlot(t *testing.T) error {
 		require.NoError(t, err)
 		signer := (*bind.PrivateKeySigner)(key)
 		address := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
-		receipt := testutil.Send(t, signer, staker.AddValidator(address, stake, config.MinStakingPeriod, true))
+		receipt := testutil.Send(t, signer, staker.AddValidator(address, stake, config.MinStakingPeriod))
 		return receipt.Outputs[0].Events[0].Topics[3]
 	}
 
