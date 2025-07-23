@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"log/slog"
-	"math"
 	"net"
 	"os"
 	"os/signal"
@@ -87,7 +86,7 @@ func main() {
 
 	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
 	validators := validations.NewState(stack)
-	engine := lifecycle.NewEngine(stack, validators, hayabusa.Stargate)
+	engine := lifecycle.NewEngine(stack, validators)
 
 	defer printOutput(engine)
 
@@ -95,7 +94,7 @@ func main() {
 	for i, acc := range initialValidators {
 		config := engine.GenerateValidatorConfig(acc, 0)
 		if i < 50 { // create 50 long term validators
-			config.StakingPeriods = math.MaxUint32
+			config.StakingPeriods = 5000
 		} else if i < 70 { // create 20 mid-term validators
 			config.StakingPeriods = uint32(utils.RandomBetween(30, 100))
 		} else {
@@ -107,7 +106,7 @@ func main() {
 	}
 
 	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
-		slog.Error("failed to wash validator lifecycles", "error", err)
+		slog.Error("failed to flush validator lifecycles", "error", err)
 		os.Exit(1)
 	}
 
@@ -133,7 +132,7 @@ func main() {
 	}
 
 	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
-		slog.Error("failed to wash validator lifecycles", "error", err)
+		slog.Error("failed to flush validator lifecycles", "error", err)
 		os.Exit(1)
 	}
 
@@ -145,13 +144,13 @@ func main() {
 
 func addManyKeyNode(network *hayabusa.Network) error {
 	nodeBuild := &thorbuilder.Config{
-		//DownloadConfig: &thorbuilder.DownloadConfig{
-		//	RepoUrl: "git@github.com:vechain/hayabusa.git",
-		//	Branch:  "darren/testing/multiple-keys",
-		//},
-		BuildConfig: &thorbuilder.BuildConfig{
-			ExistingPath: "/Users/darren/workspace/vechain/hayabusa",
+		DownloadConfig: &thorbuilder.DownloadConfig{
+			RepoUrl: "git@github.com:vechain/hayabusa.git",
+			Branch:  "darren/testing/multiple-keys",
 		},
+		//BuildConfig: &thorbuilder.BuildConfig{
+		//	ExistingPath: "/Users/darren/workspace/vechain/hayabusa",
+		//},
 	}
 	args := make(map[string]string)
 	keys := ""

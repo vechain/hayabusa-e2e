@@ -17,25 +17,22 @@ import (
 )
 
 type Engine struct {
-	stack       *stack.Stack
-	validators  *validations.State
-	lifecycles  map[thor.Bytes32]Lifecycle
-	withdrawn   map[thor.Bytes32]Lifecycle
-	stargateAcc bind.Signer
-	mu          sync.Mutex
+	stack      *stack.Stack
+	validators *validations.State
+	lifecycles map[thor.Bytes32]Lifecycle
+	withdrawn  map[thor.Bytes32]Lifecycle
+	mu         sync.Mutex
 }
 
 func NewEngine(
 	stack *stack.Stack,
 	validators *validations.State,
-	stargateAcc bind.Signer,
 ) *Engine {
 	return &Engine{
-		validators:  validators,
-		lifecycles:  make(map[thor.Bytes32]Lifecycle),
-		withdrawn:   make(map[thor.Bytes32]Lifecycle),
-		stargateAcc: stargateAcc,
-		stack:       stack,
+		validators: validators,
+		lifecycles: make(map[thor.Bytes32]Lifecycle),
+		withdrawn:  make(map[thor.Bytes32]Lifecycle),
+		stack:      stack,
 	}
 }
 
@@ -86,6 +83,7 @@ func (e *Engine) GenerateValidatorConfig(acc bind.Signer, startBlock uint32) Con
 
 func (e *Engine) GenerateDelegatorConfig(startBlock uint32) Config {
 	config := e.stack.Config()
+	stargate := e.stack.Stargate()
 
 	return Config{
 		QueueDelay: Delay{
@@ -98,7 +96,7 @@ func (e *Engine) GenerateDelegatorConfig(startBlock uint32) Config {
 			Epochs: uint32(utils2.RandomBetween(1, 3)),
 		},
 		StartBlock: startBlock,
-		Account:    e.stargateAcc,
+		Account:    stargate,
 	}
 }
 
