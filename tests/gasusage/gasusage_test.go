@@ -2,7 +2,6 @@ package gasusage
 
 import (
 	"fmt"
-	"github.com/vechain/thor/v2/thor"
 	"math/big"
 	"testing"
 
@@ -32,12 +31,9 @@ func Test_Staker_GasUsage(t *testing.T) {
 	addReceipt2 := testutil.Send(t, validator2, staker.AddValidator(validator2.Address(), stake, config.MinStakingPeriod))
 	addReceipt3 := testutil.Send(t, validator3, staker.AddValidator(validator3.Address(), stake, config.MinStakingPeriod))
 
-	id1 := addReceipt1.Outputs[0].Events[0].Topics[2]
-	addr1 := thor.BytesToAddress(id1.Bytes())
-	id2 := addReceipt2.Outputs[0].Events[0].Topics[2]
-	addr2 := thor.BytesToAddress(id2.Bytes())
-	id3 := addReceipt3.Outputs[0].Events[0].Topics[2]
-	addr3 := thor.BytesToAddress(id3.Bytes())
+	addr1 := validator1.Address()
+	addr2 := validator2.Address()
+	addr3 := validator3.Address()
 
 	require.NoError(t, utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod))
 
@@ -87,13 +83,13 @@ func Test_Staker_GasUsage(t *testing.T) {
 
 	t.Run("get", func(t *testing.T) {
 		t.Parallel()
-		res, err := staker.Raw().Method("get", id1).Call().Execute()
+		res, err := staker.Raw().Method("get", addr1).Call().Execute()
 		checkCallResult(t, res, err, "get")
 	})
 
 	t.Run("next", func(t *testing.T) {
 		t.Parallel()
-		res, err := staker.Raw().Method("next", id1).Call().Execute()
+		res, err := staker.Raw().Method("next", addr1).Call().Execute()
 		checkCallResult(t, res, err, "next")
 	})
 

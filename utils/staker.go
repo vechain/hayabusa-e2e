@@ -14,6 +14,10 @@ import (
 func WaitForPOS(staker *builtin.Staker, maxBlock uint32) error {
 	return WaitForCondition(staker.Raw().Client(), maxBlock, func() (bool, error) {
 		_, id, err := staker.FirstActive()
+		println("id is ", id.String(), err == nil, !id.IsZero())
+		if err != nil {
+			println("error is ", err.Error())
+		}
 		return err == nil && !id.IsZero(), nil
 	})
 }

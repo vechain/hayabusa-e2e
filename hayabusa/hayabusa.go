@@ -90,7 +90,7 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 		thorBuilder = &thorbuilder.Config{
 			DownloadConfig: &thorbuilder.DownloadConfig{
 				RepoUrl:    repo,
-				Branch:     "vanja/feat/705-staker-use-node-master-as-ID",
+				Branch:     "release/hayabusa",
 				IsReusable: true,
 			},
 		}
