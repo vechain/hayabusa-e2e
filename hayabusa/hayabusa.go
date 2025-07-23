@@ -73,7 +73,7 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
-	repo := "git@github.com:vechain/thor.git"
+	repo := "https://github.com/vechain/thor"
 
 	// reimplement this logic
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
@@ -90,7 +90,7 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 		thorBuilder = &thorbuilder.Config{
 			DownloadConfig: &thorbuilder.DownloadConfig{
 				RepoUrl:    repo,
-				Branch:     "release/hayabusa",
+				Branch:     "vanja/feat/705-staker-use-node-master-as-ID",
 				IsReusable: true,
 			},
 		}

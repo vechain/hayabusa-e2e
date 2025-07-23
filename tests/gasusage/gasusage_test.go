@@ -2,6 +2,7 @@ package gasusage
 
 import (
 	"fmt"
+	"github.com/vechain/thor/v2/thor"
 	"math/big"
 	"testing"
 
@@ -31,9 +32,12 @@ func Test_Staker_GasUsage(t *testing.T) {
 	addReceipt2 := testutil.Send(t, validator2, staker.AddValidator(validator2.Address(), stake, config.MinStakingPeriod))
 	addReceipt3 := testutil.Send(t, validator3, staker.AddValidator(validator3.Address(), stake, config.MinStakingPeriod))
 
-	id1 := addReceipt1.Outputs[0].Events[0].Topics[3]
-	id2 := addReceipt2.Outputs[0].Events[0].Topics[3]
-	id3 := addReceipt3.Outputs[0].Events[0].Topics[3]
+	id1 := addReceipt1.Outputs[0].Events[0].Topics[2]
+	addr1 := thor.BytesToAddress(id1.Bytes())
+	id2 := addReceipt2.Outputs[0].Events[0].Topics[2]
+	addr2 := thor.BytesToAddress(id2.Bytes())
+	id3 := addReceipt3.Outputs[0].Events[0].Topics[2]
+	addr3 := thor.BytesToAddress(id3.Bytes())
 
 	require.NoError(t, utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod))
 
@@ -87,12 +91,6 @@ func Test_Staker_GasUsage(t *testing.T) {
 		checkCallResult(t, res, err, "get")
 	})
 
-	t.Run("lookupNode", func(t *testing.T) {
-		t.Parallel()
-		res, err := staker.Raw().Method("lookupNode", validator1.Address()).Call().Execute()
-		checkCallResult(t, res, err, "lookupNode")
-	})
-
 	t.Run("next", func(t *testing.T) {
 		t.Parallel()
 		res, err := staker.Raw().Method("next", id1).Call().Execute()
@@ -101,26 +99,26 @@ func Test_Staker_GasUsage(t *testing.T) {
 
 	t.Run("increase / autorenew / decrease ", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, validator1, staker.IncreaseStake(id1, builtin.MinStake()))
+		receipt := testutil.Send(t, validator1, staker.IncreaseStake(addr1, builtin.MinStake()))
 		tw.AppendRow(table.Row{"increaseStake", receipt.GasUsed})
-		receipt = testutil.Send(t, validator1, staker.DecreaseStake(id1, builtin.MinStake()))
+		receipt = testutil.Send(t, validator1, staker.DecreaseStake(addr1, builtin.MinStake()))
 		tw.AppendRow(table.Row{"decreaseStake", receipt.GasUsed})
-		receipt = testutil.Send(t, validator1, staker.SignalExit(id1))
+		receipt = testutil.Send(t, validator1, staker.SignalExit(addr1))
 		tw.AppendRow(table.Row{"updateAutoRenew", receipt.GasUsed})
 	})
 
 	t.Run("updateAutoRenew / withdraw", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, validator2, staker.SignalExit(id2))
+		receipt := testutil.Send(t, validator2, staker.SignalExit(addr2))
 		tw.AppendRow(table.Row{"updateAutoRenew", receipt.GasUsed})
-		receipt = testutil.Send(t, validator2, staker.WithdrawStake(id2))
+		receipt = testutil.Send(t, validator2, staker.WithdrawStake(addr2))
 		tw.AppendRow(table.Row{"withdraw", receipt.GasUsed})
 	})
 
 	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
 	t.Run("addDelegation / updateDelegationAutoRenew", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(id3, delegationStake, true, 100))
+		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, true, 100))
 		tw.AppendRow(table.Row{"addDelegation-1", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.UpdateDelegationAutoRenew(delegationID, false))
@@ -129,7 +127,7 @@ func Test_Staker_GasUsage(t *testing.T) {
 
 	t.Run("addDelegation-2 / get", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(id3, delegationStake, true, 100))
+		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, true, 100))
 		tw.AppendRow(table.Row{"addDelegation-2", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
 		res, err := staker.Raw().Method("getDelegation", delegationID).Call().Execute()
@@ -138,7 +136,7 @@ func Test_Staker_GasUsage(t *testing.T) {
 
 	t.Run("addDelegation-3 / withdrawDelegation", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(id3, delegationStake, false, 100))
+		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, false, 100))
 		tw.AppendRow(table.Row{"addDelegation-3", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))

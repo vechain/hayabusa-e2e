@@ -373,7 +373,7 @@ func Test_Delegations(t *testing.T) {
 	})
 }
 
-func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]thor.Bytes32) {
+func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]thor.Address) {
 	t.Helper()
 	config := &hayabusa.Config{
 		Nodes:             6,
@@ -400,7 +400,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		t.Fatalf("failed to wait for fork: %v", err)
 	}
 
-	validationIDs := [6]thor.Bytes32{}
+	validationIDs := [6]thor.Address{}
 	senders := &utils.Senders{}
 
 	for i := range validationIDs {

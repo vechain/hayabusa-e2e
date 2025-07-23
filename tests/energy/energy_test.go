@@ -111,14 +111,15 @@ func runEnergyTest(t *testing.T) error {
 
 	actualStakerRewards := new(big.Int)
 	for _, receipt := range receipts {
-		validatorID := receipt.Outputs[0].Events[0].Topics[3]
-		validator, err := staker.Get(validatorID)
+		validatorID := receipt.Outputs[0].Events[0].Topics[2]
+		addr := thor.BytesToAddress(validatorID.Bytes())
+		validator, err := staker.Get(addr)
 		require.NoError(t, err)
 
 		if validator.Status == builtin.StakerStatusUnknown {
 			return testutil.StakerStatusUnknownError{ValidationID: validatorID.String()}
 		}
-		rewards, err := staker.GetRewards(validatorID, 1)
+		rewards, err := staker.GetRewards(addr, 1)
 		require.NoError(t, err)
 		actualStakerRewards = actualStakerRewards.Add(actualStakerRewards, rewards)
 	}
