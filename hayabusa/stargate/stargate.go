@@ -3,9 +3,10 @@ package stargate
 import (
 	_ "embed"
 	"fmt"
-	"github.com/vechain/thor/v2/api"
 	"log/slog"
 	"math/big"
+
+	"github.com/vechain/thor/v2/api"
 
 	"github.com/vechain/thor/v2/thorclient"
 

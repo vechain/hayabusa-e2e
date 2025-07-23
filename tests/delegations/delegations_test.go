@@ -267,18 +267,18 @@ func Test_Delegations(t *testing.T) {
 		// wait for validators current period + 1 staking period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*1))
 
-		receipt = testutil.Send(t, validatorAccount, staker.UpdateAutoRenew(validationIDs[3], false))
+		receipt = testutil.Send(t, validatorAccount, staker.SignalExit(validationIDs[3]))
 
 		// wait for validators current period to end
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
 		// withdraw - should succeed since validator exited
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID1))
+		testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID1))
 		delegation1, err = staker.GetDelegation(delegationID1)
 		require.NoError(t, err)
 		assert.True(t, delegation1.Stake.Sign() == 0)
 
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID2))
+		testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID2))
 		delegation2, err = staker.GetDelegation(delegationID2)
 		require.NoError(t, err)
 		assert.True(t, delegation2.Stake.Sign() == 0)
@@ -407,7 +407,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod, true).
+		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod).
 			Send().
 			WithSigner(account).
 			WithOptions(testutil.TxOptions())

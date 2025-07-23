@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	utils2 "github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"log/slog"
+	"math"
 	"net"
 	"os"
 	"os/signal"
@@ -19,6 +20,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	utils2 "github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/networkhub/thorbuilder"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -39,7 +41,7 @@ func main() {
 		HighStakingPeriod: 259200,
 	}
 	network := hayabusa.NewNetwork(config, ctx)
-	os.Setenv("THOR_WORKING_DIR", "/Users/darren/workspace/vechain/thor")
+	//os.Setenv("THOR_WORKING_DIR", "/Users/darren/workspace/vechain/thor")
 
 	slog.SetLogLoggerLevel(slog.LevelInfo)
 
@@ -90,8 +92,15 @@ func main() {
 	defer printOutput(engine)
 
 	// initial seeding of validator accounts
-	for _, acc := range initialValidators {
+	for i, acc := range initialValidators {
 		config := engine.GenerateValidatorConfig(acc, 0)
+		if i < 50 { // create 50 long term validators
+			config.StakingPeriods = math.MaxUint32
+		} else if i < 70 { // create 20 mid-term validators
+			config.StakingPeriods = uint32(utils.RandomBetween(30, 100))
+		} else {
+			config.StakingPeriods = uint32(utils.RandomBetween(6, 12)) // create 20 short term validators
+		}
 		config.QueueDelay = lifecycle.Delay{Blocks: 0, Epochs: 0}
 		cycle := lifecycle.NewValidatorLifecycle(config)
 		engine.AddLifecycle(cycle)

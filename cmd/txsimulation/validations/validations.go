@@ -5,6 +5,7 @@ import (
 	utils2 "github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
 	"log/slog"
+	"math"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -122,7 +123,7 @@ func (s *State) poll() {
 }
 
 func (s *State) Withdraw(id thor.Bytes32, signer bind.Signer) (*api.Receipt, error) {
-	sender := s.stack.Staker().Withdraw(id)
+	sender := s.stack.Staker().WithdrawStake(id)
 	receipt, err := s.stack.SendTransaction(sender, signer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to withdraw from validator %s: %w", id.String(), err)
@@ -131,7 +132,7 @@ func (s *State) Withdraw(id thor.Bytes32, signer bind.Signer) (*api.Receipt, err
 }
 
 func (s *State) QueueValidator(acc bind.Signer, autoRenew bool) (thor.Bytes32, *api.Receipt, error) {
-	sender := s.stack.Staker().AddValidator(acc.Address(), RandomStake(), s.stack.Config().MinStakingPeriod, autoRenew)
+	sender := s.stack.Staker().AddValidator(acc.Address(), RandomStake(), s.stack.Config().MinStakingPeriod)
 	receipt, err := s.stack.SendTransaction(sender, acc)
 	if err != nil {
 		return thor.Bytes32{}, nil, fmt.Errorf("failed to queue validator %s: %w", acc.Address(), err)
@@ -151,7 +152,7 @@ func (s *State) QueueValidator(acc bind.Signer, autoRenew bool) (thor.Bytes32, *
 }
 
 func (s *State) DisableAutoRenew(id thor.Bytes32, signer bind.Signer) (*api.Receipt, error) {
-	sender := s.stack.Staker().UpdateAutoRenew(id, false)
+	sender := s.stack.Staker().SignalExit(id)
 	receipt, err := s.stack.SendTransaction(sender, signer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to disable auto-renew for validator %s: %w", id.String(), err)
@@ -224,9 +225,9 @@ func (s *State) updateStatus(id thor.Bytes32, validation *builtin.Validator) {
 		hasUpdates = true
 		slog.Info("🐳validator status changed", "addr", validation.Master, "from", prevValidation.Status, "to", validation.Status)
 	}
-	if exists && prevValidation.AutoRenew != validation.AutoRenew {
+	if exists && prevValidation.ExitBlock != validation.ExitBlock {
 		hasUpdates = true
-		slog.Info("🤑validator auto-renew status changed", "addr", validation.Master, "from", prevValidation.AutoRenew, "to", validation.AutoRenew)
+		slog.Info("🤑validator auto-renew status changed", "addr", validation.Master, "from", prevValidation.ExitBlock, "to", validation.ExitBlock)
 	}
 	if exists && prevValidation.Stake.Cmp(validation.Stake) != 0 {
 		hasUpdates = true
@@ -255,7 +256,7 @@ func (s *State) updateStatus(id thor.Bytes32, validation *builtin.Validator) {
 	case builtin.StakerStatusQueued:
 		s.queued[id] = validation
 	case builtin.StakerStatusActive:
-		if validation.AutoRenew {
+		if validation.ExitBlock == math.MaxUint32 {
 			s.activeAutoRenew[id] = validation
 		} else {
 			s.activeOneTime[id] = validation
