@@ -31,7 +31,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	})
 }
 
-func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, validationID thor.Bytes32, expectedPeriods uint32) error {
+func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, validationID thor.Address, expectedPeriods uint32) error {
 	err := ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
 		completed, err := staker.GetCompletedPeriods(validationID)
 		slog.Info("⚠️ - completed periods, waiting for greater or equal than expected", "completed", int(*completed), "expected", expectedPeriods)
@@ -434,7 +434,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	return nil
 }
 
-func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Bytes32) {
+func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Address) {
 	t.Helper()
 	config := &hayabusa.Config{
 		Nodes:             3,
@@ -469,7 +469,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		t.Fatalf("failed to wait for fork: %v", err)
 	}
 
-	validationIDs := [3]thor.Bytes32{}
+	validationIDs := [3]thor.Address{}
 	senders := &utils.Senders{}
 
 	for i := range validationIDs {
@@ -580,8 +580,9 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 	return stargate
 }
 
-func receiptToID(receipt *api.Receipt) thor.Bytes32 {
-	return receipt.Outputs[0].Events[0].Topics[3]
+func receiptToID(receipt *api.Receipt) thor.Address {
+	id := receipt.Outputs[0].Events[0].Topics[2]
+	return thor.BytesToAddress(id.Bytes())
 }
 
 func receiptToDelegationID(t *testing.T, receipt *api.Receipt) thor.Bytes32 {

@@ -139,7 +139,7 @@ func (s *Stargate) Weights(validationID thor.Bytes32, period uint32) (*big.Int, 
 // ---- Transaction Methods ----
 
 // AddDelegator adds a delegator to a validation ID
-func (s *Stargate) AddDelegator(validationID thor.Bytes32, autoRenew bool, multiplier uint8, amount *big.Int) *bind.MethodBuilder {
+func (s *Stargate) AddDelegator(validationID thor.Address, autoRenew bool, multiplier uint8, amount *big.Int) *bind.MethodBuilder {
 	return s.contract.Method("addDelegator", validationID, autoRenew, multiplier).WithValue(amount)
 }
 

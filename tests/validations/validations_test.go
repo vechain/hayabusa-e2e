@@ -101,7 +101,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 	_, validatorID, err := staker.FirstActive()
 	assert.ErrorContains(t, err, "no active validator")
-	assert.Equal(t, thor.Bytes32{}, validatorID)
+	assert.Equal(t, thor.Address{}, validatorID)
 	t.Log("✅ - Validator is not activated since min validator threshold is not met")
 
 	id2 := addValidator(t, staker, validator2, config.MinStakingPeriod)
@@ -187,7 +187,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	retrievedValidator4, retrievedValidator4Id, err := staker.Next(id3)
 	assert.Error(t, err, "no next validator")
 	assert.Nil(t, retrievedValidator4)
-	assert.Equal(t, thor.Bytes32{}.String(), retrievedValidator4Id.String())
+	assert.Equal(t, thor.Address{}.String(), retrievedValidator4Id.String())
 
 	// assert validators staking periods
 	assertValidatorStakingPeriod(t, staker, id1, config.MinStakingPeriod)
@@ -299,7 +299,8 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	receipt := testutil.Send(t, validator3, staker.SignalExit(id3))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator3.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
-	assert.Equal(t, id3, receipt.Outputs[0].Events[0].Topics[2])
+	addr := receipt.Outputs[0].Events[0].Topics[2]
+	assert.Equal(t, id3, thor.BytesToAddress(addr.Bytes()))
 
 	t.Log("✅ - AutoRenew updated")
 
@@ -371,7 +372,8 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	receipt := testutil.Send(t, validator1, staker.IncreaseStake(id1, increase))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator1.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
-	assert.Equal(t, id1, receipt.Outputs[0].Events[0].Topics[2])
+	id := receipt.Outputs[0].Events[0].Topics[2]
+	assert.Equal(t, id1, thor.BytesToAddress(id.Bytes()))
 
 	t.Log("✅ - Validator 1 stake increased tx sent")
 
@@ -411,7 +413,8 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	testutil.Send(t, validator1, staker.DecreaseStake(id1, decrease))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator1.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
-	assert.Equal(t, id1, receipt.Outputs[0].Events[0].Topics[2])
+	address := receipt.Outputs[0].Events[0].Topics[2]
+	assert.Equal(t, id1, thor.BytesToAddress(address.Bytes()))
 
 	t.Log("✅ - Validator 1 stake decrease tx sent")
 
@@ -695,50 +698,51 @@ func runTestHayabusaTotalStakeDecreased(t *testing.T) error {
 	return nil
 }
 
-func addValidatorWithStake(t *testing.T, staker *builtin.Staker, signer bind.Signer, stake *big.Int, period uint32) thor.Bytes32 {
+func addValidatorWithStake(t *testing.T, staker *builtin.Staker, signer bind.Signer, stake *big.Int, period uint32) thor.Address {
 	receipt := testutil.Send(t, signer, staker.AddValidator(signer.Address(), stake, period))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, signer.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	assert.Equal(t, signer.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[2].Bytes()[12:])
 
-	id := receipt.Outputs[0].Events[0].Topics[3]
+	id := receipt.Outputs[0].Events[0].Topics[2]
 	amount := big.NewInt(0).Quo(stake, big.NewInt(1e18))
 	slog.Info("✅ - added validator", "validator", signer.Address().String(), "period", period, "stake", amount, "id", id.String())
 
-	return id
+	return thor.BytesToAddress(id.Bytes())
 }
 
-func addValidator(t *testing.T, staker *builtin.Staker, signer bind.Signer, period uint32) thor.Bytes32 {
+func addValidator(t *testing.T, staker *builtin.Staker, signer bind.Signer, period uint32) thor.Address {
 	return addValidatorWithStake(t, staker, signer, calculateValidatorStake(), period)
 }
 
-func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Bytes32) {
+func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Address) {
 	receipt := testutil.Send(t, signer, staker.WithdrawStake(validatorID))
 	addr := signer.Address()
+	id := receipt.Outputs[0].Events[0].Topics[2]
 	assert.Equal(t, addr.Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
-	assert.Equal(t, validatorID, receipt.Outputs[0].Events[0].Topics[2])
+	assert.Equal(t, validatorID, thor.BytesToAddress(id.Bytes()))
 	assert.Len(t, receipt.Outputs[0].Transfers, 1)
 	assert.Equal(t, receipt.Outputs[0].Transfers[0].Recipient, addr)
 	slog.Info("✅ - validator withdrawn", "validator", validatorID.String())
 }
 
-func assertMatchingValidators(t *testing.T, staker *builtin.Staker, id1 thor.Bytes32, masterAddress thor.Address) {
+func assertMatchingValidators(t *testing.T, staker *builtin.Staker, id1 thor.Address, masterAddress thor.Address) {
 	val1, err := staker.Get(id1)
 	assert.NoError(t, err)
 
-	val2, _, err := staker.LookupNode(masterAddress)
+	val2, err := staker.Get(masterAddress)
 	assert.NoError(t, err)
 	assert.Equal(t, val1, val2)
 }
 
-func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
+func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
-func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedStatus builtin.StakerStatus, waitForBlock uint32) error {
+func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) error {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
@@ -749,13 +753,13 @@ func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validato
 	return nil
 }
 
-func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, expectedPeriod uint32) {
+func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedPeriod uint32) {
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedPeriod, validator.Period)
 }
 
-func assertRewards(t *testing.T, staker *builtin.Staker, validatorID thor.Bytes32, totalStaked *big.Int, periodStart uint32, periodEnd uint32) {
+func assertRewards(t *testing.T, staker *builtin.Staker, validatorID thor.Address, totalStaked *big.Int, periodStart uint32, periodEnd uint32) {
 	expectedReward := hayabusa.GetExpectedReward(totalStaked)
 	validator, err := staker.Get(validatorID)
 	assert.NoError(t, err)
@@ -831,7 +835,7 @@ func assertTotalStakeAndWeight(t *testing.T, staker *builtin.Staker, expectedAct
 	assert.Equal(t, expectedTotalWeight, totalWeight)
 }
 
-func waitForPoSAndAssertFirstActive(t *testing.T, staker *builtin.Staker, config *hayabusa.Config, expectedFirstActive thor.Bytes32) uint32 {
+func waitForPoSAndAssertFirstActive(t *testing.T, staker *builtin.Staker, config *hayabusa.Config, expectedFirstActive thor.Address) uint32 {
 	block := config.ForkBlock + config.TransitionPeriod
 	require.NoError(t, utils.WaitForPOS(staker, block))
 
