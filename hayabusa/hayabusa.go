@@ -65,9 +65,9 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 		Build()
 }
 
-func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBranch *string) (*thorclient.Client, environments.Actions, func(), error) {
+func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBranch *string) (*thorclient.Client, environments.Actions, func(), []node.Config, error) {
 	if config.Nodes < 2 {
-		return nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
+		return nil, nil, nil, nil, fmt.Errorf("at least 2 nodes are required")
 	}
 
 	buildMutex.Lock()
@@ -164,13 +164,13 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 	networkIDResult, err := networkHub.Config(networkCfg)
 	if err != nil {
 		cleanupPorts(usedPorts)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
 	if err != nil {
 		cleanupPorts(usedPorts)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	if maliciousPath != nil {
@@ -182,21 +182,21 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 		hayabusaNetwork.StopNetwork()
 
 		cleanupPorts(usedPorts)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
 		hayabusaNetwork.StopNetwork()
 
 		cleanupPorts(usedPorts)
-		return nil, nil, nil, fmt.Errorf("health check failed: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("health check failed: %w", err)
 	}
 
 	err = utils.WaitForPeersConnection(t, nodes, config.Nodes-1)
 	if err != nil {
 		hayabusaNetwork.StopNetwork()
 		cleanupPorts(usedPorts)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
@@ -208,11 +208,12 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 		if err := hayabusaNetwork.StopNetwork(); err != nil {
 			slog.Error("failed to stop network", "error", err)
 		}
-	}, nil
+	}, nodes, nil
 }
 
 func StartNetwork(t *testing.T, config *Config) (*thorclient.Client, environments.Actions, func(), error) {
-	return StartNetworkWithMaliciousNode(t, config, nil)
+	a1, a2, a3, _, err := StartNetworkWithMaliciousNode(t, config, nil)
+	return a1, a2, a3, err
 }
 
 func authorities() []thorgenesis.Authority {
