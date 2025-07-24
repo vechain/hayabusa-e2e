@@ -2,7 +2,6 @@ package delegations
 
 import (
 	"context"
-
 	"math/big"
 	"strconv"
 	"testing"
@@ -95,10 +94,15 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	previousTotalStake, previousTotalWeight, err := staker.TotalStake()
 	require.NoError(t, err)
 
-	// wait for validators current period + 1 staking period
-	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+	// wait for validators current period to activate delegator
+	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
+	receipt = testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
+	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 	// withdraw - should succeed since auto-renew is false
+	delegation, err = staker.GetDelegation(delegationID)
+	require.NoError(t, err)
+	assert.False(t, delegation.Locked)
 	receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 
 	delegation, err = staker.GetDelegation(delegationID)
@@ -343,8 +347,8 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		MaxBlockProposers: 6,
 		ForkBlock:         0,
 		TransitionPeriod:  4,
-		EpochLength:       2,
-		CooldownPeriod:    2,
+		EpochLength:       4,
+		CooldownPeriod:    4,
 		MinStakingPeriod:  4,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,

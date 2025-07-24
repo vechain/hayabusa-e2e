@@ -23,6 +23,7 @@ var Bin string
 // Stargate represents a wrapper to interact with the Stargate contract
 type Stargate struct {
 	contract *bind.Contract
+	revision string
 }
 
 // NewStargate creates a new instance of the Stargate contract wrapper
@@ -46,12 +47,20 @@ func (s *Stargate) Address() *thor.Address {
 	return s.contract.Address()
 }
 
+// Revision returns a new Stargate instance with the specified revision
+func (s *Stargate) Revision(rev string) *Stargate {
+	return &Stargate{
+		contract: s.contract,
+		revision: rev,
+	}
+}
+
 // ---- Getter Methods ----
 
 // Claims returns the claims for a given validation ID
 func (s *Stargate) Claims(validationID thor.Bytes32) (uint32, error) {
 	var result uint32
-	if err := s.contract.Method("claims", validationID).Call().ExecuteInto(&result); err != nil {
+	if err := s.contract.Method("claims", validationID).Call().AtRevision(s.revision).ExecuteInto(&result); err != nil {
 		return 0, err
 	}
 	return result, nil
@@ -60,7 +69,7 @@ func (s *Stargate) Claims(validationID thor.Bytes32) (uint32, error) {
 // DelegationIDs returns the delegation ID for a given address
 func (s *Stargate) DelegationIDs(address thor.Address) (thor.Bytes32, error) {
 	out := new(common.Hash)
-	if err := s.contract.Method("delegationIDs", address).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("delegationIDs", address).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return thor.Bytes32{}, err
 	}
 	return thor.Bytes32(*out), nil
@@ -73,7 +82,7 @@ func (s *Stargate) GetClaimable(delegator thor.Address) (*big.Int, uint32, uint3
 	out[1] = new(uint32)
 	out[2] = new(uint32)
 
-	if err := s.contract.Method("getClaimable", delegator).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("getClaimable", delegator).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, 0, 0, err
 	}
 
@@ -83,7 +92,7 @@ func (s *Stargate) GetClaimable(delegator thor.Address) (*big.Int, uint32, uint3
 // PopulatedWeights returns the populated weights for a validation ID
 func (s *Stargate) PopulatedWeights(validationID thor.Bytes32) (uint32, error) {
 	var result uint32
-	if err := s.contract.Method("populatedWeights", validationID).Call().ExecuteInto(&result); err != nil {
+	if err := s.contract.Method("populatedWeights", validationID).Call().AtRevision(s.revision).ExecuteInto(&result); err != nil {
 		return 0, err
 	}
 	return result, nil
@@ -92,7 +101,7 @@ func (s *Stargate) PopulatedWeights(validationID thor.Bytes32) (uint32, error) {
 // Reductions returns the reductions for a validation ID and period
 func (s *Stargate) Reductions(validationID thor.Bytes32, period uint32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.Method("reductions", validationID, period).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("reductions", validationID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -101,7 +110,7 @@ func (s *Stargate) Reductions(validationID thor.Bytes32, period uint32) (*big.In
 // Rewards returns the rewards for a validation ID and period
 func (s *Stargate) Rewards(validationID thor.Bytes32, period uint32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.Method("rewards", validationID, period).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("rewards", validationID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -110,7 +119,7 @@ func (s *Stargate) Rewards(validationID thor.Bytes32, period uint32) (*big.Int, 
 // Staker returns the staker contract address
 func (s *Stargate) Staker() (thor.Address, error) {
 	out := new(common.Address)
-	if err := s.contract.Method("staker").Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("staker").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -119,7 +128,7 @@ func (s *Stargate) Staker() (thor.Address, error) {
 // VTHO returns the VTHO token contract address
 func (s *Stargate) VTHO() (thor.Address, error) {
 	out := new(common.Address)
-	if err := s.contract.Method("vtho").Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("vtho").Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return thor.Address{}, err
 	}
 	return thor.Address(*out), nil
@@ -128,7 +137,7 @@ func (s *Stargate) VTHO() (thor.Address, error) {
 // Weights returns the weights for a validation ID and period
 func (s *Stargate) Weights(validationID thor.Bytes32, period uint32) (*big.Int, error) {
 	out := new(big.Int)
-	if err := s.contract.Method("weights", validationID, period).Call().ExecuteInto(&out); err != nil {
+	if err := s.contract.Method("weights", validationID, period).Call().AtRevision(s.revision).ExecuteInto(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
