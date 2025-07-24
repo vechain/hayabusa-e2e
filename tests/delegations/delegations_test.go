@@ -89,7 +89,7 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, builtin.MinStake(), delegation.Stake)
 	assert.Equal(t, uint8(100), delegation.Multiplier)
-	assert.False(t, delegation.AutoRenew)
+	assert.False(t, delegation.Locked)
 	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 	previousTotalStake, previousTotalWeight, err := staker.TotalStake()
@@ -134,7 +134,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation.Stake)
 		assert.Equal(t, uint8(100), delegation.Multiplier)
-		assert.True(t, delegation.AutoRenew)
+		assert.False(t, delegation.Locked)
 
 		// wait for validators current period + 1 staking period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
@@ -162,7 +162,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation.Stake)
 		assert.Equal(t, uint8(100), delegation.Multiplier)
-		assert.True(t, delegation.AutoRenew)
+		assert.False(t, delegation.Locked)
 
 		// wait for validators current period + 1 staking period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
@@ -215,7 +215,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation1.Stake)
 		assert.Equal(t, uint8(100), delegation1.Multiplier)
-		assert.True(t, delegation1.AutoRenew)
+		assert.False(t, delegation1.Locked)
 
 		// add the delegation
 		receipt = testutil.Send(t, hayabusa.Stargate,
@@ -225,7 +225,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation2.Stake)
 		assert.Equal(t, uint8(100), delegation2.Multiplier)
-		assert.True(t, delegation2.AutoRenew)
+		assert.False(t, delegation2.Locked)
 
 		// wait for validators current period + 1 staking period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*1))
@@ -302,12 +302,12 @@ func Test_Delegations(t *testing.T) {
 		delegation, err := staker.GetDelegation(firstDelegationID)
 		require.NoError(t, err)
 		assert.Equal(t, firstStake, delegation.Stake)
-		assert.True(t, delegation.AutoRenew)
+		assert.False(t, delegation.Locked)
 
 		delegation, err = staker.GetDelegation(secondDelegationID)
 		require.NoError(t, err)
 		assert.Equal(t, secondStake, delegation.Stake)
-		assert.True(t, delegation.AutoRenew)
+		assert.False(t, delegation.Locked)
 
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 		totalsBeforeWithdrawal, err := staker.GetValidatorsTotals(validationIDs[5])
