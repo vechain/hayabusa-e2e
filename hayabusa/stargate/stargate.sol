@@ -64,6 +64,8 @@ contract Stargate {
         weights[validationID][startPeriod] += weight;
     }
 
+    event DisabledAutoRenew(address indexed delegator, uint32 roundReduction, uint256 reductionWeight);
+
     function disableAutoRenew() public {
         bytes32 delegationID = delegationIDs[msg.sender];
         require(delegationID != bytes32(0), "not a delegator");
@@ -76,7 +78,10 @@ contract Stargate {
         uint256 weight = (stake * multiplier) / 100;
 
         staker.signalDelegationExit(delegationID);
-        reductions[validationID][validatorCompleted + 1] += weight;
+        uint32 lastPeriod = validatorCompleted + 1; // last staking period
+        uint32 reductionPeriod = lastPeriod + 1; // first round after the delegation exit, reduce the weight on this round
+        reductions[validationID][reductionPeriod] += weight;
+        emit DisabledAutoRenew(msg.sender, reductionPeriod, weight);
     }
 
 
@@ -131,7 +136,7 @@ contract Stargate {
         uint256 delegatorWeight = (stake * multiplier) / 100;
 
         emit ClaimParams(delegationID, msg.sender,  firstClaimablePeriod, maxClaimablePeriod, claims[delegationID], maxClaimablePeriod, delegatorWeight);
-        
+
         if (maxClaimablePeriod == 0 || firstClaimablePeriod > maxClaimablePeriod) {
             return (0, firstClaimablePeriod, maxClaimablePeriod);
         }

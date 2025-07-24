@@ -224,6 +224,35 @@ func (s *Stargate) FilterClaimedRewards(from, to uint32) ([]*ClaimedRewardsEvent
 	return out, nil
 }
 
+type DisabledAutoRenewEvent struct {
+	Delegator       thor.Address
+	RoundReduction  uint32
+	ReductionWeight *big.Int
+}
+
+func (s *Stargate) ParseDisabledAutoRenew(topics []*thor.Bytes32, data string) (*DisabledAutoRenewEvent, error) {
+	if len(topics) < 2 {
+		return nil, fmt.Errorf("not enough topics for DisabledAutoRenew event")
+	}
+
+	delegator := thor.BytesToAddress(topics[1][:]) // indexed
+	dataFields := make([]any, 2)
+	dataFields[0] = new(uint32)
+	dataFields[1] = new(*big.Int)
+	bytes, err := hexutil.Decode(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode DisabledAutoRenew event data: %w", err)
+	}
+	if err := s.contract.ABI().Events["DisabledAutoRenew"].Inputs.Unpack(&dataFields, bytes); err != nil {
+		return nil, fmt.Errorf("failed to unpack DisabledAutoRenew event data: %w", err)
+	}
+	return &DisabledAutoRenewEvent{
+		Delegator:       delegator,
+		RoundReduction:  *(dataFields[0].(*uint32)),
+		ReductionWeight: *(dataFields[1].(**big.Int)),
+	}, nil
+}
+
 type ClaimParamsEvent struct {
 	DelegationID              thor.Bytes32
 	Delegator                 thor.Address
@@ -580,7 +609,16 @@ func (s *Stargate) LogEventValues(events []*api.Event) {
 				"allDelegatorsWeight", event.AllDelegatorsWeight,
 				"allDelegatorsRewards", event.AllDelegatorsRewards,
 			)
-
+		case "DisabledAutoRenew":
+			event, err := s.ParseDisabledAutoRenew(topicsToPointers(event.Topics), event.Data)
+			if err != nil {
+				fmt.Printf("Error parsing DisabledAutoRenew event: %v\n", err)
+				continue
+			}
+			slog.Info("DisabledAutoRenew Event",
+				"delegator", event.Delegator,
+				"roundReduction", event.RoundReduction,
+				"reductionWeight", event.ReductionWeight)
 		default:
 			slog.Warn("Unknown Stargate event",
 				"name", name,
