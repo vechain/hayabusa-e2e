@@ -69,7 +69,7 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(10)) // very large stake
-	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, true, 200, stake))
+	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -209,7 +209,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(3)) // very large stake
-	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, false, 200, stake))
+	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -317,7 +317,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(3))
-	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, true, 200, stake))
+	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 

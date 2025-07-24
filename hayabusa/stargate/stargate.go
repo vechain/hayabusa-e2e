@@ -6,13 +6,11 @@ import (
 	"log/slog"
 	"math/big"
 
-	"github.com/vechain/thor/v2/api"
-
-	"github.com/vechain/thor/v2/thorclient"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
@@ -139,8 +137,8 @@ func (s *Stargate) Weights(validationID thor.Bytes32, period uint32) (*big.Int, 
 // ---- Transaction Methods ----
 
 // AddDelegator adds a delegator to a validation ID
-func (s *Stargate) AddDelegator(validationID thor.Address, autoRenew bool, multiplier uint8, amount *big.Int) *bind.MethodBuilder {
-	return s.contract.Method("addDelegator", validationID, autoRenew, multiplier).WithValue(amount)
+func (s *Stargate) AddDelegator(validationID thor.Address, multiplier uint8, amount *big.Int) *bind.MethodBuilder {
+	return s.contract.Method("addDelegator", validationID, multiplier).WithValue(amount)
 }
 
 // ClaimRewards claims rewards for the sender
@@ -151,11 +149,6 @@ func (s *Stargate) ClaimRewards() *bind.MethodBuilder {
 // DisableAutoRenew disables auto renewal for the sender's delegation
 func (s *Stargate) DisableAutoRenew() *bind.MethodBuilder {
 	return s.contract.Method("disableAutoRenew")
-}
-
-// EnableAutoRenew enables auto renewal for the sender's delegation
-func (s *Stargate) EnableAutoRenew() *bind.MethodBuilder {
-	return s.contract.Method("enableAutoRenew")
 }
 
 // ---- Event Filterers ----

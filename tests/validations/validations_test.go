@@ -617,7 +617,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	delegatorStake = new(big.Int).Mul(delegatorStake, big.NewInt(10))
 
 	// Add delegator
-	receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(id2, delegatorStake, false, 100))
+	receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(id2, delegatorStake, 100))
 	t.Log("✅ - New delegator added to queued validator")
 
 	// Get delegation ID from receipt

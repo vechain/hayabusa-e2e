@@ -11,11 +11,11 @@ interface IStaker {
     function getCompletedPeriods(address validationID) external view returns (uint32);
 
     // delegator functions
-    function addDelegation(address validationID, bool autoRenew, uint8 multiplier) external payable returns (bytes32);
-    function updateDelegationAutoRenew(bytes32 delegationID, bool active) external;
+    function addDelegation(address validationID, uint8 multiplier) external payable returns (bytes32);
+    function signalDelegationExit(bytes32 delegationID) external;
     function withdrawDelegation(bytes32 delegationID) external;
-    // validationID, stake, startPeriod, endPeriod, multiplier, autoRenew, active
-    function getDelegation(bytes32 delegationID) external view returns (address, uint256, uint32, uint32, uint8, bool, bool);
+    // validationID, stake, startPeriod, endPeriod, multiplier, active
+    function getDelegation(bytes32 delegationID) external view returns (address, uint256, uint32, uint32, uint8, bool);
 }
 
 contract Stargate {
@@ -45,59 +45,37 @@ contract Stargate {
     // staking round rewards (validation ID => staking period => reward). rewards per validator per staking period
     mapping(address => mapping(uint32 => uint256)) public rewards;
 
-    function addDelegator(address validationID, bool autoRenew, uint8 multiplier) public payable {
+    function addDelegator(address validationID, uint8 multiplier) public payable {
         // validation
         require(delegationIDs[msg.sender] == bytes32(0), "already a delegator");
         require(msg.value > 0, "must send ether");
 
         // create the delegation position
-        bytes32 delegationID = staker.addDelegation{value: msg.value}(validationID, autoRenew, multiplier);
+        bytes32 delegationID = staker.addDelegation{value: msg.value}(validationID,  multiplier);
 
         // store data for later use
         delegationIDs[msg.sender] = delegationID;
 
         uint256 weight = (msg.value * multiplier) / 100;
 
-        (address validationID, uint256 stake, uint32 startPeriod, uint32 endPeriod, uint8 multiplier, bool autoRenew, bool active) = staker.getDelegation(delegationID);
+        (address validationID, uint256 stake, uint32 startPeriod, uint32 endPeriod, uint8 multiplier, bool active) = staker.getDelegation(delegationID);
 
         // so we can calculate the delegators % of total
         weights[validationID][startPeriod] += weight;
-
-        if (!autoRenew) {
-            reductions[validationID][startPeriod + 1] += weight;
-        }
-    }
-
-    function enableAutoRenew() public {
-        bytes32 delegationID = delegationIDs[msg.sender];
-        require(delegationID != bytes32(0), "not a delegator");
-
-        (address validationID, uint256 stake, uint32 startPeriod, uint32 endPeriod, uint8 multiplier, bool autoRenew, bool active) = staker.getDelegation(delegationID);
-
-        require(stake > 0, "delegation is not active");
-        require(autoRenew == false, "auto renew already enabled");
-
-        uint32 validatorCompleted = staker.getCompletedPeriods(validationID);
-
-        require(endPeriod > validatorCompleted, "delegation has expired");
-        staker.updateDelegationAutoRenew(delegationID, true);
-        uint256 weight = (stake * multiplier) / 100;
-        reductions[validationID][validatorCompleted + 1] -= weight;
     }
 
     function disableAutoRenew() public {
         bytes32 delegationID = delegationIDs[msg.sender];
         require(delegationID != bytes32(0), "not a delegator");
 
-        (address validationID, uint256 stake, uint32 startPeriod, uint32 endPeriod, uint8 multiplier, bool autoRenew, bool active) = staker.getDelegation(delegationID);
+        (address validationID, uint256 stake, uint32 startPeriod, uint32 endPeriod, uint8 multiplier, bool active) = staker.getDelegation(delegationID);
         require(stake > 0, "delegation is not active");
-        require(autoRenew == true, "auto renew already disabled");
 
         uint32 validatorCompleted = staker.getCompletedPeriods(validationID);
 
         uint256 weight = (stake * multiplier) / 100;
 
-        staker.updateDelegationAutoRenew(delegationID, false);
+        staker.signalDelegationExit(delegationID);
         reductions[validationID][validatorCompleted + 1] += weight;
     }
 
@@ -130,8 +108,7 @@ contract Stargate {
             uint256 stake,
             uint32 startPeriod,
             uint32 endPeriod,
-            uint8 multiplier,
-            bool autoRenew
+            uint8 multiplier
         ) = _getDelegationInfo(delegationID);
 
         require(stake > 0, "delegation is not active");
@@ -197,12 +174,11 @@ contract Stargate {
         uint256 stake,
         uint32 startPeriod,
         uint32 endPeriod,
-        uint8 multiplier,
-        bool autoRenew
+        uint8 multiplier
     ) {
         bool active;
-        (validationID, stake, startPeriod, endPeriod, multiplier, autoRenew, active) = staker.getDelegation(delegationID);
-        return (validationID, stake, startPeriod, endPeriod, multiplier, autoRenew);
+        (validationID, stake, startPeriod, endPeriod, multiplier, active) = staker.getDelegation(delegationID);
+        return (validationID, stake, startPeriod, endPeriod, multiplier);
     }
 
     event WeightsPopulated(address indexed validationID, uint32 stakingPeriod, uint256 previousWeight, uint256 increase, uint256 reduction, uint256 newWeight);
