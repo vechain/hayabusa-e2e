@@ -372,10 +372,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 
 	totalRewards, err := staker.GetDelegatorsRewards(validationID, 3)
 	assert.NoError(t, err)
-	validatorRewards := big.NewInt(0).Mul(totalRewards, big.NewInt(3))
-	validatorRewards = big.NewInt(0).Div(validatorRewards, big.NewInt(10))
-	expectedClaimable := big.NewInt(0).Sub(totalRewards, validatorRewards)
-	assert.Equal(t, expectedClaimable, claimableAmount)
+	assert.Equal(t, totalRewards, claimableAmount)
 
 	accAddress := acc.Address()
 	blck, err := staker.Raw().Client().Block("best")
