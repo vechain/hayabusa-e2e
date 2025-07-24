@@ -7,7 +7,7 @@ interface IERC20 {
 
 interface IStaker {
     // validator functions
-    function getRewards(address validationID, uint32 stakingPeriod) external view returns (uint256);
+    function getDelegatorsRewards(address validationID, uint32 stakingPeriod) external view returns (uint256);
     function getCompletedPeriods(address validationID) external view returns (uint32);
 
     // delegator functions
@@ -206,7 +206,7 @@ contract Stargate {
         emit WeightsPopulated(validationID, stakingPeriod, previousWeight, increase, reduction, newWeight);
     }
 
-    event RewardsPopulated(address indexed validationID, uint32 stakingPeriod, uint256 blockRewards, uint256 allDelegatorsRewards, uint256 proposerRewards);
+    event RewardsPopulated(address indexed validationID, uint32 stakingPeriod, uint256 allDelegatorsRewards);
 
     function _updateRewards(
         address validationID,
@@ -216,10 +216,8 @@ contract Stargate {
             // no delegators for this staking period
             return;
         }
-        uint256 blockRewards = staker.getRewards(validationID, stakingPeriod);
-        uint256 proposerRewards = (blockRewards * 3) / 10;
-        uint256 allDelegatorsRewards = blockRewards - proposerRewards;
-        emit RewardsPopulated(validationID, stakingPeriod, blockRewards, allDelegatorsRewards, proposerRewards);
+        uint256 allDelegatorsRewards = staker.getDelegatorsRewards(validationID, stakingPeriod);
+        emit RewardsPopulated(validationID, stakingPeriod, allDelegatorsRewards);
         rewards[validationID][stakingPeriod] = allDelegatorsRewards;
     }
 

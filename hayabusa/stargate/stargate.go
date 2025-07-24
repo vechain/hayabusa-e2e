@@ -414,9 +414,7 @@ func (s *Stargate) FilterWeightsPopulated(from, to uint32) ([]*WeightsPopulatedE
 type RewardsPopulatedEvent struct {
 	ValidationID         thor.Bytes32
 	StakingPeriod        uint32
-	BlockRewards         *big.Int
 	AllDelegatorsRewards *big.Int
-	ProposerRewards      *big.Int
 }
 
 func (s *Stargate) ParseRewardsPopulated(topics []*thor.Bytes32, data string) (*RewardsPopulatedEvent, error) {
@@ -428,8 +426,6 @@ func (s *Stargate) ParseRewardsPopulated(topics []*thor.Bytes32, data string) (*
 	dataFields := make([]any, 4)
 	dataFields[0] = new(uint32)
 	dataFields[1] = new(*big.Int)
-	dataFields[2] = new(*big.Int)
-	dataFields[3] = new(*big.Int)
 	bytes, err := hexutil.Decode(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode RewardsPopulated event data: %w", err)
@@ -440,9 +436,7 @@ func (s *Stargate) ParseRewardsPopulated(topics []*thor.Bytes32, data string) (*
 	return &RewardsPopulatedEvent{
 		ValidationID:         validationID,
 		StakingPeriod:        *(dataFields[0].(*uint32)),
-		BlockRewards:         *(dataFields[1].(**big.Int)),
-		AllDelegatorsRewards: *(dataFields[2].(**big.Int)),
-		ProposerRewards:      *(dataFields[3].(**big.Int)),
+		AllDelegatorsRewards: *(dataFields[1].(**big.Int)),
 	}, nil
 }
 
@@ -593,9 +587,7 @@ func (s *Stargate) LogEventValues(events []*api.Event) {
 
 			slog.Info("RewardsPopulated Event",
 				"stakingPeriod", event.StakingPeriod,
-				"blockRewards", event.BlockRewards,
 				"allDelegatorsRewards", event.AllDelegatorsRewards,
-				"proposerRewards", event.ProposerRewards,
 			)
 		case "RewardsCalculated":
 			event, err := s.ParseRewardsCalculated(topicsToPointers(event.Topics), event.Data)
