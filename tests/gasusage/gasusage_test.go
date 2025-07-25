@@ -114,16 +114,16 @@ func Test_Staker_GasUsage(t *testing.T) {
 	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
 	t.Run("addDelegation / updateDelegationAutoRenew", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, true, 100))
+		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, 100))
 		tw.AppendRow(table.Row{"addDelegation-1", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.UpdateDelegationAutoRenew(delegationID, false))
+		receipt = testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
 		tw.AppendRow(table.Row{"updateDelegationAutoRenew", receipt.GasUsed})
 	})
 
 	t.Run("addDelegation-2 / get", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, true, 100))
+		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, 100))
 		tw.AppendRow(table.Row{"addDelegation-2", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
 		res, err := staker.Raw().Method("getDelegation", delegationID).Call().Execute()
@@ -132,7 +132,7 @@ func Test_Staker_GasUsage(t *testing.T) {
 
 	t.Run("addDelegation-3 / withdrawDelegation", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, false, 100))
+		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, 100))
 		tw.AppendRow(table.Row{"addDelegation-3", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))

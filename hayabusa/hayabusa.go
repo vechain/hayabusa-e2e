@@ -115,7 +115,7 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 			"txpool-limit-per-account": "100000",
 			"api-allowed-tracers":      "all",
 		}
-		stakerVerbosity := max(config.StakerVerbosity, 0)
+		stakerVerbosity := max(config.StakerVerbosity, 3)
 		if i == 0 { // enable verbose staker logs for 1 node
 			additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
 		}
