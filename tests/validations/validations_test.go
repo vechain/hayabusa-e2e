@@ -118,7 +118,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	t.Log("✅ - Both validators are activated")
 
-	testutil.Send(t, validator1, staker.SignalExit(id1))
+	manager.Send(validator1, staker.SignalExit(id1))
 
 	block += config.MinStakingPeriod
 	id3 := addValidator(manager, staker, validator3, config.MinStakingPeriod)
@@ -169,8 +169,8 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 
-	testutil.Send(t, validator1, staker.SignalExit(id1))
-	testutil.Send(t, validator2, staker.SignalExit(id2))
+	manager.Send(validator1, staker.SignalExit(id1))
+	manager.Send(validator2, staker.SignalExit(id2))
 
 	retrievedValidator2, retrievedValidator2Id, err := staker.Next(id1)
 	assert.NoError(t, err)
@@ -224,7 +224,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 
 	t.Log("✅ - Second validator exited")
 
-	validatorWithdraw(t, staker, validator1, id1)
+	validatorWithdraw(manager, staker, validator1, id1)
 }
 
 func TestHayabusaQueuedAndThenEnter(t *testing.T) {
@@ -292,7 +292,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assert.Equal(t, id4, validatorID)
 	t.Log("✅ - Three validators are activated, 2 are queued, queue order has changed based on weight")
 
-	receipt := testutil.Send(t, validator3, staker.SignalExit(id3))
+	receipt := manager.Send(validator3, staker.SignalExit(id3))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator3.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	addr := receipt.Outputs[0].Events[0].Topics[2]
@@ -361,7 +361,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	increase := big.NewInt(1e18)
 	increase = big.NewInt(0).Mul(increase, big.NewInt(1e6))
 	increase = big.NewInt(0).Mul(increase, big.NewInt(5))
-	receipt := testutil.Send(t, validator1, staker.IncreaseStake(id1, increase))
+	receipt := manager.Send(validator1, staker.IncreaseStake(id1, increase))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator1.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	id := receipt.Outputs[0].Events[0].Topics[2]
@@ -402,7 +402,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	decrease := big.NewInt(1e18)
 	decrease = big.NewInt(0).Mul(decrease, big.NewInt(1e6))
 	decrease = big.NewInt(0).Mul(decrease, big.NewInt(3))
-	testutil.Send(t, validator1, staker.DecreaseStake(id1, decrease))
+	manager.Send(validator1, staker.DecreaseStake(id1, decrease))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator1.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
 	address := receipt.Outputs[0].Events[0].Topics[2]
@@ -448,7 +448,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	assert.Equal(t, validatorStake, queued)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(2)), queuedWeight)
 
-	validatorWithdraw(t, staker, validator1, id1)
+	validatorWithdraw(manager, staker, validator1, id1)
 
 	t.Log("✅ - Validator 1 stake decreased")
 }
@@ -476,8 +476,8 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 
 	block := waitForPoSAndAssertFirstActive(t, staker, config, id1)
 
-	testutil.Send(t, validator1, staker.SignalExit(id1))
-	testutil.Send(t, validator2, staker.SignalExit(id2))
+	manager.Send(validator1, staker.SignalExit(id1))
+	manager.Send(validator2, staker.SignalExit(id2))
 
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
@@ -488,7 +488,7 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 
-	testutil.Send(t, validator3, staker.SignalExit(id3))
+	manager.Send(validator3, staker.SignalExit(id3))
 
 	queued, queuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
@@ -612,7 +612,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	delegatorStake = new(big.Int).Mul(delegatorStake, big.NewInt(10))
 
 	// Add delegator
-	receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(id2, delegatorStake, 100))
+	receipt := manager.Send(hayabusa.Stargate, staker.AddDelegation(id2, delegatorStake, 100))
 	t.Log("✅ - New delegator added to queued validator")
 
 	// Get delegation ID from receipt
@@ -630,7 +630,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	t.Log("✅ - Queued weight is increased for value of delegators stake")
 
 	// Remove delegator
-	_ = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
+	manager.Send(hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 	delegation, err := staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
 	assert.True(t, delegation.Stake.Sign() == 0)
@@ -674,7 +674,7 @@ func runTestHayabusaTotalStakeDecreased(t *testing.T) error {
 
 	block := waitForPoSAndAssertFirstActive(t, staker, config, id1)
 
-	testutil.Send(t, validator1, staker.SignalExit(id1))
+	manager.Send(validator1, staker.SignalExit(id1))
 
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
@@ -711,14 +711,14 @@ func addValidator(manager *testutil.TxManager, staker *builtin.Staker, signer bi
 	return addValidatorWithStake(manager, staker, signer, calculateValidatorStake(), period)
 }
 
-func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Address) {
-	receipt := testutil.Send(t, signer, staker.WithdrawStake(validatorID))
+func validatorWithdraw(manager *testutil.TxManager, staker *builtin.Staker, signer bind.Signer, validatorID thor.Address) {
+	receipt := manager.Send(signer, staker.WithdrawStake(validatorID))
 	addr := signer.Address()
 	id := receipt.Outputs[0].Events[0].Topics[2]
-	assert.Equal(t, addr.Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
-	assert.Equal(t, validatorID, thor.BytesToAddress(id.Bytes()))
-	assert.Len(t, receipt.Outputs[0].Transfers, 1)
-	assert.Equal(t, receipt.Outputs[0].Transfers[0].Recipient, addr)
+	assert.Equal(manager.Test(), addr.Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
+	assert.Equal(manager.Test(), validatorID, thor.BytesToAddress(id.Bytes()))
+	assert.Len(manager.Test(), receipt.Outputs[0].Transfers, 1)
+	assert.Equal(manager.Test(), receipt.Outputs[0].Transfers[0].Recipient, addr)
 	slog.Info("✅ - validator withdrawn", "validator", validatorID.String())
 }
 
