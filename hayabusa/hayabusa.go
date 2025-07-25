@@ -90,7 +90,7 @@ func StartNetworkWithMaliciousNode(t *testing.T, config *Config, maliciousNodeBr
 		thorBuilder = &thorbuilder.Config{
 			DownloadConfig: &thorbuilder.DownloadConfig{
 				RepoUrl:    repo,
-				Branch:     "vanja/feat/717-staker-utility-function-to-return-leader-group-queued-length",
+				Branch:     "release/hayabusa",
 				IsReusable: true,
 			},
 		}
