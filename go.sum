@@ -214,6 +214,8 @@ github.com/vechain/networkhub v0.0.0-20250530135136-c57dd785b5d1 h1:mCtLU6WYG8Az
 github.com/vechain/networkhub v0.0.0-20250530135136-c57dd785b5d1/go.mod h1:eKVUaHh3O3bFDGESAwyQQMy+mkrb4jHE7W1z/YRFySI=
 github.com/vechain/thor/v2 v2.3.2-0.20250724151102-f14562f0132a h1:dUAATx6c7fQdSjzNQj5Re9BliFe+Vu9vcMQd8qg7LMU=
 github.com/vechain/thor/v2 v2.3.2-0.20250724151102-f14562f0132a/go.mod h1:STGXqeAwg9qHV/q5QlAAA/VvWcC2eAeGAAYuYUUUosg=
+github.com/vechain/thor/v2 v2.3.2-0.20250725122255-37f7ed3ae71d h1:sFDTof3tw+dwtAc5K+izMz2oxKlJ/7HCjwE7iMWf9sY=
+github.com/vechain/thor/v2 v2.3.2-0.20250725122255-37f7ed3ae71d/go.mod h1:STGXqeAwg9qHV/q5QlAAA/VvWcC2eAeGAAYuYUUUosg=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 go.opentelemetry.io/auto/sdk v1.1.0 h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=

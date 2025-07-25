@@ -232,13 +232,29 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	staker := setupStakerAndWaitForFork(t, client, config)
 
+	active, queued, err := staker.GetValidatorsNum()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), active.String())
+	assert.Equal(t, big.NewInt(0).String(), queued.String())
+
 	stake := big.NewInt(1e18)
 	stake = new(big.Int).Mul(stake, big.NewInt(1e6))
 	stake = new(big.Int).Mul(stake, big.NewInt(26))
+
 	id1 := addValidator(t, staker, validator1, config.MinStakingPeriod)
+	active, queued, err = staker.GetValidatorsNum()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), active.String())
+	assert.Equal(t, big.NewInt(1).String(), queued.String())
+
 	id2 := addValidator(t, staker, validator2, config.MinStakingPeriod)
 	id3 := addValidator(t, staker, validator3, config.MinStakingPeriod)
 	id4 := addValidator(t, staker, validator4, config.MinStakingPeriod)
+
+	active, queued, err = staker.GetValidatorsNum()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0).String(), active.String())
+	assert.Equal(t, big.NewInt(4).String(), queued.String())
 
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -257,6 +273,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusQueued, block)
+
+	active, queued, err = staker.GetValidatorsNum()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(3).String(), active.String())
+	assert.Equal(t, big.NewInt(1).String(), queued.String())
 	t.Log("✅ - Three validators are activated one is queued")
 
 	assertTotalStakeAndWeight(t, staker, 3)
@@ -268,6 +289,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusQueued, block)
 	assertValidatorStatus(t, staker, id5, builtin.StakerStatusQueued, block)
+
+	active, queued, err = staker.GetValidatorsNum()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(3).String(), active.String())
+	assert.Equal(t, big.NewInt(2).String(), queued.String())
 
 	assertTotalStakeAndWeight(t, staker, 3)
 
@@ -298,6 +324,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id5, builtin.StakerStatusQueued, block)
 
+	active, queued, err = staker.GetValidatorsNum()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(3).String(), active.String())
+	assert.Equal(t, big.NewInt(1).String(), queued.String())
+
 	_, validationID, err := staker.FirstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id5, validationID)
@@ -310,6 +341,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusExited, block)
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id5, builtin.StakerStatusQueued, block)
+
+	active, queued, err = staker.GetValidatorsNum()
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(3).String(), active.String())
+	assert.Equal(t, big.NewInt(1).String(), queued.String())
 
 	t.Log("✅ - Three validators are active one is queued and one has exited")
 }
