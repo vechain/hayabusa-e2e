@@ -48,6 +48,7 @@ func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, valid
 
 func runTestStargateSingleDelegator(t *testing.T) error {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
+	manager := testutil.NewTxManager(t, staker.Raw().Client())
 
 	validationID := validationIDs[0]
 	ticker := utils.NewTicker(staker.Raw().Client())
@@ -69,7 +70,7 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(10)) // very large stake
-	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, 200, stake))
+	receipt := manager.Send(acc, stargate.AddDelegator(validationID, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -199,6 +200,7 @@ func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_Off(t *testing.T) {
 
 func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
+	manager := testutil.NewTxManager(t, staker.Raw().Client())
 
 	validationID := validationIDs[0]
 	ticker := utils.NewTicker(staker.Raw().Client())
@@ -220,7 +222,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(3)) // very large stake
-	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, 200, stake))
+	receipt := manager.Send(acc, stargate.AddDelegator(validationID, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -275,7 +277,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	assert.NoError(t, err)
 	amountBefore := (*big.Int)(fetchedAcc.Energy)
 
-	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
+	receipt = manager.Send(acc, stargate.ClaimRewards())
 	claimedAmount := receiptToClaimedAmount(t, receipt)
 	assert.Equal(t, claimableAmount, claimedAmount)
 
@@ -305,6 +307,7 @@ func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_On_And_Off(t *testin
 
 func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) error {
 	staker, stargate, config, validationIDs := newDelegationSetup(t)
+	manager := testutil.NewTxManager(t, staker.Raw().Client())
 
 	validationID := validationIDs[0]
 	ticker := utils.NewTicker(staker.Raw().Client())
@@ -326,7 +329,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(10))
-	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, 255, stake))
+	receipt := manager.Send(acc, stargate.AddDelegator(validationID, 255, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -381,7 +384,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	assert.NoError(t, err)
 	amountBefore := (*big.Int)(fetchedAcc.Energy)
 
-	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
+	receipt = manager.Send(acc, stargate.ClaimRewards())
 	claimedAmount := receiptToClaimedAmount(t, receipt)
 	assert.Equal(t, claimableAmount, claimedAmount)
 
@@ -399,7 +402,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	require.NoError(t, err)
 	assert.Equal(t, 0, claimable.Sign())
 
-	receipt = testutil.Send(t, acc, stargate.DisableAutoRenew())
+	receipt = manager.Send(acc, stargate.DisableAutoRenew())
 	stargate.LogEventValues(receipt.Outputs[0].Events)
 
 	block = receipt.Meta.BlockNumber + config.MinStakingPeriod
@@ -429,7 +432,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	assert.NoError(t, err)
 	amountBefore = (*big.Int)(fetchedAcc.Energy)
 
-	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
+	receipt = manager.Send(acc, stargate.ClaimRewards())
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
 	assert.NoError(t, err)

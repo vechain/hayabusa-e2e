@@ -22,21 +22,13 @@ import (
 func Test_StargateRewards(t *testing.T) {
 	t.Parallel()
 	staker, config, validationIDs := newDelegationSetup(t)
+	manager := testutil.NewTxManager(t, staker.Raw().Client())
 
 	expectedStake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(int64(len(validationIDs))))
 	stargateAddr := hayabusa.Stargate.Address()
 
 	for _, validationID := range validationIDs { // evenly distribute delegations among validators
-		senders := &utils.Senders{}
-		for range 10 {
-			sender := staker.AddDelegation(validationID, builtin.MinStake(), 200).Send().WithSigner(hayabusa.Stargate).WithOptions(testutil.TxOptions())
-			senders.Add(sender)
-			expectedStake = expectedStake.Add(expectedStake, builtin.MinStake())
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		_, _, err := senders.Send(ctx)
-		cancel()
-		require.NoError(t, err)
+		manager.SendAsync(hayabusa.Stargate, staker.AddDelegation(validationID, builtin.MinStake(), 200))
 	}
 
 	ticker := utils.NewTicker(staker.Raw().Client())
@@ -79,10 +71,10 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	t.Parallel()
 	staker, config, validationIDs := newDelegationSetup(t)
 	ticker := utils.NewTicker(staker.Raw().Client())
+	manager := testutil.NewTxManager(t, staker.Raw().Client())
 
 	multiplier := uint8(100)
-	receipt := testutil.Send(t, hayabusa.Stargate,
-		staker.AddDelegation(validationIDs[0], builtin.MinStake(), multiplier))
+	receipt := manager.Send(hayabusa.Stargate, staker.AddDelegation(validationIDs[0], builtin.MinStake(), multiplier))
 	delegationID := receiptToID(receipt)
 	delegation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err)
@@ -96,14 +88,14 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 
 	// wait for validators current period to activate delegator
 	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
-	receipt = testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
+	receipt = manager.Send(hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
 	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 	// withdraw - should succeed since auto-renew is false
 	delegation, err = staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	assert.False(t, delegation.Locked)
-	receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
+	receipt = manager.Send(hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 
 	delegation, err = staker.GetDelegation(delegationID)
 	require.NoError(t, err)
@@ -126,12 +118,14 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 func Test_Delegations(t *testing.T) {
 	staker, config, validationIDs := newDelegationSetup(t)
 	ticker := utils.NewTicker(staker.Raw().Client())
+	manager := testutil.NewTxManager(t, staker.Raw().Client())
 
 	t.Run("Delegate update auto renew after first period", func(t *testing.T) {
 		t.Parallel()
+		manager := manager.Copy(t)
 
 		// add the delegation
-		receipt := testutil.Send(t, hayabusa.Stargate,
+		receipt := manager.Send(hayabusa.Stargate,
 			staker.AddDelegation(validationIDs[0], builtin.MinStake(), 100))
 		delegationID := receiptToID(receipt)
 		delegation, err := staker.GetDelegation(delegationID)
@@ -142,13 +136,13 @@ func Test_Delegations(t *testing.T) {
 
 		// wait for validators current period + 1 staking period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
-		testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
+		manager.Send(hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
 
 		// wait for validators current period + 2 staking period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*3))
 
 		// withdraw - should succeed since auto-renew is false
-		testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
+		manager.Send(hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 		require.NoError(t, err)
 
 		delegation, err = staker.GetDelegation(delegationID)
@@ -158,9 +152,10 @@ func Test_Delegations(t *testing.T) {
 
 	t.Run("Delegated with auto-renew", func(t *testing.T) {
 		t.Parallel()
+		manager := manager.Copy(t)
 
 		// add the delegation
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[2], builtin.MinStake(), 100))
+		receipt := manager.Send(hayabusa.Stargate, staker.AddDelegation(validationIDs[2], builtin.MinStake(), 100))
 		delegationID := receiptToID(receipt)
 		delegation, err := staker.GetDelegation(delegationID)
 		require.NoError(t, err)
@@ -183,12 +178,12 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation.Stake)
 
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
+		receipt = manager.Send(hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
 		// wait for validators current period to end
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 		// withdraw - should succeed since auto-renew is false
-		testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
+		manager.Send(hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 		require.NoError(t, err)
 		delegation, err = staker.GetDelegation(delegationID)
 		require.NoError(t, err)
@@ -197,6 +192,7 @@ func Test_Delegations(t *testing.T) {
 
 	t.Run("Delegations are exited when validator exits", func(t *testing.T) {
 		t.Parallel()
+		manager := manager.Copy(t)
 
 		validator, err := staker.Get(validationIDs[3])
 		require.NoError(t, err)
@@ -211,7 +207,7 @@ func Test_Delegations(t *testing.T) {
 		hayabusa.ValidatorAccounts[0].Address()
 
 		// add the delegation
-		receipt := testutil.Send(t, hayabusa.Stargate,
+		receipt := manager.Send(hayabusa.Stargate,
 			staker.AddDelegation(validationIDs[3], builtin.MinStake(), 100))
 		require.NoError(t, err)
 		delegationID1 := receiptToID(receipt)
@@ -222,7 +218,7 @@ func Test_Delegations(t *testing.T) {
 		assert.False(t, delegation1.Locked)
 
 		// add the delegation
-		receipt = testutil.Send(t, hayabusa.Stargate,
+		receipt = manager.Send(hayabusa.Stargate,
 			staker.AddDelegation(validationIDs[3], builtin.MinStake(), 100))
 		delegationID2 := receiptToID(receipt)
 		delegation2, err := staker.GetDelegation(delegationID2)
@@ -237,18 +233,18 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, rewards.Sign(), "Rewards should be positive after first period")
 
-		receipt = testutil.Send(t, validatorAccount, staker.SignalExit(validationIDs[3]))
+		receipt = manager.Send(validatorAccount, staker.SignalExit(validationIDs[3]))
 
 		// wait for validators current period to end
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
 		// withdraw - should succeed since validator exited
-		testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID1))
+		manager.Send(hayabusa.Stargate, staker.WithdrawDelegation(delegationID1))
 		delegation1, err = staker.GetDelegation(delegationID1)
 		require.NoError(t, err)
 		assert.True(t, delegation1.Stake.Sign() == 0)
 
-		testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID2))
+		manager.Send(hayabusa.Stargate, staker.WithdrawDelegation(delegationID2))
 		delegation2, err = staker.GetDelegation(delegationID2)
 		require.NoError(t, err)
 		assert.True(t, delegation2.Stake.Sign() == 0)
@@ -256,7 +252,9 @@ func Test_Delegations(t *testing.T) {
 
 	t.Run("Should not be able call with external account", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate,
+		manager := manager.Copy(t)
+
+		receipt := manager.Send(hayabusa.Stargate,
 			staker.AddDelegation(validationIDs[0], builtin.MinStake(), 100))
 		delegationID := receiptToID(receipt)
 
@@ -294,15 +292,16 @@ func Test_Delegations(t *testing.T) {
 
 	t.Run("Active delegator can increase/decrease their stake and get reflected in validator totals", func(t *testing.T) {
 		t.Parallel()
+		manager := manager.Copy(t)
 
 		// Create first delegation
 		firstStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], firstStake, 100))
+		receipt := manager.Send(hayabusa.Stargate, staker.AddDelegation(validationIDs[5], firstStake, 100))
 		firstDelegationID := receiptToID(receipt)
 
 		// Create second delegation
 		secondStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3))
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], secondStake, 100))
+		receipt = manager.Send(hayabusa.Stargate, staker.AddDelegation(validationIDs[5], secondStake, 100))
 		secondDelegationID := receiptToID(receipt)
 
 		// Verify both delegations
@@ -325,12 +324,12 @@ func Test_Delegations(t *testing.T) {
 		assert.Equal(t, expectedTotalStake, totalsBeforeWithdrawal.DelegationsLockedStake,
 			"Validator should have exact total stake from both delegations before withdrawal")
 
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(firstDelegationID))
+		receipt = manager.Send(hayabusa.Stargate, staker.SignalDelegationExit(firstDelegationID))
 		require.NoError(t, err)
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 		// Withdraw only the first delegation (partial decrease)
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(firstDelegationID))
+		receipt = manager.Send(hayabusa.Stargate, staker.WithdrawDelegation(firstDelegationID))
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 		// Verify that the validator has exactly the second delegation stake after withdrawal

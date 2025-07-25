@@ -19,6 +19,7 @@ func Test_Staker_GasUsage(t *testing.T) {
 	config, client := setupTestNetwork(t, 3)
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
+	manager := testutil.NewTxManager(t, client)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
@@ -27,9 +28,9 @@ func Test_Staker_GasUsage(t *testing.T) {
 	require.NoError(t, utils.WaitForFork(staker, config.ForkBlock))
 
 	stake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)) // 3x MinStake for each validator
-	addReceipt1 := testutil.Send(t, validator1, staker.AddValidator(validator1.Address(), stake, config.MinStakingPeriod))
-	addReceipt2 := testutil.Send(t, validator2, staker.AddValidator(validator2.Address(), stake, config.MinStakingPeriod))
-	addReceipt3 := testutil.Send(t, validator3, staker.AddValidator(validator3.Address(), stake, config.MinStakingPeriod))
+	addReceipt1 := manager.Send(validator1, staker.AddValidator(validator1.Address(), stake, config.MinStakingPeriod))
+	addReceipt2 := manager.Send(validator2, staker.AddValidator(validator2.Address(), stake, config.MinStakingPeriod))
+	addReceipt3 := manager.Send(validator3, staker.AddValidator(validator3.Address(), stake, config.MinStakingPeriod))
 
 	addr1 := validator1.Address()
 	addr2 := validator2.Address()
@@ -95,35 +96,39 @@ func Test_Staker_GasUsage(t *testing.T) {
 
 	t.Run("increase / autorenew / decrease ", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, validator1, staker.IncreaseStake(addr1, builtin.MinStake()))
+		manager := manager.Copy(t)
+		receipt := manager.Send(validator1, staker.IncreaseStake(addr1, builtin.MinStake()))
 		tw.AppendRow(table.Row{"increaseStake", receipt.GasUsed})
-		receipt = testutil.Send(t, validator1, staker.DecreaseStake(addr1, builtin.MinStake()))
+		receipt = manager.Send(validator1, staker.DecreaseStake(addr1, builtin.MinStake()))
 		tw.AppendRow(table.Row{"decreaseStake", receipt.GasUsed})
-		receipt = testutil.Send(t, validator1, staker.SignalExit(addr1))
+		receipt = manager.Send(validator1, staker.SignalExit(addr1))
 		tw.AppendRow(table.Row{"updateAutoRenew", receipt.GasUsed})
 	})
 
 	t.Run("updateAutoRenew / withdraw", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, validator2, staker.SignalExit(addr2))
+		manager := manager.Copy(t)
+		receipt := manager.Send(validator2, staker.SignalExit(addr2))
 		tw.AppendRow(table.Row{"updateAutoRenew", receipt.GasUsed})
-		receipt = testutil.Send(t, validator2, staker.WithdrawStake(addr2))
+		receipt = manager.Send(validator2, staker.WithdrawStake(addr2))
 		tw.AppendRow(table.Row{"withdraw", receipt.GasUsed})
 	})
 
 	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
 	t.Run("addDelegation / updateDelegationAutoRenew", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, 100))
+		manager := manager.Copy(t)
+		receipt := manager.Send(hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, 100))
 		tw.AppendRow(table.Row{"addDelegation-1", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
+		receipt = manager.Send(hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
 		tw.AppendRow(table.Row{"updateDelegationAutoRenew", receipt.GasUsed})
 	})
 
 	t.Run("addDelegation-2 / get", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, 100))
+		manager := manager.Copy(t)
+		receipt := manager.Send(hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, 100))
 		tw.AppendRow(table.Row{"addDelegation-2", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
 		res, err := staker.Raw().Method("getDelegation", delegationID).Call().Execute()
@@ -132,10 +137,11 @@ func Test_Staker_GasUsage(t *testing.T) {
 
 	t.Run("addDelegation-3 / withdrawDelegation", func(t *testing.T) {
 		t.Parallel()
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, 100))
+		manager := manager.Copy(t)
+		receipt := manager.Send(hayabusa.Stargate, staker.AddDelegation(addr3, delegationStake, 100))
 		tw.AppendRow(table.Row{"addDelegation-3", receipt.GasUsed})
 		delegationID := receipt.Outputs[0].Events[0].Topics[2]
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
+		receipt = manager.Send(hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 		tw.AppendRow(table.Row{"withdrawDelegation", receipt.GasUsed})
 	})
 }
