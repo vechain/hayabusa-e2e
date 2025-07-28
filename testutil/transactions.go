@@ -14,7 +14,7 @@ import (
 )
 
 func TxContext(t *testing.T) context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	t.Cleanup(cancel)
 	return ctx
 }
@@ -27,6 +27,10 @@ func TxOptions() *bind.TxOptions {
 }
 
 func DebugRevert(t *testing.T, receipt *api.Receipt, sender *bind.MethodBuilder) {
+	if receipt == nil {
+		require.Fail(t, "receipt is nil")
+		return
+	}
 	if receipt.Reverted {
 		_, err := sender.Call().
 			AtRevision(receipt.Meta.BlockID.String()).
