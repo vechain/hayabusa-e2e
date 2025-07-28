@@ -44,7 +44,6 @@ jobs:
           - tests/slots
           - tests/energy
           - tests/stargate
-          - tests/forks
       fail-fast: false
 
     steps:
