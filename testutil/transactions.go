@@ -82,5 +82,6 @@ func (s *TxSequence) Send(signer bind.Signer, sender *bind.MethodBuilder) *api.R
 		SubmitAndConfirm(TxContext(s.t))
 	assert.NoError(s.t, err, "failed to send transaction")
 	DebugRevert(s.t, receipt, sender)
+	s.txs = append(s.txs, receipt.Meta.TxID)
 	return receipt
 }
