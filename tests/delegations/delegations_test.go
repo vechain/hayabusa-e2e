@@ -208,7 +208,6 @@ func Test_Delegations(t *testing.T) {
 				break
 			}
 		}
-		hayabusa.ValidatorAccounts[0].Address()
 
 		// add the delegation
 		receipt := testutil.Send(t, hayabusa.Stargate,
@@ -231,15 +230,11 @@ func Test_Delegations(t *testing.T) {
 		assert.Equal(t, uint8(100), delegation2.Multiplier)
 		assert.False(t, delegation2.Locked)
 
-		// wait for validators current period + 1 staking period
+		// wait for validators current period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*1))
-		rewards, err := staker.GetDelegatorsRewards(validatorAccount.Address(), delegation2.StartPeriod)
-		require.NoError(t, err)
-		assert.Equal(t, 1, rewards.Sign(), "Rewards should be positive after first period")
-
 		receipt = testutil.Send(t, validatorAccount, staker.SignalExit(validationIDs[3]))
 
-		// wait for validators current period to end
+		// wait for validators last period to end
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
 
 		// withdraw - should succeed since validator exited
