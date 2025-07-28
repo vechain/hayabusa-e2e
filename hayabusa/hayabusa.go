@@ -1,32 +1,22 @@
 package hayabusa
 
 import (
-	"context"
 	"crypto/rand"
 	_ "embed"
 	"fmt"
-	"log/slog"
 	"math/big"
 	"net"
-	"os"
 	"strconv"
 	"sync"
-	"time"
-
+	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/hayabusa-e2e/utils"
-	"github.com/vechain/networkhub/entrypoint/client"
-	"github.com/vechain/networkhub/environments"
 	"github.com/vechain/networkhub/genesisbuilder"
-	networkhubNetwork "github.com/vechain/networkhub/network"
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/network/node/genesis"
-	"github.com/vechain/networkhub/thorbuilder"
 	thorgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
@@ -62,154 +52,7 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 		Build()
 }
 
-type Network struct {
-	ctx       context.Context
-	nodes     []node.Config
-	config    *Config
-	builder   *thorbuilder.Config
-	genesis   *genesis.CustomGenesis
-	usedPorts []int // to track used ports for cleanup
-}
-
-func NewNetwork(config *Config, ctx context.Context) *Network {
-	repo := "git@github.com:vechain/thor.git"
-
-	// reimplement this logic
-	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
-	var thorBuilder *thorbuilder.Config
-	if ok {
-		thorBuilder = &thorbuilder.Config{
-			BuildConfig: &thorbuilder.BuildConfig{
-				ExistingPath: workingDir,
-				DebugBuild:   config.Debug,
-			},
-		}
-	} else {
-		slog.Warn("THOR_WORKING_DIR not set, using default repo/branch")
-		thorBuilder = &thorbuilder.Config{
-			DownloadConfig: &thorbuilder.DownloadConfig{
-				RepoUrl:    repo,
-				Branch:     "release/hayabusa",
-				IsReusable: true,
-			},
-		}
-	}
-
-	customGenesis := Genesis(config)
-	nodes := make([]node.Config, 0)
-	usedPorts := make([]int, 0, config.Nodes*2) // API and P2P ports
-
-	for i := range config.Nodes {
-		nodes = append(nodes, makeNode(config, i, usedPorts, customGenesis))
-	}
-
-	return &Network{
-		ctx:       ctx,
-		nodes:     nodes,
-		config:    config,
-		genesis:   customGenesis,
-		builder:   thorBuilder,
-		usedPorts: usedPorts,
-	}
-}
-
-func (n *Network) Start() (*thorclient.Client, environments.Actions, error) {
-	buildMutex.Lock()
-	defer buildMutex.Unlock()
-
-	id := "default"
-	if n.config.Name != "" {
-		id = n.config.Name
-	}
-
-	networkCfg := &networkhubNetwork.Network{
-		Environment: "local",
-		BaseID:      id,
-		Nodes:       n.nodes,
-		ThorBuilder: n.builder,
-	}
-
-	networkHub := client.New()
-	networkIDResult, err := networkHub.Config(networkCfg)
-	if err != nil {
-		cleanupPorts(n.usedPorts)
-		return nil, nil, err
-	}
-
-	hayabusaNetwork, err := networkHub.GetNetwork(networkIDResult.ID())
-	if err != nil {
-		cleanupPorts(n.usedPorts)
-		return nil, nil, err
-	}
-
-	cleanup := func() {
-		cleanupPorts(n.usedPorts)
-		if err := hayabusaNetwork.StopNetwork(); err != nil {
-			slog.Error("failed to stop network", "error", err)
-		}
-	}
-
-	go func() {
-		<-n.ctx.Done()
-		slog.Info("context done, cleaning up network")
-		cleanup()
-	}()
-
-	err = hayabusaNetwork.StartNetwork()
-	if err != nil {
-		return nil, nil, err
-	}
-	
-	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
-		cleanup()
-		return nil, nil, fmt.Errorf("health check failed: %w", err)
-	}
-
-	err = utils.WaitForPeersConnection(n.nodes, len(n.nodes)-1, n.ctx)
-	if err != nil {
-		cleanup()
-		return nil, nil, err
-	}
-
-	// verbose logging for node 0, use node 1 for http (simulation etc.). Amount validated on first line of function
-	client := thorclient.New(n.nodes[1].GetHTTPAddr())
-
-	return client, hayabusaNetwork, nil
-}
-
-func (n *Network) Nodes() []node.Config {
-	return n.nodes
-}
-
-func (n *Network) AttachNode(build *thorbuilder.Config, additionalArgs map[string]string) error {
-	buildMutex.Lock()
-	defer buildMutex.Unlock()
-
-	builder := thorbuilder.New(build)
-	if err := builder.Download(); err != nil {
-		return fmt.Errorf("failed to download Thor binary: %w", err)
-	}
-
-	path, err := builder.Build()
-	if err != nil {
-		return fmt.Errorf("failed to build Thor binary: %w", err)
-	}
-
-	node := makeNode(n.config, len(n.nodes), n.usedPorts, n.genesis)
-	node.SetExecArtifact(path)
-
-	args := node.GetAdditionalArgs()
-	for k, v := range additionalArgs {
-		args[k] = v
-	}
-	node.SetAdditionalArgs(args)
-
-	n.nodes = append(n.nodes, node)
-
-	return nil
-}
-
-func makeNode(config *Config, i int, usedPorts []int, customGenesis *genesis.CustomGenesis) node.Config {
+func makeNode(config *Config, i int, customGenesis *genesis.CustomGenesis) (*node.Config, int, int) {
 	networkID := ""
 	if config.Name != "" {
 		networkID = config.Name
@@ -234,9 +77,8 @@ func makeNode(config *Config, i int, usedPorts []int, customGenesis *genesis.Cus
 
 	apiPort := rndPort()
 	p2pPort := rndPort()
-	usedPorts = append(usedPorts, apiPort, p2pPort)
 
-	return &node.BaseNode{
+	return &node.Config{
 		ID:             nodeID,
 		Key:            common.Bytes2Hex(ValidatorAccounts[i].D.Bytes()),
 		Genesis:        customGenesis,
@@ -244,7 +86,7 @@ func makeNode(config *Config, i int, usedPorts []int, customGenesis *genesis.Cus
 		AdditionalArgs: additionalArgs,
 		APIAddr:        fmt.Sprintf("0.0.0.0:%d", apiPort),
 		P2PListenPort:  p2pPort,
-	}
+	}, apiPort, p2pPort
 }
 
 func authorities() []thorgenesis.Authority {

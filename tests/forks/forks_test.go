@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/networkhub/thorbuilder"
 	"io"
 	"net"
 	"os"
@@ -53,7 +55,7 @@ type PropagatedDoubleSignedBlock struct {
 	block2 thor.Bytes32
 }
 
-func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.Bytes32, *thorclient.Client, []node.Config, chan PropagatedDoubleSignedBlock) {
+func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.Bytes32, *thorclient.Client, []*node.Config, chan PropagatedDoubleSignedBlock) {
 	t.Helper()
 	config := &hayabusa.Config{
 		Nodes:             2,
@@ -65,13 +67,16 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 		MinStakingPeriod:  4,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
+		Name:              t.Name(),
 	}
-	branch := "hayabusa/doublesigning-node"
-	client, _, cancel, nodes, err := hayabusa.StartNetworkWithMaliciousNode(t, config, &branch)
-	if err != nil {
-		t.Fatal(err)
+
+	network := hayabusa.NewNetworkV2(config, t.Context())
+	t.Cleanup(network.MustStop)
+	client := network.ThorClient()
+	if err := network.AttachNode(&thorbuilder.DownloadConfig{Branch: "hayabusa/doublesigning-node"}); err != nil {
+		t.Fatalf("failed to attach double signing node: %v", err)
 	}
-	t.Cleanup(cancel)
+	require.NoError(t, network.Start())
 
 	doubleSignedBlocksChan := make(chan PropagatedDoubleSignedBlock, 100)
 
@@ -143,5 +148,5 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 		}
 	}
 
-	return staker, config, validationIDs[:], client, nodes, doubleSignedBlocksChan
+	return staker, config, validationIDs[:], client, network.NodeConfigs(), doubleSignedBlocksChan
 }

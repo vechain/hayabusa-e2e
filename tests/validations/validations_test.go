@@ -746,11 +746,10 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		Name:              t.Name(),
 	}
 
-	network := hayabusa.NewNetwork(config, t.Context())
-	client, _, err := network.Start()
-	require.NoError(t, err, "failed to start network")
-	t.Cleanup(network)
-	return config, client
+	network := hayabusa.NewNetworkV2(config, t.Context())
+	t.Cleanup(network.MustStop)
+	require.NoError(t, network.Start())
+	return config, network.ThorClient()
 }
 
 func setupStakerAndWaitForFork(t *testing.T, client *thorclient.Client, config *hayabusa.Config) *builtin.Staker {

@@ -456,11 +456,10 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		HighStakingPeriod: 24,
 		Name:              t.Name(),
 	}
-	network := hayabusa.NewNetwork(config, t.Context())
-	client, _, err := network.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	network := hayabusa.NewNetworkV2(config, t.Context())
+	t.Cleanup(network.MustStop)
+	require.NoError(t, network.Start())
+	client := network.ThorClient()
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)

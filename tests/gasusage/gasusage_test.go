@@ -152,10 +152,11 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		MidStakingPeriod:  240,
 		HighStakingPeriod: 259200,
 		Verbosity:         1,
+		Name:              t.Name(),
 	}
 
-	client, _, cancel, err := hayabusa.StartNetwork(t, config)
-	require.NoError(t, err)
-	t.Cleanup(cancel)
-	return config, client
+	network := hayabusa.NewNetworkV2(config, t.Context())
+	t.Cleanup(network.MustStop)
+	require.NoError(t, network.Start())
+	return config, network.ThorClient()
 }

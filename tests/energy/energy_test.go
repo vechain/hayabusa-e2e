@@ -32,10 +32,10 @@ func runEnergyTest(t *testing.T) error {
 		HighStakingPeriod: 180,
 		Name:              t.Name(),
 	}
-	genesis := hayabusa.Genesis(config)
-	network := hayabusa.NewNetwork(config, t.Context())
-	client, _, err := network.Start()
-	require.NoError(t, err)
+	network := hayabusa.NewNetworkV2(config, t.Context())
+	t.Cleanup(network.MustStop)
+	require.NoError(t, network.Start())
+	client := network.ThorClient()
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func runEnergyTest(t *testing.T) error {
 
 	genesisVET := big.NewInt(0)
 	genesisVTHO := big.NewInt(0)
-	for _, acc := range genesis.Accounts {
+	for _, acc := range network.Genesis().Accounts {
 		genesisVET = genesisVET.Add(genesisVET, (*big.Int)(acc.Balance))
 		genesisVTHO = genesisVTHO.Add(genesisVTHO, (*big.Int)(acc.Energy))
 	}

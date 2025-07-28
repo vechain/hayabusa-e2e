@@ -358,13 +358,11 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		Name:              t.Name(),
 	}
 	t.Context()
-	network := hayabusa.NewNetwork(config, t.Context())
-	client, _, err := network.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	network := hayabusa.NewNetworkV2(config, t.Context())
+	t.Cleanup(network.MustStop)
+	require.NoError(t, network.Start())
 
-	staker, err := builtin.NewStaker(client)
+	staker, err := builtin.NewStaker(network.ThorClient())
 	if err != nil {
 		t.Fatalf("failed to create staker: %v", err)
 	}
