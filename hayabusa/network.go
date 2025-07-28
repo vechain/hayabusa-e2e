@@ -195,26 +195,20 @@ func (n *Network) AttachNode(buildConfig *thorbuilder.DownloadConfig) error {
 }
 
 func makeNode(config *Config, i int, customGenesis *genesis.CustomGenesis) (node.Config, int, int) {
-	networkID := ""
-	if config.Name != "" {
-		networkID = config.Name
-	}
 	verbosity := 3
 	if config.Verbosity > 0 {
 		verbosity = config.Verbosity
 	}
-
 	additionalArgs := map[string]string{
 		"txpool-limit-per-account": "100000",
 		"api-allowed-tracers":      "all",
 	}
-	stakerVerbosity := max(config.StakerVerbosity, 0)
 	if i == 0 { // enable verbose staker logs for 1 node
-		additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
+		additionalArgs["verbosity-staker"] = strconv.Itoa(max(config.StakerVerbosity, 3))
 	}
 	nodeID := fmt.Sprintf("Node-%d", i)
-	if networkID != "" {
-		nodeID = fmt.Sprintf("%s-%s", networkID, nodeID)
+	if config.Name != "" {
+		nodeID = fmt.Sprintf("%s-%s", config.Name, nodeID)
 	}
 
 	apiPort := globalPortManager.NewPort(config.Name)
