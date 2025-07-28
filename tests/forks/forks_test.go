@@ -55,7 +55,7 @@ type PropagatedDoubleSignedBlock struct {
 	block2 thor.Bytes32
 }
 
-func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.Bytes32, *thorclient.Client, []*node.Config, chan PropagatedDoubleSignedBlock) {
+func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.Bytes32, *thorclient.Client, []node.Config, chan PropagatedDoubleSignedBlock) {
 	t.Helper()
 	config := &hayabusa.Config{
 		Nodes:             2,
@@ -73,10 +73,14 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 	network := hayabusa.NewNetworkV2(config, t.Context())
 	t.Cleanup(network.MustStop)
 	client := network.ThorClient()
-	if err := network.AttachNode(&thorbuilder.DownloadConfig{Branch: "hayabusa/doublesigning-node"}); err != nil {
+	require.NoError(t, network.Start())
+	nodeConfig := &thorbuilder.DownloadConfig{
+		Branch:  "hayabusa/doublesigning-node",
+		RepoUrl: "git@github.com:vechain/thor.git",
+	}
+	if err := network.AttachNode(nodeConfig); err != nil {
 		t.Fatalf("failed to attach double signing node: %v", err)
 	}
-	require.NoError(t, network.Start())
 
 	doubleSignedBlocksChan := make(chan PropagatedDoubleSignedBlock, 100)
 

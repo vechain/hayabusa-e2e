@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/networkhub/environments/local"
 	networkhubNetwork "github.com/vechain/networkhub/network"
@@ -21,9 +23,9 @@ type Network struct {
 	ctx       context.Context
 	config    *Config
 	network   *local.Local
-	builder   *thorbuilder.Config
 	genesis   *genesis.CustomGenesis
-	nodes     []*node.Config
+	builder   *thorbuilder.Config
+	nodes     []node.Config
 	usedPorts []int // to track used ports for cleanup
 	started   bool
 
@@ -36,7 +38,6 @@ func NewNetworkV2(config *Config, ctx context.Context) *Network {
 
 	repo := "git@github.com:vechain/thor.git"
 
-	// reimplement this logic
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
 	var thorBuilder *thorbuilder.Config
 	if ok {
@@ -56,8 +57,7 @@ func NewNetworkV2(config *Config, ctx context.Context) *Network {
 			},
 		}
 	}
-
-	nodes := make([]*node.Config, 0)
+	nodes := make([]node.Config, 0)
 	genesis := Genesis(config)
 	usedPorts := make([]int, 0, config.Nodes*2)
 	for i := range config.Nodes {
@@ -66,12 +66,14 @@ func NewNetworkV2(config *Config, ctx context.Context) *Network {
 		usedPorts = append(usedPorts, apiPort, p2pPort)
 	}
 
+	network := local.NewLocalEnv()
+
 	return &Network{
 		ctx:       ctx,
 		config:    config,
-		network:   local.NewLocalEnv(),
-		builder:   thorBuilder,
+		network:   network,
 		genesis:   Genesis(config),
+		builder:   thorBuilder,
 		nodes:     nodes,
 		usedPorts: usedPorts,
 	}
@@ -85,21 +87,44 @@ func (n *Network) Genesis() *genesis.CustomGenesis {
 	return n.genesis
 }
 
+func (n *Network) Stop() error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	globalPortManager.RemovePorts(n.config.Name)
+
+	if err := n.network.StopNetwork(); err != nil {
+		return fmt.Errorf("failed to stop network: %w", err)
+	}
+	n.started = false
+	return nil
+}
+
+func (n *Network) MustStop() {
+	if err := n.Stop(); err != nil {
+		panic(err)
+	}
+}
+
+func (n *Network) NodeConfigs() []node.Config {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	return n.nodes
+}
+
+func (n *Network) NodeLifecycles() map[string]node.Lifecycle {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	return n.network.Nodes()
+}
+
 func (n *Network) Start() error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
-
-	config := &networkhubNetwork.Network{
-		BaseID:      n.config.Name,
-		Nodes:       n.nodes,
-		ThorBuilder: n.builder,
-	}
-
-	if _, err := n.network.LoadConfig(config); err != nil {
-		return err
-	}
 
 	go func() {
 		<-n.ctx.Done()
@@ -108,6 +133,15 @@ func (n *Network) Start() error {
 			slog.Error("failed to stop network", "error", err)
 		}
 	}()
+
+	netConfig := &networkhubNetwork.Network{
+		BaseID:      n.config.Name,
+		Nodes:       n.nodes,
+		ThorBuilder: n.builder,
+	}
+	if _, err := n.network.LoadConfig(netConfig); err != nil {
+		return fmt.Errorf("failed to load network config: %w", err)
+	}
 
 	if err := n.network.StartNetwork(); err != nil {
 		return err
@@ -126,38 +160,6 @@ func (n *Network) Start() error {
 	n.started = true
 
 	return nil
-}
-
-func (n *Network) Stop() error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	cleanupPorts(n.usedPorts)
-	if err := n.network.StopNetwork(); err != nil {
-		return fmt.Errorf("failed to stop network: %w", err)
-	}
-	n.started = false
-	return nil
-}
-
-func (n *Network) MustStop() {
-	if err := n.Stop(); err != nil {
-		panic(err)
-	}
-}
-
-func (n *Network) NodeConfigs() []*node.Config {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	return n.nodes
-}
-
-func (n *Network) NodeLifecycles() map[string]node.Lifecycle {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	return n.network.Nodes()
 }
 
 func (n *Network) AttachNode(buildConfig *thorbuilder.DownloadConfig) error {
@@ -190,4 +192,41 @@ func (n *Network) AttachNode(buildConfig *thorbuilder.DownloadConfig) error {
 	}
 
 	return nil
+}
+
+func makeNode(config *Config, i int, customGenesis *genesis.CustomGenesis) (node.Config, int, int) {
+	networkID := ""
+	if config.Name != "" {
+		networkID = config.Name
+	}
+	verbosity := 3
+	if config.Verbosity > 0 {
+		verbosity = config.Verbosity
+	}
+
+	additionalArgs := map[string]string{
+		"txpool-limit-per-account": "100000",
+		"api-allowed-tracers":      "all",
+	}
+	stakerVerbosity := max(config.StakerVerbosity, 0)
+	if i == 0 { // enable verbose staker logs for 1 node
+		additionalArgs["verbosity-staker"] = strconv.Itoa(stakerVerbosity)
+	}
+	nodeID := fmt.Sprintf("Node-%d", i)
+	if networkID != "" {
+		nodeID = fmt.Sprintf("%s-%s", networkID, nodeID)
+	}
+
+	apiPort := globalPortManager.NewPort(config.Name)
+	p2pPort := globalPortManager.NewPort(config.Name)
+
+	return &node.BaseNode{
+		ID:             nodeID,
+		Key:            common.Bytes2Hex(ValidatorAccounts[i].D.Bytes()),
+		Genesis:        customGenesis,
+		Verbosity:      verbosity,
+		AdditionalArgs: additionalArgs,
+		APIAddr:        fmt.Sprintf("0.0.0.0:%d", apiPort),
+		P2PListenPort:  p2pPort,
+	}, apiPort, p2pPort
 }
