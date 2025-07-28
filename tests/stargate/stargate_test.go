@@ -457,7 +457,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		Name:              t.Name(),
 	}
 	network := hayabusa.NewNetworkV2(config, t.Context())
-	t.Cleanup(network.MustStop)
+	t.Cleanup(network.Stop)
 	require.NoError(t, network.Start())
 	client := network.ThorClient()
 

@@ -87,23 +87,16 @@ func (n *Network) Genesis() *genesis.CustomGenesis {
 	return n.genesis
 }
 
-func (n *Network) Stop() error {
+func (n *Network) Stop() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	globalPortManager.RemovePorts(n.config.Name)
 
 	if err := n.network.StopNetwork(); err != nil {
-		return fmt.Errorf("failed to stop network: %w", err)
+		slog.Error("🛑 failed to stop network", "error", err)
 	}
 	n.started = false
-	return nil
-}
-
-func (n *Network) MustStop() {
-	if err := n.Stop(); err != nil {
-		panic(err)
-	}
 }
 
 func (n *Network) NodeConfigs() []node.Config {
@@ -129,9 +122,7 @@ func (n *Network) Start() error {
 	go func() {
 		<-n.ctx.Done()
 		slog.Info("context done, cleaning up network")
-		if err := n.Stop(); err != nil {
-			slog.Error("failed to stop network", "error", err)
-		}
+		n.Stop()
 	}()
 
 	netConfig := &networkhubNetwork.Network{
