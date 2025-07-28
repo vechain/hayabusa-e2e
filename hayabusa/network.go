@@ -34,9 +34,6 @@ type Network struct {
 }
 
 func NewNetwork(config *Config, ctx context.Context) *Network {
-	if config.ForkBlock < 6 {
-		panic("you're about to create a flaky test")
-	}
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
