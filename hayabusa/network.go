@@ -34,6 +34,9 @@ type Network struct {
 }
 
 func NewNetwork(config *Config, ctx context.Context) *Network {
+	if config.ForkBlock < 6 {
+		panic("you're about to create a flaky test")
+	}
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
@@ -67,12 +70,10 @@ func NewNetwork(config *Config, ctx context.Context) *Network {
 		usedPorts = append(usedPorts, apiPort, p2pPort)
 	}
 
-	network := local.NewLocalEnv()
-
 	return &Network{
 		ctx:       ctx,
 		config:    config,
-		network:   network,
+		network:   local.NewEnv(),
 		genesis:   Genesis(config),
 		builder:   thorBuilder,
 		nodes:     nodes,
@@ -117,6 +118,11 @@ func (n *Network) NodeLifecycles() map[string]node.Lifecycle {
 func (n *Network) Start() error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
+	if n.started {
+		return fmt.Errorf("network %s is already started", n.config.Name)
+	}
+
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 

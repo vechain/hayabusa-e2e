@@ -352,7 +352,6 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		HighStakingPeriod: 259200,
 		Name:              t.Name(),
 	}
-	t.Context()
 	network := hayabusa.NewNetwork(config, t.Context())
 	t.Cleanup(network.Stop)
 	require.NoError(t, network.Start())

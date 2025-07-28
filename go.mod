@@ -20,7 +20,7 @@ require (
 
 require (
 	github.com/jedib0t/go-pretty/v6 v6.6.7
-	github.com/vechain/networkhub v0.0.5-0.20250728102825-0b0ad46a8713
+	github.com/vechain/networkhub v0.0.5-0.20250728114736-53b35ba1a3ab
 )
 
 require (
