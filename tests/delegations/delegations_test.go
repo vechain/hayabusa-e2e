@@ -232,7 +232,8 @@ func Test_Delegations(t *testing.T) {
 		assert.False(t, delegation2.Locked)
 
 		// wait for validators current period + 1 staking period
-		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*1))
+		// TODO there should be an epoch util to process stuff per epoch instead of block height manipulation
+		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+1+config.MinStakingPeriod*1))
 		rewards, err := staker.GetDelegatorsRewards(validatorAccount.Address(), delegation2.StartPeriod)
 		require.NoError(t, err)
 		assert.Equal(t, 1, rewards.Sign(), "Rewards should be positive after first period")
