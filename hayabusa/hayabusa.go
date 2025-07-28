@@ -159,7 +159,7 @@ func (n *Network) Start() (*thorclient.Client, environments.Actions, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
+	
 	if err = networkCfg.HealthCheck(0, 30*time.Second); err != nil {
 		cleanup()
 		return nil, nil, fmt.Errorf("health check failed: %w", err)

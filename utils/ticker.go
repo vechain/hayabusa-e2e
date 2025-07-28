@@ -3,13 +3,14 @@ package utils
 import (
 	"errors"
 	"fmt"
+
 	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thorclient"
-	"github.com/vechain/thor/v2/thorclient/common"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
 type Ticker struct {
@@ -73,7 +74,7 @@ func (t *Ticker) WaitForBlock(blockNumber uint32) error {
 			if block != nil && block.Number >= blockNumber {
 				return nil
 			}
-			if err != nil && !errors.Is(err, common.ErrNotFound) {
+			if err != nil && !errors.Is(err, httpclient.ErrNotFound) {
 				return fmt.Errorf("unexpected error getting block: %w", err)
 			}
 			time.Sleep(1 * time.Second)

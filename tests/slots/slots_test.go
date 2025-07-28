@@ -47,13 +47,14 @@ func runTestMissedSlot(t *testing.T) error {
 	validator2 := network.Config().Nodes[1]
 	validator3 := network.Config().Nodes[2]
 
-	mustAddValidator := func(hexKey string, stake *big.Int) thor.Bytes32 {
+	mustAddValidator := func(hexKey string, stake *big.Int) thor.Address {
 		key, err := crypto.HexToECDSA(hexKey)
 		require.NoError(t, err)
 		signer := (*bind.PrivateKeySigner)(key)
 		address := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
-		receipt := testutil.Send(t, signer, staker.AddValidator(address, stake, config.MinStakingPeriod, true))
-		return receipt.Outputs[0].Events[0].Topics[3]
+		receipt := testutil.Send(t, signer, staker.AddValidator(address, stake, config.MinStakingPeriod))
+		id := receipt.Outputs[0].Events[0].Topics[2]
+		return thor.BytesToAddress(id.Bytes())
 	}
 
 	// add 2 min stake validators

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
@@ -25,7 +26,7 @@ func TxOptions() *bind.TxOptions {
 
 // Send a transaction with the method, signer and default transaction options/ context.
 // It asserts that the transaction is sent successfully and not reverted.
-func Send(t *testing.T, signer bind.Signer, sender bind.MethodBuilder) *api.Receipt {
+func Send(t *testing.T, signer bind.Signer, sender *bind.MethodBuilder) *api.Receipt {
 	receipt, _, err := sender.Send().
 		WithOptions(TxOptions()).
 		WithSigner(signer).
@@ -37,9 +38,9 @@ func Send(t *testing.T, signer bind.Signer, sender bind.MethodBuilder) *api.Rece
 			Caller(&receipt.Meta.TxOrigin).
 			Execute()
 		if err != nil {
-			assert.Fail(t, "transaction reverted", err)
+			require.Fail(t, "transaction reverted", err)
 		} else {
-			assert.Fail(t, "transaction reverted for unknown reason")
+			require.Fail(t, "transaction reverted for unknown reason")
 		}
 	}
 	return receipt

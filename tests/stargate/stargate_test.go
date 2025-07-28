@@ -31,7 +31,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	})
 }
 
-func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, validationID thor.Bytes32, expectedPeriods uint32) error {
+func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, validationID thor.Address, expectedPeriods uint32) error {
 	err := ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
 		completed, err := staker.GetCompletedPeriods(validationID)
 		slog.Info("⚠️ - completed periods, waiting for greater or equal than expected", "completed", int(*completed), "expected", expectedPeriods)
@@ -69,7 +69,7 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(10)) // very large stake
-	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, true, 200, stake))
+	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -131,14 +131,17 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	}
 
 	// these rewards are the expected rewards
+	lockedVET, _, err = staker.TotalStake()
+	require.NoError(t, err)
 	blockReward := hayabusa.GetExpectedReward(lockedVET)
+	allRewards := new(big.Int).Mul(blockReward, big.NewInt(int64(blockCount)))
 
 	proposerReward := new(big.Int).Set(blockReward)
 	proposerReward = proposerReward.Mul(proposerReward, big.NewInt(3))
 	proposerReward = proposerReward.Div(proposerReward, big.NewInt(10))
 
 	delegatorReward := new(big.Int).Sub(blockReward, proposerReward)
-	t.Logf("✅ rewards per block: proposer=%s, delegator=%s, blockCount=%d", proposerReward.String(), delegatorReward.String(), blockCount)
+	t.Logf("✅ rewards per block: proposer=%s, delegator=%s, blockCount=%d, total=%s", proposerReward.String(), delegatorReward.String(), blockCount, allRewards.String())
 	delegatorReward = delegatorReward.Mul(delegatorReward, big.NewInt(int64(blockCount)))
 	proposerReward = proposerReward.Mul(proposerReward, big.NewInt(int64(blockCount)))
 	t.Logf("✅ total rewards: proposer=%s, delegator=%s, combined=%s", proposerReward.String(), delegatorReward.String(), new(big.Int).Add(proposerReward, delegatorReward).String())
@@ -159,6 +162,14 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedCompletedPeriods, *completed)
 
+	t.Logf("PER Block reward: %s", blockReward.String())
+	res, err := stargate.Raw().Method("getClaimable", acc.Address()).Call().Execute()
+	require.NoError(t, err)
+	for range res.Events {
+		stargate.LogEventValues(res.Events)
+	}
+	t.Log(res.Data)
+
 	claimable, start, end, err = stargate.GetClaimable(acc.Address())
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(start))
@@ -168,13 +179,13 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	// these are the actual total rewards for the 4 periods
 	totalPeriodRewards := big.NewInt(0)
 	for i := start; i <= end; i++ {
-		reward, err := staker.GetRewards(validationID, i)
+		reward, err := staker.GetDelegatorsRewards(validationID, i)
 		require.NoError(t, err)
 		totalPeriodRewards = totalPeriodRewards.Add(totalPeriodRewards, reward)
 	}
 
 	t.Logf("✅ total rewards for: %s", totalPeriodRewards.String())
-	assert.Equal(t, new(big.Int).Add(proposerReward, delegatorReward), totalPeriodRewards)
+	assert.Equal(t, delegatorReward, totalPeriodRewards)
 
 	return nil
 }
@@ -209,113 +220,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	// add the delegation
 	acc := hayabusa.AdditionalAccounts[0]
 	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(3)) // very large stake
-	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, false, 200, stake))
-	require.NoError(t, err)
-	delegationID := receiptToDelegationID(t, receipt)
-
-	// assert correct start period
-	completed, err = staker.GetCompletedPeriods(validationID)
-	require.NoError(t, err)
-	assert.Equal(t, expectedCompletedPeriods, *completed)
-	delegation, err := staker.GetDelegation(delegationID)
-	require.NoError(t, err)
-	assert.Equal(t, 3, int(delegation.StartPeriod))
-
-	// assert no claimable periods
-	claimable, start, end, err := stargate.GetClaimable(acc.Address())
-	require.NoError(t, err)
-	assert.Equal(t, 0, claimable.Sign())
-	// start is after end, so no claimable periods
-	assert.Equal(t, 3, int(start))
-	assert.Equal(t, 1, int(end))
-
-	// wait for 2 staking periods
-	block += config.MinStakingPeriod * 2
-	require.NoError(t, ticker.WaitForBlock(block))
-
-	// assert validator completed 2 more period
-	expectedCompletedPeriods = 3
-	err = waitForCompletedPeriods(ticker, staker, validationID, expectedCompletedPeriods)
-	if err != nil {
-		return err
-	}
-	completed, err = staker.GetCompletedPeriods(validationID)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedCompletedPeriods, *completed)
-
-	// assert delegator can claim for that period
-	claimableAmount, start, end, err := stargate.GetClaimable(acc.Address())
-	assert.NoError(t, err)
-	assert.Equal(t, 3, int(start))
-	assert.Equal(t, 3, int(end))
-
-	delegation, err = staker.GetDelegation(delegationID)
-	assert.NoError(t, err)
-	assert.False(t, delegation.Locked)
-
-	totalRewards, err := staker.GetRewards(validationID, 3)
-	expectedClaimable := big.NewInt(0).Mul(totalRewards, big.NewInt(7))
-	expectedClaimable = big.NewInt(0).Div(expectedClaimable, big.NewInt(10))
-	assert.Equal(t, expectedClaimable, claimableAmount)
-
-	accAddress := acc.Address()
-	blck, err := staker.Raw().Client().Block("best")
-	assert.NoError(t, err)
-	fetchedAcc, err := staker.Raw().Client().Account(&accAddress)
-	assert.NoError(t, err)
-	amountBefore := (*big.Int)(fetchedAcc.Energy)
-
-	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
-	claimedAmount := receiptToClaimedAmount(t, receipt)
-	assert.Equal(t, claimableAmount, claimedAmount)
-
-	ticker.WaitForBlock(blck.Number + 1)
-	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
-	amountAfter := (*big.Int)(fetchedAcc.Energy)
-
-	gasUsed := big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
-	diff := big.NewInt(0).Sub(amountAfter, amountBefore)
-	diff = diff.Add(diff, gasUsed)
-	assert.Equal(t, claimedAmount, diff)
-
-	claimable, start, end, err = stargate.GetClaimable(acc.Address())
-	require.NoError(t, err)
-	assert.Equal(t, 0, claimable.Sign())
-
-	return nil
-}
-
-func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_On_And_Off(t *testing.T) {
-	t.Parallel()
-	testutil.RunFlakyTest(t, func() error {
-		return runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t)
-	})
-}
-
-func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) error {
-	staker, stargate, config, validationIDs := newDelegationSetup(t)
-
-	validationID := validationIDs[0]
-	ticker := utils.NewTicker(staker.Raw().Client())
-	_, err := staker.Get(validationID)
-	require.NoError(t, err)
-
-	// wait for the validator to complete 1 staking period
-	block := config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod
-	require.NoError(t, ticker.WaitForBlock(block))
-	expectedCompletedPeriods := uint32(1)
-	err = waitForCompletedPeriods(ticker, staker, validationID, expectedCompletedPeriods)
-	if err != nil {
-		return err
-	}
-	completed, err := staker.GetCompletedPeriods(validationID)
-	require.NoError(t, err)
-	assert.Equal(t, expectedCompletedPeriods, *completed)
-
-	// add the delegation
-	acc := hayabusa.AdditionalAccounts[0]
-	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(3))
-	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, true, 200, stake))
+	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, 200, stake))
 	require.NoError(t, err)
 	delegationID := receiptToDelegationID(t, receipt)
 
@@ -359,10 +264,9 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	assert.NoError(t, err)
 	assert.True(t, delegation.Locked)
 
-	totalRewards, err := staker.GetRewards(validationID, 3)
-	expectedClaimable := big.NewInt(0).Mul(totalRewards, big.NewInt(7))
-	expectedClaimable = big.NewInt(0).Div(expectedClaimable, big.NewInt(10))
-	assert.Equal(t, expectedClaimable, claimableAmount)
+	stakerRewards, err := staker.GetDelegatorsRewards(validationID, 3)
+	assert.NoError(t, err)
+	assert.Equal(t, stakerRewards, claimableAmount)
 
 	accAddress := acc.Address()
 	blck, err := staker.Raw().Client().Block("best")
@@ -377,6 +281,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
+	assert.NoError(t, err)
 	amountAfter := (*big.Int)(fetchedAcc.Energy)
 
 	gasUsed := big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
@@ -384,13 +289,120 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	diff = diff.Add(diff, gasUsed)
 	assert.Equal(t, claimedAmount, diff)
 
-	claimable, start, end, err = stargate.GetClaimable(acc.Address())
+	claimable, _, _, err = stargate.GetClaimable(acc.Address())
+	require.NoError(t, err)
+	assert.Equal(t, 0, claimable.Sign())
+
+	return nil
+}
+
+func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_On_And_Off(t *testing.T) {
+	t.Parallel()
+	testutil.RunFlakyTest(t, func() error {
+		return runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t)
+	})
+}
+
+func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) error {
+	staker, stargate, config, validationIDs := newDelegationSetup(t)
+
+	validationID := validationIDs[0]
+	ticker := utils.NewTicker(staker.Raw().Client())
+	_, err := staker.Get(validationID)
+	require.NoError(t, err)
+
+	// wait for the validator to complete 1 staking period
+	block := config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod
+	require.NoError(t, ticker.WaitForBlock(block))
+	expectedCompletedPeriods := uint32(1)
+	err = waitForCompletedPeriods(ticker, staker, validationID, expectedCompletedPeriods)
+	if err != nil {
+		return err
+	}
+	completed, err := staker.GetCompletedPeriods(validationID)
+	require.NoError(t, err)
+	assert.Equal(t, expectedCompletedPeriods, *completed)
+
+	// add the delegation
+	acc := hayabusa.AdditionalAccounts[0]
+	stake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(10))
+	receipt := testutil.Send(t, acc, stargate.AddDelegator(validationID, 255, stake))
+	require.NoError(t, err)
+	delegationID := receiptToDelegationID(t, receipt)
+
+	// assert correct start period
+	completed, err = staker.GetCompletedPeriods(validationID)
+	require.NoError(t, err)
+	assert.Equal(t, expectedCompletedPeriods, *completed)
+	delegation, err := staker.GetDelegation(delegationID)
+	require.NoError(t, err)
+	assert.Equal(t, 3, int(delegation.StartPeriod))
+
+	// assert no claimable periods
+	claimable, start, end, err := stargate.GetClaimable(acc.Address())
+	require.NoError(t, err)
+	assert.Equal(t, 0, claimable.Sign())
+	// start is after end, so no claimable periods
+	assert.Equal(t, 3, int(start))
+	assert.Equal(t, 1, int(end))
+
+	// wait for 2 staking periods
+	block += config.MinStakingPeriod * 2
+	require.NoError(t, ticker.WaitForBlock(block))
+
+	// assert validator completed 2 more period
+	expectedCompletedPeriods = 3
+	err = waitForCompletedPeriods(ticker, staker, validationID, expectedCompletedPeriods)
+	if err != nil {
+		return err
+	}
+	completed, err = staker.GetCompletedPeriods(validationID)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedCompletedPeriods, *completed)
+
+	// assert delegator can claim for that period
+	claimableAmount, start, end, err := stargate.GetClaimable(acc.Address())
+	assert.NoError(t, err)
+	assert.Equal(t, 3, int(start))
+	assert.Equal(t, 3, int(end))
+
+	delegation, err = staker.GetDelegation(delegationID)
+	assert.NoError(t, err)
+	assert.True(t, delegation.Locked)
+
+	totalRewards, err := staker.GetDelegatorsRewards(validationID, 3)
+	assert.NoError(t, err)
+	assert.Equal(t, totalRewards, claimableAmount)
+
+	accAddress := acc.Address()
+	blck, err := staker.Raw().Client().Block("best")
+	assert.NoError(t, err)
+	fetchedAcc, err := staker.Raw().Client().Account(&accAddress)
+	assert.NoError(t, err)
+	amountBefore := (*big.Int)(fetchedAcc.Energy)
+
+	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
+	claimedAmount := receiptToClaimedAmount(t, receipt)
+	assert.Equal(t, claimableAmount, claimedAmount)
+
+	ticker.WaitForBlock(blck.Number + 1)
+	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
+	assert.NoError(t, err)
+	amountAfter := (*big.Int)(fetchedAcc.Energy)
+
+	gasUsed := big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
+	diff := big.NewInt(0).Sub(amountAfter, amountBefore)
+	diff = diff.Add(diff, gasUsed)
+	assert.Equal(t, claimedAmount, diff)
+
+	claimable, _, _, err = stargate.GetClaimable(acc.Address())
 	require.NoError(t, err)
 	assert.Equal(t, 0, claimable.Sign())
 
 	receipt = testutil.Send(t, acc, stargate.DisableAutoRenew())
+	stargate.LogEventValues(receipt.Outputs[0].Events)
 
-	block += config.MinStakingPeriod * 2
+	block = receipt.Meta.BlockNumber + config.MinStakingPeriod
 	require.NoError(t, ticker.WaitForBlock(block))
 
 	expectedCompletedPeriods = 5
@@ -409,7 +421,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	claimableAmount, start, end, err = stargate.GetClaimable(acc.Address())
 	assert.NoError(t, err)
 	assert.Equal(t, 4, int(start))
-	assert.Equal(t, 5, int(end))
+	assert.Equal(t, 4, int(end))
 
 	blck, err = staker.Raw().Client().Block("best")
 	assert.NoError(t, err)
@@ -420,6 +432,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	receipt = testutil.Send(t, acc, stargate.ClaimRewards())
 	ticker.WaitForBlock(blck.Number + 1)
 	fetchedAcc, err = staker.Raw().Client().Account(&accAddress)
+	assert.NoError(t, err)
 	amountAfter = (*big.Int)(fetchedAcc.Energy)
 
 	gasUsed = big.NewInt(0).Mul(big.NewInt(0).SetUint64(receipt.GasUsed), big.NewInt(1e15))
@@ -429,16 +442,16 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	return nil
 }
 
-func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Bytes32) {
+func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Address) {
 	t.Helper()
 	config := &hayabusa.Config{
 		Nodes:             3,
 		MaxBlockProposers: 3,
 		ForkBlock:         0,
 		TransitionPeriod:  4,
-		EpochLength:       2,
-		CooldownPeriod:    2,
-		MinStakingPeriod:  2,
+		EpochLength:       4,
+		CooldownPeriod:    4,
+		MinStakingPeriod:  4,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 24,
 		Name:              t.Name(),
@@ -465,12 +478,12 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		t.Fatalf("failed to wait for fork: %v", err)
 	}
 
-	validationIDs := [3]thor.Bytes32{}
+	validationIDs := [3]thor.Address{}
 	senders := &utils.Senders{}
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod, true).Send().WithSigner(account).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(account).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 
@@ -576,8 +589,9 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 	return stargate
 }
 
-func receiptToID(receipt *api.Receipt) thor.Bytes32 {
-	return receipt.Outputs[0].Events[0].Topics[3]
+func receiptToID(receipt *api.Receipt) thor.Address {
+	id := receipt.Outputs[0].Events[0].Topics[2]
+	return thor.BytesToAddress(id.Bytes())
 }
 
 func receiptToDelegationID(t *testing.T, receipt *api.Receipt) thor.Bytes32 {
