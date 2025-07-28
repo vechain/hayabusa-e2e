@@ -1,6 +1,7 @@
 package slots
 
 import (
+	"github.com/vechain/thor/v2/thorclient"
 	"math/big"
 	"testing"
 	"time"
@@ -34,17 +35,18 @@ func runTestMissedSlot(t *testing.T) error {
 		HighStakingPeriod: 259200,
 		Name:              t.Name(),
 	}
-	network := hayabusa.NewNetworkV2(config, t.Context())
+	network := hayabusa.NewNetwork(config, t.Context())
 	t.Cleanup(network.Stop)
 	require.NoError(t, network.Start())
-	client := network.ThorClient()
-
-	staker, err := builtin.NewStaker(client)
-	require.NoError(t, err)
 
 	validator1 := network.NodeConfigs()[0]
 	validator2 := network.NodeConfigs()[1]
 	validator3 := network.NodeConfigs()[2]
+
+	client := thorclient.New(validator2.GetHTTPAddr()) // use validator2 as the client to avoid issues with validator1 being stopped
+
+	staker, err := builtin.NewStaker(client)
+	require.NoError(t, err)
 
 	mustAddValidator := func(hexKey string, stake *big.Int) thor.Address {
 		key, err := crypto.HexToECDSA(hexKey)

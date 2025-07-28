@@ -70,7 +70,7 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 		Name:              t.Name(),
 	}
 
-	network := hayabusa.NewNetworkV2(config, t.Context())
+	network := hayabusa.NewNetwork(config, t.Context())
 	t.Cleanup(network.Stop)
 	client := network.ThorClient()
 	require.NoError(t, network.Start())

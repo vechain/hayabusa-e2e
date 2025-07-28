@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/networkhub/network/node/genesis"
 	"github.com/vechain/networkhub/thorbuilder"
 	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
 type Network struct {
@@ -32,7 +33,7 @@ type Network struct {
 	mu sync.Mutex
 }
 
-func NewNetworkV2(config *Config, ctx context.Context) *Network {
+func NewNetwork(config *Config, ctx context.Context) *Network {
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
@@ -61,7 +62,7 @@ func NewNetworkV2(config *Config, ctx context.Context) *Network {
 	genesis := Genesis(config)
 	usedPorts := make([]int, 0, config.Nodes*2)
 	for i := range config.Nodes {
-		node, apiPort, p2pPort := makeNode(config, i, genesis)
+		node, apiPort, p2pPort := makeNode(config, i, ValidatorAccounts[i], genesis)
 		nodes = append(nodes, node)
 		usedPorts = append(usedPorts, apiPort, p2pPort)
 	}
@@ -169,7 +170,7 @@ func (n *Network) AttachNode(buildConfig *thorbuilder.DownloadConfig) error {
 		return fmt.Errorf("failed to build node: %w", err)
 	}
 
-	node, apiPort, p2pPort := makeNode(n.config, len(n.nodes), n.genesis)
+	node, apiPort, p2pPort := makeNode(n.config, len(n.nodes), ValidatorAccounts[len(n.nodes)], n.genesis)
 	node.SetExecArtifact(path)
 	n.nodes = append(n.nodes, node)
 	n.usedPorts = append(n.usedPorts, apiPort, p2pPort)
@@ -185,7 +186,7 @@ func (n *Network) AttachNode(buildConfig *thorbuilder.DownloadConfig) error {
 	return nil
 }
 
-func makeNode(config *Config, i int, customGenesis *genesis.CustomGenesis) (node.Config, int, int) {
+func makeNode(config *Config, i int, signer *bind.PrivateKeySigner, customGenesis *genesis.CustomGenesis) (node.Config, int, int) {
 	verbosity := 3
 	if config.Verbosity > 0 {
 		verbosity = config.Verbosity
@@ -207,7 +208,7 @@ func makeNode(config *Config, i int, customGenesis *genesis.CustomGenesis) (node
 
 	return &node.BaseNode{
 		ID:             nodeID,
-		Key:            common.Bytes2Hex(ValidatorAccounts[i].D.Bytes()),
+		Key:            common.Bytes2Hex(signer.D.Bytes()),
 		Genesis:        customGenesis,
 		Verbosity:      verbosity,
 		AdditionalArgs: additionalArgs,

@@ -353,7 +353,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		Name:              t.Name(),
 	}
 	t.Context()
-	network := hayabusa.NewNetworkV2(config, t.Context())
+	network := hayabusa.NewNetwork(config, t.Context())
 	t.Cleanup(network.Stop)
 	require.NoError(t, network.Start())
 

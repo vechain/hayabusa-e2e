@@ -32,7 +32,7 @@ func runEnergyTest(t *testing.T) error {
 		HighStakingPeriod: 180,
 		Name:              t.Name(),
 	}
-	network := hayabusa.NewNetworkV2(config, t.Context())
+	network := hayabusa.NewNetwork(config, t.Context())
 	t.Cleanup(network.Stop)
 	require.NoError(t, network.Start())
 	client := network.ThorClient()

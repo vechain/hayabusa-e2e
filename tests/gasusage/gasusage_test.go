@@ -155,7 +155,7 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		Name:              t.Name(),
 	}
 
-	network := hayabusa.NewNetworkV2(config, t.Context())
+	network := hayabusa.NewNetwork(config, t.Context())
 	t.Cleanup(network.Stop)
 	require.NoError(t, network.Start())
 	return config, network.ThorClient()
