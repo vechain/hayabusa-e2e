@@ -55,12 +55,7 @@ func main() {
 	port := 8569
 	for i, node := range network.NodeConfigs() {
 		if i == 0 {
-			additionalArgs := node.GetAdditionalArgs()
-			if additionalArgs == nil {
-				additionalArgs = make(map[string]string)
-			}
-			additionalArgs["enable-metrics"] = "true"
-			node.SetAdditionalArgs(additionalArgs)
+			node.AddAdditionalArg("enable-metrics", "true")
 		}
 		addr := net.JoinHostPort("localhost", strconv.Itoa(port))
 		port++
