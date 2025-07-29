@@ -13,17 +13,16 @@ type Position struct {
 	Multiplier uint8
 }
 
-// TODO: Supply is correct, but multiplier is not.
 var Positions = []*Position{
 	{"Mjolnir X", big.NewInt(15600000), 158, 150},
-	{"Thunder X", big.NewInt(5600000), 180, 145},
-	{"Strength X", big.NewInt(1600000), 843, 140},
-	{"VeThor X", big.NewInt(600000), 735, 135},
-	{"Mjolnir", big.NewInt(15000000), 100, 130},
-	{"Thunder", big.NewInt(5000000), 300, 125},
-	{"Strength", big.NewInt(1000000), 2_500, 120},
-	{"Flash", big.NewInt(200000), 25_000, 115},
-	{"Lightning", big.NewInt(50000), 100_000, 110},
+	{"Thunder X", big.NewInt(5600000), 180, 150},
+	{"Strength X", big.NewInt(1600000), 843, 150},
+	{"VeThor X", big.NewInt(600000), 735, 150},
+	{"Mjolnir", big.NewInt(15000000), 100, 100},
+	{"Thunder", big.NewInt(5000000), 300, 100},
+	{"Strength", big.NewInt(1000000), 2_500, 100},
+	{"Flash", big.NewInt(200000), 25_000, 100},
+	{"Lightning", big.NewInt(50000), 100_000, 100},
 	{"Dawn", big.NewInt(10000), 500_000, 100},
 }
 

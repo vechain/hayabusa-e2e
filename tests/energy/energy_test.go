@@ -32,10 +32,11 @@ func runEnergyTest(t *testing.T) error {
 		HighStakingPeriod: 180,
 		Name:              t.Name(),
 	}
-	genesis := hayabusa.Genesis(config)
-	network := hayabusa.NewNetwork(config, t.Context())
-	client, _, err := network.Start()
+	network, err := hayabusa.NewNetwork(config, t.Context())
 	require.NoError(t, err)
+	t.Cleanup(network.Stop)
+	require.NoError(t, network.Start())
+	client := network.ThorClient()
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
@@ -52,12 +53,14 @@ func runEnergyTest(t *testing.T) error {
 		sender := staker.AddValidator(acc.Address(), stake, config.MinStakingPeriod).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
-	receipts, _, err := senders.Send(testutil.TxContext(t))
+	_, _, err = senders.Send(testutil.TxContext(t))
 	require.NoError(t, err)
+	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10))
+	testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(hayabusa.ValidatorAccounts[0].Address(), delegationStake, 200))
 
 	genesisVET := big.NewInt(0)
 	genesisVTHO := big.NewInt(0)
-	for _, acc := range genesis.Accounts {
+	for _, acc := range network.Genesis().Accounts {
 		genesisVET = genesisVET.Add(genesisVET, (*big.Int)(acc.Balance))
 		genesisVTHO = genesisVTHO.Add(genesisVTHO, (*big.Int)(acc.Energy))
 	}
@@ -93,38 +96,37 @@ func runEnergyTest(t *testing.T) error {
 	lastPOASupply, err := energy.Revision(strconv.FormatUint(uint64(block), 10)).TotalSupply()
 	require.NoError(t, err)
 
-	hayabusaGrowth := hayabusa.GetExpectedReward(new(big.Int).Mul(stake, big.NewInt(int64(validators))))
+	validatorStaker := new(big.Int).Mul(stake, big.NewInt(int64(validators)))
+	totalStake := new(big.Int).Add(validatorStaker, delegationStake)
+	hayabusaGrowth := hayabusa.GetExpectedReward(totalStake)
 
 	firstPoSBlock := poaBlock + 1
 	block = config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod // wait for 1 staking period
 	require.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(block))
 
 	// check PoS growth -> Should use Hayabusa growth rate
+	acc1Blocks := 0
 	for i := firstPoSBlock; i < block; i++ {
 		blockDiff := i - poaBlock
 		increase := new(big.Int).Mul(hayabusaGrowth, big.NewInt(int64(blockDiff)))
 		expectedSupply := new(big.Int).Add(lastPOASupply, increase)
 		assertSupply(i, expectedSupply)
+		best, err := client.Block(strconv.FormatUint(uint64(i), 10))
+		require.NoError(t, err)
+		if best.Signer == hayabusa.ValidatorAccounts[0].Address() {
+			acc1Blocks++
+		}
 	}
 	t.Logf("✅ - PoS growth is as expected")
 
-	actualStakerRewards := new(big.Int)
-	for _, receipt := range receipts {
-		validatorID := receipt.Outputs[0].Events[0].Topics[3]
-		validator, err := staker.Get(validatorID)
-		require.NoError(t, err)
+	rewards, err := staker.GetDelegatorsRewards(hayabusa.ValidatorAccounts[0].Address(), 1)
+	require.NoError(t, err)
+	proposerRewardsPerBlock := big.NewInt(0).Mul(hayabusaGrowth, big.NewInt(3))
+	proposerRewardsPerBlock = proposerRewardsPerBlock.Div(proposerRewardsPerBlock, big.NewInt(10))
+	delegatorRewardsPerBlock := big.NewInt(0).Sub(hayabusaGrowth, proposerRewardsPerBlock)
+	expectedRewards := big.NewInt(0).Mul(delegatorRewardsPerBlock, big.NewInt(int64(acc1Blocks)))
 
-		if validator.Status == builtin.StakerStatusUnknown {
-			return testutil.StakerStatusUnknownError{ValidationID: validatorID.String()}
-		}
-		rewards, err := staker.GetRewards(validatorID, 1)
-		require.NoError(t, err)
-		actualStakerRewards = actualStakerRewards.Add(actualStakerRewards, rewards)
-	}
-
-	// growth per block * number of blocks in a staking period
-	expectedStakerRewards := new(big.Int).Mul(hayabusaGrowth, big.NewInt(int64(config.MinStakingPeriod)))
-	require.Equal(t, expectedStakerRewards, actualStakerRewards)
+	require.Equal(t, expectedRewards, rewards)
 	t.Logf("✅ - Staker rewards are as expected")
 
 	return nil

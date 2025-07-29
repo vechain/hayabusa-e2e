@@ -51,13 +51,15 @@ func WaitForCondition(client *thorclient.Client, maxBlock uint32, condition func
 }
 
 // WaitForPeersConnection waits for all nodes to connect to each other
-func WaitForPeersConnection(nodes []node.Config, expectedPeersLen int, ctx context.Context) error {
+func WaitForPeersConnection(nodes []node.Config, ctx context.Context) error {
 	// Timeout configuration
 	timeout := 5 * time.Minute
 	context, cancel := context.WithTimeout(ctx, timeout)
 	tick := time.NewTicker(5 * time.Second)
 	defer cancel()
 	attempts := 0
+
+	expectedPeersLen := len(nodes) - 1 // Each node should connect to all others except itself
 
 	slog.Info("waiting for peers to connect...", "expected_peers", expectedPeersLen, "timeout", timeout.Seconds())
 

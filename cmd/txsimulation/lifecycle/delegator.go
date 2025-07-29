@@ -23,7 +23,7 @@ type DelegatorLifecycle struct {
 	exitReceipt     *api.Receipt // the receipt of the exit transaction
 	withdrawReceipt *api.Receipt // the receipt of the withdraw transaction
 	id              thor.Bytes32
-	validationID    thor.Bytes32
+	validationID    thor.Address
 
 	mu sync.Mutex
 }
@@ -101,7 +101,7 @@ func (d *DelegatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 		return nil
 	}
 
-	validation, validationID := engine.validators.RandomActiveAutoRenewValidator()
+	validation, validationID := engine.validators.RandomActiveValidator()
 	if validationID.IsZero() {
 		return nil
 	}
@@ -110,7 +110,7 @@ func (d *DelegatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	position := delegations.RandomPosition()
 	eth := big.NewInt(1e18)
 	stake := big.NewInt(0).Mul(position.Stake, eth)
-	sender := engine.stack.Staker().AddDelegation(validationID, stake, true, position.Multiplier)
+	sender := engine.stack.Staker().AddDelegation(validationID, stake, position.Multiplier)
 	receipt, err := engine.stack.SendTransaction(sender, d.config.Account)
 	if err != nil {
 		slog.Error("failed to queue delegator", "error", err)
@@ -179,7 +179,7 @@ func (d *DelegatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 	}
 	slog.Debug("signalling exit for delegator", "id", d.ID())
 
-	sender := engine.stack.Staker().UpdateDelegationAutoRenew(d.id, false)
+	sender := engine.stack.Staker().SignalDelegationExit(d.id)
 	receipt, err := engine.stack.SendTransaction(sender, d.config.Account)
 	if err != nil && !strings.Contains(err.Error(), "delegation is not active") {
 		slog.Error("failed to signal exit for delegator", "error", err, "id", d.ID())

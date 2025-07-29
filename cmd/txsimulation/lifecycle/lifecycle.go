@@ -60,7 +60,7 @@ const (
 )
 
 type Info struct {
-	ValidationID    thor.Bytes32
+	ValidationID    thor.Address
 	Type            Type
 	QueuedReceipt   *api.Receipt
 	ActivatedBlock  uint32

@@ -1,6 +1,7 @@
 package slots
 
 import (
+	"github.com/vechain/thor/v2/thorclient"
 	"math/big"
 	"testing"
 	"time"
@@ -34,26 +35,28 @@ func runTestMissedSlot(t *testing.T) error {
 		HighStakingPeriod: 259200,
 		Name:              t.Name(),
 	}
-	hayabusa := hayabusa.NewNetwork(config, t.Context())
-	client, network, err := hayabusa.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	network, err := hayabusa.NewNetwork(config, t.Context())
+	require.NoError(t, err)
+	t.Cleanup(network.Stop)
+	require.NoError(t, network.Start())
+
+	validator1 := network.NodeConfigs()[0]
+	validator2 := network.NodeConfigs()[1]
+	validator3 := network.NodeConfigs()[2]
+
+	client := thorclient.New(validator2.GetHTTPAddr()) // use validator2 as the client to avoid issues with validator1 being stopped
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
 
-	validator1 := network.Config().Nodes[0]
-	validator2 := network.Config().Nodes[1]
-	validator3 := network.Config().Nodes[2]
-
-	mustAddValidator := func(hexKey string, stake *big.Int) thor.Bytes32 {
+	mustAddValidator := func(hexKey string, stake *big.Int) thor.Address {
 		key, err := crypto.HexToECDSA(hexKey)
 		require.NoError(t, err)
 		signer := (*bind.PrivateKeySigner)(key)
 		address := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
 		receipt := testutil.Send(t, signer, staker.AddValidator(address, stake, config.MinStakingPeriod))
-		return receipt.Outputs[0].Events[0].Topics[3]
+		id := receipt.Outputs[0].Events[0].Topics[2]
+		return thor.BytesToAddress(id.Bytes())
 	}
 
 	// add 2 min stake validators
@@ -74,7 +77,7 @@ func runTestMissedSlot(t *testing.T) error {
 	prev, err := ticker.Wait(35 * time.Second)
 	require.NoError(t, err)
 	// shut the validator down
-	require.NoError(t, network.Nodes()[validator1.GetID()].Stop())
+	require.NoError(t, network.NodeLifecycles()[validator1.GetID()].Stop())
 
 	missedSlot := false
 	// (16 / 18) ^ 60 = 0.00085% chance of this failing
@@ -95,7 +98,7 @@ func runTestMissedSlot(t *testing.T) error {
 	require.False(t, validation.Online)
 
 	// start the validator again
-	require.NoError(t, network.Nodes()[validator1.GetID()].Start())
+	require.NoError(t, network.NodeLifecycles()[validator1.GetID()].Start())
 
 	// wait for the validator to be back online
 	err = ticker.WaitForCondition(time.Minute*1, func() (bool, error) {

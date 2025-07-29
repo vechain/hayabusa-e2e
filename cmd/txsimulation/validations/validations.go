@@ -2,8 +2,6 @@ package validations
 
 import (
 	"fmt"
-	utils2 "github.com/vechain/hayabusa-e2e/utils"
-	"github.com/vechain/thor/v2/api"
 	"log/slog"
 	"math"
 	"math/big"
@@ -13,16 +11,18 @@ import (
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
+	utils2 "github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
 var (
-	Eth        = big.NewInt(1e18)                               // 1 ETH in wei
-	MillionETH = big.NewInt(0).Mul(big.NewInt(1e6), Eth)        // 1 million ETH in wei
-	MaxStake   = big.NewInt(0).Mul(big.NewInt(600), MillionETH) // 600 million VET in wei
-	MinStake   = big.NewInt(0).Mul(big.NewInt(25), MillionETH)  // 1 million VET in wei
+	Eth      = big.NewInt(1e18)                            // 1 ETH in wei
+	Million  = big.NewInt(1e6)                             // 1 million VET
+	MaxStake = big.NewInt(0).Mul(big.NewInt(600), Million) // 600 million VET
+	MinStake = big.NewInt(0).Mul(big.NewInt(25), Million)  // 1 million VET
 )
 
 func RandomStake() *big.Int {
@@ -36,45 +36,47 @@ func RandomStake() *big.Int {
 	// Generate a random number within the range
 	randomOffset := new(big.Int).Rand(rng, rangeStake)
 
+	stake := new(big.Int).Add(MinStake, randomOffset)
+	stake = stake.Mul(stake, Eth) // Convert to wei
+
 	// Add MinStake to ensure the value is within the desired range
-	return new(big.Int).Add(MinStake, randomOffset)
+	return stake
 }
 
 type State struct {
 	stack *stack.Stack
 
 	// the below can change based on the validator's status
-	idByAddress     map[thor.Address]thor.Bytes32
-	activeAutoRenew map[thor.Bytes32]*builtin.Validator
-	activeOneTime   map[thor.Bytes32]*builtin.Validator
-	queued          map[thor.Bytes32]*builtin.Validator
+	active  map[thor.Address]*builtin.Validator
+	queued  map[thor.Address]*builtin.Validator
+	exiting map[thor.Address]*builtin.Validator
 
 	// the below are static and do not change
-	idLookup map[thor.Bytes32]*builtin.Validator
-	exited   map[thor.Bytes32]*builtin.Validator
+	idLookup map[thor.Address]*builtin.Validator
+	exited   map[thor.Address]*builtin.Validator
 
 	mu sync.Mutex
 }
 
 func NewState(stack *stack.Stack) *State {
 	s := &State{
-		stack:           stack,
-		idByAddress:     make(map[thor.Address]thor.Bytes32),
-		activeAutoRenew: make(map[thor.Bytes32]*builtin.Validator),
-		activeOneTime:   make(map[thor.Bytes32]*builtin.Validator),
-		queued:          make(map[thor.Bytes32]*builtin.Validator),
-		idLookup:        make(map[thor.Bytes32]*builtin.Validator),
-		exited:          make(map[thor.Bytes32]*builtin.Validator),
+		stack:    stack,
+		active:   make(map[thor.Address]*builtin.Validator),
+		queued:   make(map[thor.Address]*builtin.Validator),
+		idLookup: make(map[thor.Address]*builtin.Validator),
+		exited:   make(map[thor.Address]*builtin.Validator),
+		exiting:  make(map[thor.Address]*builtin.Validator),
 	}
 	go s.poll()
 	return s
 }
 
-// Len returns the number of validators with a status of Queued, Active or
+// Len returns the number of validators with a status of Queued, Active or Exiting.
+// It does not include validators that have exited.
 func (s *State) Len() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.idByAddress)
+	return len(s.active) + len(s.queued) + len(s.exiting)
 }
 
 func (s *State) poll() {
@@ -86,20 +88,26 @@ func (s *State) poll() {
 			return
 		default:
 			ticker.Wait(time.Second * 15)
-			ids := make(map[thor.Bytes32]builtin.StakerStatus)
+			ids := make(map[thor.Address]builtin.StakerStatus)
 			s.mu.Lock()
-			for _, id := range s.idByAddress {
-				ids[id] = s.idLookup[id].Status
+			for addr, _ := range s.active {
+				ids[addr] = s.idLookup[addr].Status
+			}
+			for addr, _ := range s.queued {
+				ids[addr] = s.idLookup[addr].Status
+			}
+			for addr, _ := range s.exiting {
+				ids[addr] = s.idLookup[addr].Status
 			}
 			s.mu.Unlock()
 
 			mu := sync.Mutex{}
 			wg := sync.WaitGroup{}
-			newValidations := make(map[thor.Bytes32]*builtin.Validator)
+			newValidations := make(map[thor.Address]*builtin.Validator)
 
 			for id, status := range ids {
 				wg.Add(1)
-				go func(id thor.Bytes32, status builtin.StakerStatus) {
+				go func(id thor.Address, status builtin.StakerStatus) {
 					validation, err := s.stack.Staker().Get(id)
 					defer wg.Done()
 					if err != nil {
@@ -122,7 +130,7 @@ func (s *State) poll() {
 	}
 }
 
-func (s *State) Withdraw(id thor.Bytes32, signer bind.Signer) (*api.Receipt, error) {
+func (s *State) Withdraw(id thor.Address, signer bind.Signer) (*api.Receipt, error) {
 	sender := s.stack.Staker().WithdrawStake(id)
 	receipt, err := s.stack.SendTransaction(sender, signer)
 	if err != nil {
@@ -131,27 +139,26 @@ func (s *State) Withdraw(id thor.Bytes32, signer bind.Signer) (*api.Receipt, err
 	return receipt, nil
 }
 
-func (s *State) QueueValidator(acc bind.Signer, autoRenew bool) (thor.Bytes32, *api.Receipt, error) {
+func (s *State) QueueValidator(acc bind.Signer) (thor.Address, *api.Receipt, error) {
 	sender := s.stack.Staker().AddValidator(acc.Address(), RandomStake(), s.stack.Config().MinStakingPeriod)
 	receipt, err := s.stack.SendTransaction(sender, acc)
 	if err != nil {
-		return thor.Bytes32{}, nil, fmt.Errorf("failed to queue validator %s: %w", acc.Address(), err)
+		return thor.Address{}, nil, fmt.Errorf("failed to queue validator %s: %w", acc.Address(), err)
 	}
-	id := receipt.Outputs[0].Events[0].Topics[3]
+	id := thor.BytesToAddress(receipt.Outputs[0].Events[0].Topics[2][:])
 	validation, err := s.stack.Staker().Get(id)
 	if err != nil {
-		return thor.Bytes32{}, nil, fmt.Errorf("failed to get validator %s: %w", id.String(), err)
+		return thor.Address{}, nil, fmt.Errorf("failed to get validator %s: %w", id.String(), err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.idByAddress[acc.Address()] = id
 	s.idLookup[id] = validation
 	s.queued[id] = validation
 	return id, receipt, nil
 }
 
-func (s *State) DisableAutoRenew(id thor.Bytes32, signer bind.Signer) (*api.Receipt, error) {
+func (s *State) DisableAutoRenew(id thor.Address, signer bind.Signer) (*api.Receipt, error) {
 	sender := s.stack.Staker().SignalExit(id)
 	receipt, err := s.stack.SendTransaction(sender, signer)
 	if err != nil {
@@ -169,46 +176,35 @@ func (s *State) DisableAutoRenew(id thor.Bytes32, signer bind.Signer) (*api.Rece
 	return receipt, nil
 }
 
-func (s *State) RandomActiveAutoRenewValidator() (*builtin.Validator, thor.Bytes32) {
+func (s *State) RandomActiveValidator() (*builtin.Validator, thor.Address) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return randomFromMap(s.activeAutoRenew)
+	return randomFromMap(s.active)
 }
 
-func (s *State) RandomActiveOneTimeValidator() (*builtin.Validator, thor.Bytes32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return randomFromMap(s.activeOneTime)
-}
-
-func (s *State) RandomQueuedValidator() (*builtin.Validator, thor.Bytes32) {
+func (s *State) RandomQueuedValidator() (*builtin.Validator, thor.Address) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return randomFromMap(s.queued)
 }
 
-func (s *State) LookupAddress(address thor.Address) (thor.Bytes32, *builtin.Validator, bool) {
+func (s *State) LookupAddress(address thor.Address) (*builtin.Validator, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	id, exists := s.idByAddress[address]
+	validation, exists := s.idLookup[address]
 	if !exists {
-		return thor.Bytes32{}, nil, false
+		return nil, false
 	}
 
-	validation, exists := s.idLookup[id]
-	if !exists {
-		return thor.Bytes32{}, nil, false
-	}
-
-	return id, validation, true
+	return validation, true
 }
 
-func randomFromMap(m map[thor.Bytes32]*builtin.Validator) (*builtin.Validator, thor.Bytes32) {
+func randomFromMap(m map[thor.Address]*builtin.Validator) (*builtin.Validator, thor.Address) {
 	if len(m) == 0 {
-		return nil, thor.Bytes32{}
+		return nil, thor.Address{}
 	}
-	keys := make([]thor.Bytes32, 0, len(m))
+	keys := make([]thor.Address, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
@@ -218,7 +214,7 @@ func randomFromMap(m map[thor.Bytes32]*builtin.Validator) (*builtin.Validator, t
 }
 
 // updateStatus of a validator. It is not thread-safe, so it should be called with the mutex locked.
-func (s *State) updateStatus(id thor.Bytes32, validation *builtin.Validator) {
+func (s *State) updateStatus(id thor.Address, validation *builtin.Validator) {
 	prevValidation, exists := s.idLookup[id]
 	hasUpdates := false
 	if exists && prevValidation.Status != validation.Status {
@@ -247,29 +243,24 @@ func (s *State) updateStatus(id thor.Bytes32, validation *builtin.Validator) {
 		return
 	}
 
-	delete(s.idByAddress, *validation.Master)
-	delete(s.activeAutoRenew, id)
-	delete(s.activeOneTime, id)
 	delete(s.queued, id)
+	delete(s.active, id)
+	delete(s.exiting, id)
+	s.idLookup[id] = validation
 
 	switch validation.Status {
 	case builtin.StakerStatusQueued:
 		s.queued[id] = validation
 	case builtin.StakerStatusActive:
 		if validation.ExitBlock == math.MaxUint32 {
-			s.activeAutoRenew[id] = validation
+			s.active[id] = validation
 		} else {
-			s.activeOneTime[id] = validation
+			s.exiting[id] = validation
 		}
 	case builtin.StakerStatusExited:
 		s.exited[id] = validation
-		s.idLookup[id] = validation
-		delete(s.idByAddress, *validation.Master)
 		return
 	default:
 		slog.Warn("unknown status for validator", "id", id, "status", validation.Status)
 	}
-
-	s.idLookup[id] = validation
-	s.idByAddress[*validation.Master] = id
 }

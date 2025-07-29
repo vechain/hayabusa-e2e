@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"log/slog"
 	"net"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	utils2 "github.com/vechain/hayabusa-e2e/utils"
@@ -39,8 +39,11 @@ func main() {
 		MidStakingPeriod:  48,
 		HighStakingPeriod: 259200,
 	}
-	network := hayabusa.NewNetwork(config, ctx)
-	//os.Setenv("THOR_WORKING_DIR", "/Users/darren/workspace/vechain/thor")
+	network, err := hayabusa.NewNetwork(config, ctx)
+	if err != nil {
+		slog.Error("failed to create hayabusa network", "error", err)
+		os.Exit(1)
+	}
 
 	slog.SetLogLoggerLevel(slog.LevelInfo)
 
@@ -50,7 +53,7 @@ func main() {
 	}
 
 	port := 8569
-	for i, node := range network.Nodes() {
+	for i, node := range network.NodeConfigs() {
 		if i == 0 {
 			additionalArgs := node.GetAdditionalArgs()
 			if additionalArgs == nil {
@@ -64,11 +67,11 @@ func main() {
 		node.SetAPIAddr(addr)
 		slog.Info("node API address", "node", node.GetID(), "address", addr)
 	}
-	client, _, err := network.Start()
-	if err != nil {
+	if err := network.Start(); err != nil {
 		slog.Error("failed to start network", "error", err)
 		os.Exit(1)
 	}
+	client := network.ThorClient()
 	staker, err := builtin.NewStaker(client)
 	if err != nil {
 		slog.Error("failed to create staker client", "error", err)
@@ -143,15 +146,6 @@ func main() {
 }
 
 func addManyKeyNode(network *hayabusa.Network) error {
-	nodeBuild := &thorbuilder.Config{
-		DownloadConfig: &thorbuilder.DownloadConfig{
-			RepoUrl: "git@github.com:vechain/hayabusa.git",
-			Branch:  "darren/testing/multiple-keys",
-		},
-		//BuildConfig: &thorbuilder.BuildConfig{
-		//	ExistingPath: "/Users/darren/workspace/vechain/hayabusa",
-		//},
-	}
 	args := make(map[string]string)
 	keys := ""
 	for i := 2; i < 101; i++ {
@@ -166,7 +160,18 @@ func addManyKeyNode(network *hayabusa.Network) error {
 	}
 	keys = strings.TrimSuffix(keys, ",")
 	args["keys"] = keys
-	return network.AttachNode(nodeBuild, args)
+	config := &thorbuilder.Config{
+		//DownloadConfig: &thorbuilder.DownloadConfig{
+		//	RepoUrl:    "git@github.com:vechain/hayabusa.git",
+		//	Branch:     "darren/testing/multiple-keys",
+		//	IsReusable: true,
+		//},
+		BuildConfig: &thorbuilder.BuildConfig{
+			DebugBuild:   false,
+			ExistingPath: "/Users/darren/workspace/vechain/hayabusa",
+		},
+	}
+	return network.AttachNode(config, args)
 }
 
 func printOutput(engine *lifecycle.Engine) {

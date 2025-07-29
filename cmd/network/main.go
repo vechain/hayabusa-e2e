@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -33,13 +34,13 @@ func main() {
 		HighStakingPeriod: 180,
 	}
 
-	client, net, cancel, err := hayabusa.StartNetwork(nil, config)
+	network, err := hayabusa.NewNetwork(config, context.Background())
 	if err != nil {
 		panic(err)
 	}
-	defer cancel()
+	defer network.Stop()
 
-	staker, err := builtin.NewStaker(client)
+	staker, err := builtin.NewStaker(network.ThorClient())
 	if err != nil {
 		fmt.Println("  - Error creating staker:", err)
 		return
@@ -88,7 +89,7 @@ func main() {
 	fmt.Println("")
 
 	fmt.Println("")
-	fmt.Println("🌐 - Network URL: ", net.Config().Nodes[0].GetAPIAddr())
+	fmt.Println("🌐 - Network URL: ", network.NodeConfigs()[0].GetAPIAddr())
 	fmt.Println("📭 - Staker Address: ", staker.Raw().Address())
 	res, err := prompt.New().Ask("Stargate Address:").Input("0xf077b491b355E64048cE21E3A6Fc4751eEeA77fa", input.WithValidateFunc(func(s string) error {
 		_, err := thor.ParseAddress(s)
@@ -100,7 +101,7 @@ func main() {
 	fmt.Printf("\n🕐 Setting stargate address... %s", res)
 	fmt.Println("")
 
-	if err := setStargateAddr(client, thor.MustParseAddress(res)); err != nil {
+	if err := setStargateAddr(network.ThorClient(), thor.MustParseAddress(res)); err != nil {
 		fmt.Println("  - Error setting stargate address:", err)
 		return
 	}
@@ -115,7 +116,7 @@ func main() {
 	}
 	var killDevpal func()
 	if res == "y" {
-		addr := net.Config().Nodes[0].GetAPIAddr()
+		addr := network.NodeConfigs()[0].GetAPIAddr()
 		parts := strings.Split(addr, ":")
 		addr = fmt.Sprintf("http://localhost:%s", parts[len(parts)-1])
 		killDevpal, err = startDevPal(addr)
@@ -132,7 +133,6 @@ func main() {
 	signal.Notify(exitSignalCh, os.Interrupt, syscall.SIGTERM)
 	sig := <-exitSignalCh
 	slog.Info("exit signal received", "signal", sig)
-	cancel()
 }
 
 func startDevPal(addr string) (func(), error) {

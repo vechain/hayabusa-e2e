@@ -18,7 +18,7 @@ type ValidatorLifecycle struct {
 	activatedBlock  uint32       // the block at which this lifecycle was activated
 	exitReceipt     *api.Receipt // the receipt of the exit transaction
 	withdrawReceipt *api.Receipt // the receipt of the withdraw transaction
-	id              thor.Bytes32
+	id              thor.Address
 
 	mu sync.Mutex
 }
@@ -97,7 +97,7 @@ func (v *ValidatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	}
 	slog.Debug("queuing validator", "account", v.Account.Address(), "block", block)
 
-	id, receipt, err := engine.validators.QueueValidator(v.Account, true)
+	id, receipt, err := engine.validators.QueueValidator(v.Account)
 	if err != nil {
 		slog.Error("failed to queue validator", "error", err, "account", v.Account.Address())
 		return err
