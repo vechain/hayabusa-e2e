@@ -97,11 +97,10 @@ func (n *Network) Stop() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	globalPortManager.RemovePorts(n.config.Name)
-
 	if err := n.network.StopNetwork(); err != nil {
 		slog.Error("🛑 failed to stop network", "error", err)
 	}
+	globalPortManager.RemovePorts(n.config.Name)
 }
 
 func (n *Network) NodeConfigs() []node.Config {
