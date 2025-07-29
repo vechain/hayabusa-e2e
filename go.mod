@@ -21,7 +21,7 @@ require (
 require (
 	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/pkg/errors v0.9.1
-	github.com/vechain/networkhub v0.0.5-0.20250728134321-82101b278962
+	github.com/vechain/networkhub v0.0.5-0.20250729072045-ede4024885cc
 )
 
 require (

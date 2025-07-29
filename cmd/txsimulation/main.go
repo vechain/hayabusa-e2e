@@ -161,15 +161,15 @@ func addManyKeyNode(network *hayabusa.Network) error {
 	keys = strings.TrimSuffix(keys, ",")
 	args["keys"] = keys
 	config := &thorbuilder.Config{
-		//DownloadConfig: &thorbuilder.DownloadConfig{
-		//	RepoUrl:    "git@github.com:vechain/hayabusa.git",
-		//	Branch:     "darren/testing/multiple-keys",
-		//	IsReusable: true,
-		//},
-		BuildConfig: &thorbuilder.BuildConfig{
-			DebugBuild:   false,
-			ExistingPath: "/Users/darren/workspace/vechain/hayabusa",
+		DownloadConfig: &thorbuilder.DownloadConfig{
+			RepoUrl:    "git@github.com:vechain/hayabusa.git",
+			Branch:     "darren/testing/multiple-keys",
+			IsReusable: true,
 		},
+		//BuildConfig: &thorbuilder.BuildConfig{
+		//	DebugBuild:   false,
+		//	ExistingPath: "/Users/darren/workspace/vechain/hayabusa",
+		//},
 	}
 	return network.AttachNode(config, args)
 }
