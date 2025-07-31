@@ -1,10 +1,11 @@
 package slots
 
 import (
-	"github.com/vechain/thor/v2/thorclient"
 	"math/big"
 	"testing"
 	"time"
+
+	"github.com/vechain/thor/v2/thorclient"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
@@ -53,8 +54,8 @@ func runTestMissedSlot(t *testing.T) error {
 		require.NoError(t, err)
 		signer := (*bind.PrivateKeySigner)(key)
 		address := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
-		receipt := testutil.Send(t, signer, staker.AddValidator(address, stake, config.MinStakingPeriod))
-		id := receipt.Outputs[0].Events[0].Topics[2]
+		receipt := testutil.Send(t, signer, staker.AddValidation(address, stake, config.MinStakingPeriod))
+		id := receipt.Outputs[0].Events[0].Topics[1]
 		return thor.BytesToAddress(id.Bytes())
 	}
 

@@ -171,6 +171,12 @@ github.com/vechain/networkhub v0.0.5-0.20250728134321-82101b278962 h1:Ut0IYtwL9v
 github.com/vechain/networkhub v0.0.5-0.20250728134321-82101b278962/go.mod h1:eKVUaHh3O3bFDGESAwyQQMy+mkrb4jHE7W1z/YRFySI=
 github.com/vechain/thor/v2 v2.3.2-0.20250728105230-ec7b15625753 h1:ubvJhEADS1Kdr/RIS4lrk3RbfjscgK+npwUkCui4oTk=
 github.com/vechain/thor/v2 v2.3.2-0.20250728105230-ec7b15625753/go.mod h1:STGXqeAwg9qHV/q5QlAAA/VvWcC2eAeGAAYuYUUUosg=
+github.com/vechain/thor/v2 v2.3.2-0.20250729080525-4fe158c1c7ae h1:buhK+ofibFK7/SQZRHZ0AKvbIb1YhF4+OsZNbKUYZxc=
+github.com/vechain/thor/v2 v2.3.2-0.20250729080525-4fe158c1c7ae/go.mod h1:STGXqeAwg9qHV/q5QlAAA/VvWcC2eAeGAAYuYUUUosg=
+github.com/vechain/thor/v2 v2.3.2-0.20250729081545-39f23837c7d3 h1:nidwjOvQ/udHH5QAw458o5aDMfLxo//5EJZaXNlkhpw=
+github.com/vechain/thor/v2 v2.3.2-0.20250729081545-39f23837c7d3/go.mod h1:STGXqeAwg9qHV/q5QlAAA/VvWcC2eAeGAAYuYUUUosg=
+github.com/vechain/thor/v2 v2.3.2-0.20250731081513-7c1829ef5166 h1:KQzr1kTAvpv8n2dpyiE7PT4RpwVuUUKn6KwD9PDyUY4=
+github.com/vechain/thor/v2 v2.3.2-0.20250731081513-7c1829ef5166/go.mod h1:STGXqeAwg9qHV/q5QlAAA/VvWcC2eAeGAAYuYUUUosg=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=

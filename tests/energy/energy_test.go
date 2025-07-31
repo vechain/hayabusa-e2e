@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
@@ -49,11 +50,14 @@ func runEnergyTest(t *testing.T) error {
 	stake := builtin.MinStake()
 	for i := range validators {
 		acc := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(acc.Address(), stake, config.MinStakingPeriod).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidation(acc.Address(), stake, config.MinStakingPeriod).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
-	_, _, err = senders.Send(testutil.TxContext(t))
+	receipts, _, err := senders.Send(testutil.TxContext(t))
 	require.NoError(t, err)
+	for _, receipt := range receipts {
+		assert.False(t, receipt.Reverted)
+	}
 	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10))
 	testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(hayabusa.ValidatorAccounts[0].Address(), delegationStake, 200))
 

@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/stretchr/testify/require"
-	"github.com/vechain/networkhub/thorbuilder"
 	"io"
 	"net"
 	"os"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/vechain/networkhub/thorbuilder"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
@@ -135,7 +136,7 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 	for i := range validationIDs {
 		senders := &utils.Senders{}
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod).
+		sender := staker.AddValidation(account.Address(), builtin.MinStake(), config.MinStakingPeriod).
 			Send().
 			WithSigner(account).
 			WithOptions(testutil.TxOptions())
