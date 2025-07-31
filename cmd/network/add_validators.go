@@ -12,13 +12,13 @@ import (
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
-func addValidators(staker *builtin.Staker, config *hayabusa.Config) ([]builtin.ValidatorQueuedEvent, error) {
+func addValidators(staker *builtin.Staker, config *hayabusa.Config) ([]builtin.ValidationQueuedEvent, error) {
 	fmt.Println("")
 	senders := &utils.Senders{}
 	for i := range int(config.MaxBlockProposers) {
 		acc := hayabusa.ValidatorAccounts[i]
 		// Add the validator
-		sender := staker.AddValidator(acc.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidation(acc.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 
