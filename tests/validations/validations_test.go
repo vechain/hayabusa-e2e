@@ -37,7 +37,7 @@ func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
 	stake := calculateValidatorStake()
 	firstStake := new(big.Int).Mul(stake, big.NewInt(2))
 
-	receipt, _, err := staker.AddValidator(validator1NonPoA.Address(), firstStake, config.MinStakingPeriod).
+	receipt, _, err := staker.AddValidation(validator1NonPoA.Address(), firstStake, config.MinStakingPeriod).
 		Send().
 		WithOptions(testutil.TxOptions()).
 		WithSigner(validator1NonPoA).
@@ -50,7 +50,7 @@ func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
 
 	firstQueued, _, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, *firstQueued.Endorsor, validator1PoA.Address())
+	assert.Equal(t, firstQueued.Endorsor, validator1PoA.Address())
 	t.Log("✅ - Queued validator OK", "id", id1.String())
 
 	id2 := addValidator(sequence, staker, validator2PoA, config.MinStakingPeriod)
@@ -92,7 +92,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 	firstQueued, _, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, *firstQueued.Endorsor, validator1.Address())
+	assert.Equal(t, firstQueued.Endorsor, validator1.Address())
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
@@ -168,14 +168,14 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	retrievedValidator2, retrievedValidator2Id, err := staker.Next(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, id2, retrievedValidator2Id)
-	assert.Equal(t, validator1.Address().String(), retrievedValidator2.Endorsor.String())
-	assert.Equal(t, validator1.Address().String(), retrievedValidator2.Master.String())
+	assert.Equal(t, validator2.Address().String(), retrievedValidator2.Endorsor.String())
+	assert.Equal(t, validator2.Address().String(), retrievedValidator2.Address.String())
 
 	retrievedValidator3, retrievedValidator3Id, err := staker.Next(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, id3, retrievedValidator3Id)
-	assert.Equal(t, validator2.Address().String(), retrievedValidator3.Endorsor.String())
-	assert.Equal(t, validator2.Address().String(), retrievedValidator3.Master.String())
+	assert.Equal(t, validator3.Address().String(), retrievedValidator3.Endorsor.String())
+	assert.Equal(t, validator3.Address().String(), retrievedValidator3.Address.String())
 
 	retrievedValidator4, retrievedValidator4Id, err := staker.Next(id3)
 	assert.Error(t, err, "no next validator")
@@ -242,6 +242,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	id3 := addValidator(sequence, staker, validator3, config.MinStakingPeriod)
 	id4 := addValidator(sequence, staker, validator4, config.MinStakingPeriod)
 
+	assert.Equal(t, validator1.Address(), id1)
+	assert.Equal(t, validator2.Address(), id2)
+	assert.Equal(t, validator3.Address(), id3)
+	assert.Equal(t, validator4.Address(), id4)
+
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
 	assert.Equal(t, id1, validatorID)
@@ -288,7 +293,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	receipt := testutil.Send(t, validator3, staker.SignalExit(id3))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator3.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
-	addr := receipt.Outputs[0].Events[0].Topics[2]
+	addr := receipt.Outputs[0].Events[0].Topics[1]
 	assert.Equal(t, id3, thor.BytesToAddress(addr.Bytes()))
 
 	t.Log("✅ - AutoRenew updated")
@@ -356,7 +361,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	receipt := testutil.Send(t, validator1, staker.IncreaseStake(id1, increase))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator1.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
-	id := receipt.Outputs[0].Events[0].Topics[2]
+	id := receipt.Outputs[0].Events[0].Topics[1]
 	assert.Equal(t, id1, thor.BytesToAddress(id.Bytes()))
 
 	t.Log("✅ - Validator 1 stake increased tx sent")
@@ -397,7 +402,7 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	testutil.Send(t, validator1, staker.DecreaseStake(id1, decrease))
 	assert.Equal(t, staker.Raw().Address().String(), receipt.Outputs[0].Events[0].Address.String())
 	assert.Equal(t, validator1.Address().Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
-	address := receipt.Outputs[0].Events[0].Topics[2]
+	address := receipt.Outputs[0].Events[0].Topics[1]
 	assert.Equal(t, id1, thor.BytesToAddress(address.Bytes()))
 
 	t.Log("✅ - Validator 1 stake decrease tx sent")
@@ -683,8 +688,8 @@ func runTestHayabusaTotalStakeDecreased(t *testing.T) error {
 }
 
 func addValidatorWithStake(seq *testutil.TxSequence, staker *builtin.Staker, signer bind.Signer, stake *big.Int, period uint32) thor.Address {
-	receipt := seq.Send(signer, staker.AddValidator(signer.Address(), stake, period))
-	id := receipt.Outputs[0].Events[0].Topics[2]
+	receipt := seq.Send(signer, staker.AddValidation(signer.Address(), stake, period))
+	id := receipt.Outputs[0].Events[0].Topics[1]
 	amount := big.NewInt(0).Quo(stake, big.NewInt(1e18))
 	slog.Info("✅ - added validator", "validator", signer.Address().String(), "period", period, "stake", amount, "id", id.String())
 
@@ -698,9 +703,7 @@ func addValidator(seq *testutil.TxSequence, staker *builtin.Staker, signer bind.
 func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Address) {
 	receipt := testutil.Send(t, signer, staker.WithdrawStake(validatorID))
 	addr := signer.Address()
-	id := receipt.Outputs[0].Events[0].Topics[2]
 	assert.Equal(t, addr.Bytes(), receipt.Outputs[0].Events[0].Topics[1].Bytes()[12:])
-	assert.Equal(t, validatorID, thor.BytesToAddress(id.Bytes()))
 	assert.Len(t, receipt.Outputs[0].Transfers, 1)
 	assert.Equal(t, receipt.Outputs[0].Transfers[0].Recipient, addr)
 	slog.Info("✅ - validator withdrawn", "validator", validatorID.String())
@@ -744,7 +747,7 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		Nodes:             6,
 		MaxBlockProposers: maxBlockProposers,
 		ForkBlock:         0,
-		TransitionPeriod:  6,
+		TransitionPeriod:  10,
 		EpochLength:       2,
 		CooldownPeriod:    2,
 		MinStakingPeriod:  4,

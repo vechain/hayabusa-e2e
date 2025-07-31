@@ -67,7 +67,7 @@ func Test_StargateRewards(t *testing.T) {
 	// assert plus1 is greater than N
 	assert.True(t, blockNPlus1Energy.Cmp(blockNEnergy) > 0, "block N+1 energy should be greater than block N energy")
 
-	totals, err := staker.GetValidatorsTotals(validationIDs[0])
+	totals, err := staker.GetValidationTotals(validationIDs[0])
 	require.NoError(t, err)
 	assert.Equal(t, builtin.MinStake(), big.NewInt(0).Sub(totals.TotalLockedStake, totals.DelegationsLockedStake))
 	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)), big.NewInt(0).Sub(totals.TotalLockedWeight, totals.DelegationsLockedWeight))
@@ -203,7 +203,7 @@ func Test_Delegations(t *testing.T) {
 		validatorAccount := hayabusa.ValidatorAccounts[0]
 
 		for _, acc := range hayabusa.ValidatorAccounts {
-			if acc.Address().String() == validator.Master.String() {
+			if acc.Address().String() == validator.Address.String() {
 				validatorAccount = acc
 				break
 			}
@@ -312,7 +312,7 @@ func Test_Delegations(t *testing.T) {
 		assert.False(t, delegation.Locked)
 
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
-		totalsBeforeWithdrawal, err := staker.GetValidatorsTotals(validationIDs[5])
+		totalsBeforeWithdrawal, err := staker.GetValidationTotals(validationIDs[5])
 		require.NoError(t, err)
 
 		// Verify that the validator has the exact total stake from both delegations
@@ -329,7 +329,7 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
 		// Verify that the validator has exactly the second delegation stake after withdrawal
-		totalsAfterWithdrawal, err := staker.GetValidatorsTotals(validationIDs[5])
+		totalsAfterWithdrawal, err := staker.GetValidationTotals(validationIDs[5])
 		require.NoError(t, err)
 		assert.Equal(t, secondStake, totalsAfterWithdrawal.DelegationsLockedStake,
 			"Validator should have exactly the second delegation stake after withdrawal")
@@ -370,7 +370,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod).
+		sender := staker.AddValidation(account.Address(), builtin.MinStake(), config.MinStakingPeriod).
 			Send().
 			WithSigner(account).
 			WithOptions(testutil.TxOptions())
@@ -391,7 +391,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		t.Fatalf("failed to filter validator queued: %v", err)
 	}
 	for i, event := range events {
-		validationIDs[i] = event.ValidationID
+		validationIDs[i] = event.Node
 	}
 	return staker, config, validationIDs
 }
