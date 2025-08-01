@@ -10,6 +10,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -610,7 +611,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	t.Log("✅ - New delegator added to queued validator")
 
 	// Get delegation ID from receipt
-	delegationID := new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2].Bytes())
+  delegationID := new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2].Bytes())
 
 	finalQueued, finalQueuedWeight, err := staker.QueuedStake()
 
@@ -806,4 +807,9 @@ func waitForPoSAndAssertFirstActive(t *testing.T, staker *builtin.Staker, config
 	t.Log("✅ - Validator is active")
 
 	return block
+}
+
+func receiptToDelegationID(receipt *api.Receipt) *big.Int {
+	// 0 is the event, 1 is the validation ID
+	return new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
 }
