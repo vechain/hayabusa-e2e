@@ -594,9 +594,9 @@ func receiptToID(receipt *api.Receipt) thor.Address {
 	return thor.BytesToAddress(id.Bytes())
 }
 
-func receiptToDelegationID(t *testing.T, receipt *api.Receipt) thor.Bytes32 {
+func receiptToDelegationID(t *testing.T, receipt *api.Receipt) *big.Int {
 	require.False(t, receipt.Reverted)
-	return receipt.Outputs[0].Events[0].Topics[2]
+	return new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
 }
 
 func receiptToClaimedAmount(t *testing.T, receipt *api.Receipt) *big.Int {

@@ -396,7 +396,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 	return staker, config, validationIDs
 }
 
-func receiptToID(receipt *api.Receipt) thor.Bytes32 {
+func receiptToID(receipt *api.Receipt) *big.Int {
 	// 0 is the event, 1 is the validation ID
-	return receipt.Outputs[0].Events[0].Topics[2]
+	return new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
 }

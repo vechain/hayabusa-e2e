@@ -11,11 +11,11 @@ interface IStaker {
     function getCompletedPeriods(address validationID) external view returns (uint32);
 
     // delegator functions
-    function addDelegation(address validationID, uint8 multiplier) external payable returns (bytes32);
-    function signalDelegationExit(bytes32 delegationID) external;
-    function withdrawDelegation(bytes32 delegationID) external;
+    function addDelegation(address validationID, uint8 multiplier) external payable returns (uint256);
+    function signalDelegationExit(uint256 delegationID) external;
+    function withdrawDelegation(uint256 delegationID) external;
     // validationID, stake, startPeriod, endPeriod, multiplier, active
-    function getDelegation(bytes32 delegationID) external view returns (address, uint256, uint32, uint32, uint8, bool);
+    function getDelegation(uint256 delegationID) external view returns (address, uint256, uint32, uint32, uint8, bool);
 }
 
 contract Stargate {
@@ -23,11 +23,11 @@ contract Stargate {
     IERC20 constant public vtho = IERC20(address(0x0000000000000000000000000000456E65726779));
     IStaker constant public staker = IStaker(address(0x00000000000000000000000000005374616B6572));
 
-    event ClaimedRewards(bytes32 indexed delegatorId, address indexed delegator, uint256 amount, uint32 firstClaimablePeriod, uint32 lastClaimablePeriod);
+    event ClaimedRewards(uint256 indexed delegatorId, address indexed delegator, uint256 amount, uint32 firstClaimablePeriod, uint32 lastClaimablePeriod);
     // debugging events below. Helps understand the flow of the contract
 
     // delegator address => delegation ID
-    mapping(address => bytes32) public delegationIDs;
+    mapping(address => uint256) public delegationIDs;
 
     // staking round weights (validation ID => staking period => weight)
     mapping(address => mapping(uint32 => uint256)) public weights;
@@ -40,25 +40,25 @@ contract Stargate {
     mapping(address => mapping(uint32 => uint256)) public reductions;
 
     // staking round claims (delegation ID => last claimed staking period). prevents double claiming
-    mapping(bytes32 => uint32) public claims;
+    mapping(uint256 => uint32) public claims;
 
     // staking round rewards (validation ID => staking period => reward). rewards per validator per staking period
     mapping(address => mapping(uint32 => uint256)) public rewards;
 
     function addDelegator(address validationID, uint8 multiplier) public payable {
         // validation
-        require(delegationIDs[msg.sender] == bytes32(0), "already a delegator");
+        require(delegationIDs[msg.sender] == uint256(0), "already a delegator");
         require(msg.value > 0, "must send ether");
 
         // create the delegation position
-        bytes32 delegationID = staker.addDelegation{value: msg.value}(validationID,  multiplier);
+        uint256 delegationID = staker.addDelegation{value: msg.value}(validationID,  multiplier);
 
         // store data for later use
         delegationIDs[msg.sender] = delegationID;
 
         uint256 weight = (msg.value * multiplier) / 100;
 
-        (address validationID, uint256 stake, uint32 startPeriod, uint32 endPeriod, uint8 multiplier, bool active) = staker.getDelegation(delegationID);
+        (, , uint32 startPeriod, , , ) = staker.getDelegation(delegationID);
 
         // so we can calculate the delegators % of total
         weights[validationID][startPeriod] += weight;
@@ -67,10 +67,10 @@ contract Stargate {
     event DisabledAutoRenew(address indexed delegator, uint32 roundReduction, uint256 reductionWeight);
 
     function disableAutoRenew() public {
-        bytes32 delegationID = delegationIDs[msg.sender];
-        require(delegationID != bytes32(0), "not a delegator");
+        uint256 delegationID = delegationIDs[msg.sender];
+        require(delegationID != uint256(0), "not a delegator");
 
-        (address validationID, uint256 stake, uint32 startPeriod, uint32 endPeriod, uint8 multiplier, bool active) = staker.getDelegation(delegationID);
+        (address validationID, uint256 stake, , , uint8 multiplier, ) = staker.getDelegation(delegationID);
         require(stake > 0, "delegation is not active");
 
         uint32 validatorCompleted = staker.getCompletedPeriods(validationID);
@@ -86,14 +86,14 @@ contract Stargate {
 
 
     function getClaimable(address delegator) public returns (uint256, uint32, uint32) {
-        bytes32 delegationID = delegationIDs[delegator];
-        require(delegationID != bytes32(0), "not a delegator");
+        uint256 delegationID = delegationIDs[delegator];
+        require(delegationID != uint256(0), "not a delegator");
         return _getClaimableRewards(delegationID);
     }
 
     function claimRewards() public {
-        bytes32 delegationID = delegationIDs[msg.sender];
-        require(delegationID != bytes32(0), "not a delegator");
+        uint256 delegationID = delegationIDs[msg.sender];
+        require(delegationID != uint256(0), "not a delegator");
 
         (uint256 totalRewards, uint32 firstClaimablePeriod, uint32 maxClaimablePeriod) = _getClaimableRewards(delegationID);
         require(totalRewards > 0, "no rewards to claim");
@@ -103,10 +103,10 @@ contract Stargate {
         require(vtho.transfer(msg.sender, totalRewards), "transfer failed");
     }
 
-    event ClaimParams(bytes32 indexed delegationID, address delegator, uint32 firstClaimablePeriod, uint32 lastClaimablePeriod, uint32 previouslyPopulatedPeriod, uint32 maxClaimablePeriod, uint256 delegatorWeight);
-    event ClaimOutputs(bytes32 indexed delegationID, address delegator, uint256 totalRewards);
+    event ClaimParams(uint256 indexed delegationID, address delegator, uint32 firstClaimablePeriod, uint32 lastClaimablePeriod, uint32 previouslyPopulatedPeriod, uint32 maxClaimablePeriod, uint256 delegatorWeight);
+    event ClaimOutputs(uint256 indexed delegationID, address delegator, uint256 totalRewards);
 
-    function _getClaimableRewards(bytes32 delegationID) private returns (uint256, uint32, uint32) {
+    function _getClaimableRewards(uint256 delegationID) private returns (uint256, uint32, uint32) {
         // get the delegation
         (
             address validationID,
@@ -174,7 +174,7 @@ contract Stargate {
 
 
     // Helper function to get delegation info
-    function _getDelegationInfo(bytes32 delegationID) internal view returns (
+    function _getDelegationInfo(uint256 delegationID) internal view returns (
         address validationID,
         uint256 stake,
         uint32 startPeriod,
