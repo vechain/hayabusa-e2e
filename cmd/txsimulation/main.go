@@ -28,6 +28,13 @@ import (
 
 func main() {
 	ctx := handleExitSignal()
+
+	defer func() {
+		err := recover()
+		slog.Warn("recovered from panic", "error", err)
+		<-ctx.Done()
+	}()
+
 	config := &hayabusa.Config{
 		Nodes:             2,
 		MaxBlockProposers: 101,
@@ -134,6 +141,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// shut down node 1 to have 1 node offline
+	nodeConfig := network.NodeConfigs()[1]
+	if err := network.NodeLifecycles()[nodeConfig.GetID()].Stop(); err != nil {
+		slog.Error("failed to stop node", "node", nodeConfig.GetID(), "error", err)
+		os.Exit(1)
+	}
+
 	slog.Info("✅ delegator lifecycles flushed")
 	slog.Info("🚒 starting engine")
 	engine.Run()
@@ -161,10 +175,6 @@ func addManyKeyNode(network *hayabusa.Network) error {
 			Branch:     "darren/testing/multiple-keys",
 			IsReusable: true,
 		},
-		//BuildConfig: &thorbuilder.BuildConfig{
-		//	DebugBuild:   false,
-		//	ExistingPath: "/Users/darren/workspace/vechain/hayabusa",
-		//},
 	}
 	return network.AttachNode(config, args)
 }

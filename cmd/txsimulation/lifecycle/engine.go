@@ -230,7 +230,11 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 	slog.Info("generating validator cycles", "amount", amount, "lifecycles", lifecycles, "spaces", spaces)
 
 	for range amount {
-		account := e.stack.NextValidator()
+		account, err := e.stack.NextValidator()
+		if err != nil {
+			slog.Error("not generating any more validator cycles, no more validator keys")
+			return
+		}
 		cycle := NewValidatorLifecycle(e.GenerateValidatorConfig(account, block.Number))
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}

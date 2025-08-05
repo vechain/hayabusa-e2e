@@ -89,10 +89,7 @@ func (v *ValidatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 		return nil
 	}
 
-	firstQueueBlock := v.StartBlock +
-		v.QueueDelay.Blocks +
-		(v.QueueDelay.Epochs * engine.stack.Config().EpochLength)
-	if block < firstQueueBlock {
+	if block < v.Config.QueueBlock(engine.stack.Config()) {
 		return nil
 	}
 	slog.Debug("queuing validator", "account", v.Account.Address(), "block", block)
@@ -144,12 +141,9 @@ func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 	if v.status == StatusExitSignalled {
 		return nil
 	}
-	minExitBlock := v.activatedBlock +
-		(v.StakingPeriods * engine.stack.Config().MinStakingPeriod) + 1
-	if block < minExitBlock {
+	if block < v.Config.MinExitBlock(v.activatedBlock, engine.stack.Config()) {
 		return nil
 	}
-
 	receipt, err := engine.validators.DisableAutoRenew(v.id, v.Account)
 	if receipt != nil {
 		v.status = StatusExitSignalled
@@ -175,11 +169,7 @@ func (v *ValidatorLifecycle) ProcessExited(engine *Engine, block uint32) error {
 	if v.status != StatusExitSignalled || v.exitReceipt == nil {
 		return errors.New("cannot withdraw validator that has not signalled exit")
 	}
-	minWithdrawBlock := v.exitReceipt.Meta.BlockNumber +
-		engine.stack.Config().MinStakingPeriod +
-		v.WithdrawDelay.Blocks +
-		(v.WithdrawDelay.Epochs * engine.stack.Config().MinStakingPeriod)
-	if block < minWithdrawBlock {
+	if block < v.Config.MinWithdrawBlock(v.exitReceipt.Meta.BlockNumber, engine.stack.Config()) {
 		return nil
 	}
 	receipt, err := engine.validators.Withdraw(v.id, v.Account)

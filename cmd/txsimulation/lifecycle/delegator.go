@@ -22,7 +22,7 @@ type DelegatorLifecycle struct {
 	activatedBlock  uint32       // the block at which this lifecycle was activated
 	exitReceipt     *api.Receipt // the receipt of the exit transaction
 	withdrawReceipt *api.Receipt // the receipt of the withdraw transaction
-	id              thor.Bytes32
+	id              *big.Int
 	validationID    thor.Address
 
 	mu sync.Mutex
@@ -63,10 +63,10 @@ func (d *DelegatorLifecycle) Info() *Info {
 }
 
 func (d *DelegatorLifecycle) ID() string {
-	if d.id.IsZero() {
-		return "n/a"
+	if d.id == nil {
+		return ""
 	}
-	return big.NewInt(0).SetBytes(d.id[:]).String()
+	return d.id.String()
 }
 
 func (d *DelegatorLifecycle) Process(engine *Engine, block uint32) error {
@@ -93,11 +93,7 @@ func (d *DelegatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	if d.queuedReceipt != nil {
 		return nil
 	}
-
-	firstQueueBlock := d.config.StartBlock +
-		d.config.QueueDelay.Blocks +
-		(d.config.QueueDelay.Epochs * engine.stack.Config().EpochLength)
-	if block < firstQueueBlock {
+	if block < d.config.QueueBlock(engine.stack.Config()) {
 		return nil
 	}
 
@@ -105,7 +101,7 @@ func (d *DelegatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	if validationID.IsZero() {
 		return nil
 	}
-	slog.Debug("queuing delegator", "validation", validation.Master.String())
+	slog.Debug("queuing delegator", "validation", validation.Address.String())
 
 	position := delegations.RandomPosition()
 	eth := big.NewInt(1e18)
@@ -118,7 +114,7 @@ func (d *DelegatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	}
 
 	d.validationID = validationID
-	d.id = receipt.Outputs[0].Events[0].Topics[2]
+	d.id = big.NewInt(0).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
 	d.queuedReceipt = receipt
 	d.status = StatusQueued
 
@@ -143,7 +139,7 @@ func (d *DelegatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
 	if !delegation.Locked {
 		return nil // not locked, no activation needed
 	}
-	validator, err := engine.stack.Staker().Get(delegation.ValidationID)
+	validator, err := engine.stack.Staker().Get(delegation.Validator)
 	if err != nil {
 		slog.Error("failed to get validator for delegation", "error", err, "id", d.ID())
 		return err
@@ -173,7 +169,7 @@ func (d *DelegatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 		slog.Error("failed to get validator for delegation", "error", err, "id", d.ID())
 		return err
 	}
-	lastActiveBlock := d.activatedBlock + (d.config.StakingPeriods * engine.stack.Config().MinStakingPeriod) + 1
+	lastActiveBlock := d.config.MinExitBlock(d.activatedBlock, engine.stack.Config())
 	if block < lastActiveBlock && validation.Status < builtin.StakerStatusExited {
 		return nil
 	}
@@ -181,15 +177,15 @@ func (d *DelegatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 
 	sender := engine.stack.Staker().SignalDelegationExit(d.id)
 	receipt, err := engine.stack.SendTransaction(sender, d.config.Account)
-	if err != nil && !strings.Contains(err.Error(), "delegation is not active") {
+	if receipt != nil {
+		d.exitReceipt = receipt
+		d.status = StatusExitSignalled
+	}
+	if err != nil && !strings.Contains(err.Error(), "delegation has ended, funds can be withdrawn") {
 		slog.Error("failed to signal exit for delegator", "error", err, "id", d.ID())
 		return err
 	}
-	if receipt != nil {
-		d.exitReceipt = receipt
-	}
 	slog.Debug("delegator exit signalled", "id", d.ID())
-	d.status = StatusExitSignalled
 	return nil
 }
 
@@ -207,9 +203,7 @@ func (d *DelegatorLifecycle) ProcessExited(engine *Engine, block uint32) error {
 	if d.exitReceipt == nil {
 		return fmt.Errorf("cannot withdraw delegator that has not signalled exit: %s", d.ID())
 	}
-	minWithdrawBlock := d.exitReceipt.Meta.BlockNumber + engine.stack.Config().MinStakingPeriod +
-		d.config.WithdrawDelay.Blocks +
-		(d.config.WithdrawDelay.Epochs * engine.stack.Config().EpochLength)
+	minWithdrawBlock := d.config.MinWithdrawBlock(d.exitReceipt.Meta.BlockNumber, engine.stack.Config())
 	if block < minWithdrawBlock {
 		return nil
 	}

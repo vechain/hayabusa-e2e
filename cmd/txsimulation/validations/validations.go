@@ -140,7 +140,7 @@ func (s *State) Withdraw(id thor.Address, signer bind.Signer) (*api.Receipt, err
 }
 
 func (s *State) QueueValidator(acc bind.Signer) (thor.Address, *api.Receipt, error) {
-	sender := s.stack.Staker().AddValidator(acc.Address(), RandomStake(), s.stack.Config().MinStakingPeriod)
+	sender := s.stack.Staker().AddValidation(acc.Address(), RandomStake(), s.stack.Config().MinStakingPeriod)
 	receipt, err := s.stack.SendTransaction(sender, acc)
 	if err != nil {
 		return thor.Address{}, nil, fmt.Errorf("failed to queue validator %s: %w", acc.Address(), err)
@@ -219,19 +219,19 @@ func (s *State) updateStatus(id thor.Address, validation *builtin.Validator) {
 	hasUpdates := false
 	if exists && prevValidation.Status != validation.Status {
 		hasUpdates = true
-		slog.Info("🐳validator status changed", "addr", validation.Master, "from", prevValidation.Status, "to", validation.Status)
+		slog.Info("🐳validator status changed", "addr", validation.Address, "from", prevValidation.Status, "to", validation.Status)
 	}
 	if exists && prevValidation.ExitBlock != validation.ExitBlock {
 		hasUpdates = true
-		slog.Info("🤑validator auto-renew status changed", "addr", validation.Master, "from", prevValidation.ExitBlock, "to", validation.ExitBlock)
+		slog.Info("🤑validator auto-renew status changed", "addr", validation.Address, "from", prevValidation.ExitBlock, "to", validation.ExitBlock)
 	}
 	if exists && prevValidation.Stake.Cmp(validation.Stake) != 0 {
 		hasUpdates = true
-		slog.Info("🤪validator stake changed", "addr", validation.Master, "from", utils.ScaleToVET(prevValidation.Stake), "to", utils.ScaleToVET(validation.Stake))
+		slog.Info("🤪validator stake changed", "addr", validation.Address, "from", utils.ScaleToVET(prevValidation.Stake), "to", utils.ScaleToVET(validation.Stake))
 	}
 	if exists && prevValidation.Weight.Cmp(validation.Weight) != 0 {
 		hasUpdates = true
-		slog.Info("🚚validator weight changed", "addr", validation.Master, "from", utils.ScaleToVET(prevValidation.Weight), "to", utils.ScaleToVET(validation.Weight))
+		slog.Info("🚚validator weight changed", "addr", validation.Address, "from", utils.ScaleToVET(prevValidation.Weight), "to", utils.ScaleToVET(validation.Weight))
 	}
 
 	if !exists {

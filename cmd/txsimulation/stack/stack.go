@@ -2,6 +2,8 @@ package stack
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -61,18 +63,19 @@ func (s *Stack) Stargate() bind.Signer {
 	return s.stargateAcc
 }
 
-func (s *Stack) NextValidator() bind.Signer {
+func (s *Stack) NextValidator() (bind.Signer, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// get any element from the map, delete it and return it
 	if len(s.validatorAccs) == 0 {
-		return nil
+		slog.Error("no validators available in the stack")
+		return nil, errors.New("no validators available in the stack")
 	}
 
 	for addr, signer := range s.validatorAccs {
 		delete(s.validatorAccs, addr)
-		return signer
+		return signer, nil
 	}
 
 	panic("stack: no validators available")

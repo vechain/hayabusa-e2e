@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -84,4 +85,16 @@ type Config struct {
 	StartBlock     uint32
 	StakingPeriods uint32
 	WithdrawDelay  Delay
+}
+
+func (c Config) QueueBlock(config *hayabusa.Config) uint32 {
+	return c.StartBlock + c.QueueDelay.Blocks + (c.QueueDelay.Epochs * config.EpochLength)
+}
+
+func (c Config) MinExitBlock(activatedBlock uint32, config *hayabusa.Config) uint32 {
+	return activatedBlock + (c.StakingPeriods * config.MinStakingPeriod)
+}
+
+func (c Config) MinWithdrawBlock(exitBlock uint32, config *hayabusa.Config) uint32 {
+	return exitBlock + c.WithdrawDelay.Blocks + (c.WithdrawDelay.Epochs * config.EpochLength)
 }
