@@ -179,6 +179,8 @@ github.com/vechain/thor/v2 v2.3.2-0.20250731081513-7c1829ef5166 h1:KQzr1kTAvpv8n
 github.com/vechain/thor/v2 v2.3.2-0.20250731081513-7c1829ef5166/go.mod h1:STGXqeAwg9qHV/q5QlAAA/VvWcC2eAeGAAYuYUUUosg=
 github.com/vechain/thor/v2 v2.3.2-0.20250731124546-176bcf437a14 h1:tR2KrHu23kOL9Df93cS2U9DIDhhEo9VemEMVHe+tGPg=
 github.com/vechain/thor/v2 v2.3.2-0.20250731124546-176bcf437a14/go.mod h1:STGXqeAwg9qHV/q5QlAAA/VvWcC2eAeGAAYuYUUUosg=
+github.com/vechain/thor/v2 v2.3.2-0.20250806130803-09d9cc85eecc h1:BF8RL52DXjDzxiFcTrVKzSzHCznHBFiOvBLgk/Q8Ghs=
+github.com/vechain/thor/v2 v2.3.2-0.20250806130803-09d9cc85eecc/go.mod h1:STGXqeAwg9qHV/q5QlAAA/VvWcC2eAeGAAYuYUUUosg=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
