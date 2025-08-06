@@ -95,11 +95,5 @@ func (c *Config) Validate() error {
 	if c.TransitionPeriod%c.EpochLength != 0 {
 		return errors.New("hayabusa-transition-period must be a multiple of epoch-length")
 	}
-	if c.MaxBlockProposers < 2 {
-		return errors.New("max-block-proposers must be 2 or more")
-	}
-	if c.Nodes < 2 {
-		return errors.New("nodes must 2 or more")
-	}
 	return nil
 }
