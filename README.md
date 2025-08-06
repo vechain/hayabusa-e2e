@@ -14,3 +14,9 @@ Eg (replace `tests/validations` by your own test directory, for instance `tests/
 export THOR_WORKING_DIR=/path/to/your/hayabusa
 go test -v -failfast -timeout 3600s ./tests/validations
 ```
+
+## Command
+- **Gas usage**: executes the staker contract functions and displays a table showing the gas consumed by each function.
+```bash
+go run cmd/gasusage/main.go
+```

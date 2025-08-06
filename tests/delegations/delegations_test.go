@@ -12,7 +12,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
-	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -83,7 +82,7 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	multiplier := uint8(100)
 	receipt := testutil.Send(t, hayabusa.Stargate,
 		staker.AddDelegation(validationIDs[0], builtin.MinStake(), multiplier))
-	delegationID := receiptToID(receipt)
+	delegationID := testutil.ReceiptToID(receipt)
 	delegation, err := staker.GetDelegation(delegationID)
 	require.NoError(t, err)
 	assert.Equal(t, builtin.MinStake(), delegation.Stake)
@@ -133,7 +132,7 @@ func Test_Delegations(t *testing.T) {
 		// add the delegation
 		receipt := testutil.Send(t, hayabusa.Stargate,
 			staker.AddDelegation(validationIDs[0], builtin.MinStake(), 100))
-		delegationID := receiptToID(receipt)
+		delegationID := testutil.ReceiptToID(receipt)
 		delegation, err := staker.GetDelegation(delegationID)
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation.Stake)
@@ -161,7 +160,7 @@ func Test_Delegations(t *testing.T) {
 
 		// add the delegation
 		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[2], builtin.MinStake(), 100))
-		delegationID := receiptToID(receipt)
+		delegationID := testutil.ReceiptToID(receipt)
 		delegation, err := staker.GetDelegation(delegationID)
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation.Stake)
@@ -213,7 +212,7 @@ func Test_Delegations(t *testing.T) {
 		receipt := testutil.Send(t, hayabusa.Stargate,
 			staker.AddDelegation(validationIDs[3], builtin.MinStake(), 100))
 		require.NoError(t, err)
-		delegationID1 := receiptToID(receipt)
+		delegationID1 := testutil.ReceiptToID(receipt)
 		delegation1, err := staker.GetDelegation(delegationID1)
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation1.Stake)
@@ -223,7 +222,7 @@ func Test_Delegations(t *testing.T) {
 		// add the delegation
 		receipt = testutil.Send(t, hayabusa.Stargate,
 			staker.AddDelegation(validationIDs[3], builtin.MinStake(), 100))
-		delegationID2 := receiptToID(receipt)
+		delegationID2 := testutil.ReceiptToID(receipt)
 		delegation2, err := staker.GetDelegation(delegationID2)
 		require.NoError(t, err)
 		assert.Equal(t, builtin.MinStake(), delegation2.Stake)
@@ -253,7 +252,7 @@ func Test_Delegations(t *testing.T) {
 		t.Parallel()
 		receipt := testutil.Send(t, hayabusa.Stargate,
 			staker.AddDelegation(validationIDs[0], builtin.MinStake(), 100))
-		delegationID := receiptToID(receipt)
+		delegationID := testutil.ReceiptToID(receipt)
 
 		// external should not be able to add delegation
 		var err error
@@ -293,12 +292,12 @@ func Test_Delegations(t *testing.T) {
 		// Create first delegation
 		firstStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
 		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], firstStake, 100))
-		firstDelegationID := receiptToID(receipt)
+		firstDelegationID := testutil.ReceiptToID(receipt)
 
 		// Create second delegation
 		secondStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3))
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], secondStake, 100))
-		secondDelegationID := receiptToID(receipt)
+		secondDelegationID := testutil.ReceiptToID(receipt)
 
 		// Verify both delegations
 		delegation, err := staker.GetDelegation(firstDelegationID)
@@ -394,9 +393,4 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		validationIDs[i] = event.Node
 	}
 	return staker, config, validationIDs
-}
-
-func receiptToID(receipt *api.Receipt) *big.Int {
-	// 0 is the event, 1 is the validation ID
-	return new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
 }
