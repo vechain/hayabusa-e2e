@@ -16,23 +16,31 @@ import (
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
+type Generator interface {
+	CreateValidator(acc bind.Signer, startBlock uint32) Config
+	CreateDelegator(acc bind.Signer, startBlock uint32) Config
+}
+
 type Engine struct {
 	stack      *stack.Stack
 	validators *validations.State
 	lifecycles map[thor.Bytes32]Lifecycle
 	withdrawn  map[thor.Bytes32]Lifecycle
+	generator  Generator
 	mu         sync.Mutex
 }
 
 func NewEngine(
 	stack *stack.Stack,
 	validators *validations.State,
+	generator Generator,
 ) *Engine {
 	return &Engine{
 		validators: validators,
 		lifecycles: make(map[thor.Bytes32]Lifecycle),
 		withdrawn:  make(map[thor.Bytes32]Lifecycle),
 		stack:      stack,
+		generator:  generator,
 	}
 }
 
@@ -61,43 +69,6 @@ func (e *Engine) AddLifecycle(lifecycle Lifecycle) {
 	defer e.mu.Unlock()
 
 	e.lifecycles[datagen.RandomHash()] = lifecycle
-}
-
-func (e *Engine) GenerateValidatorConfig(acc bind.Signer, startBlock uint32) Config {
-	config := e.stack.Config()
-
-	return Config{
-		QueueDelay: Delay{
-			Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
-			Epochs: uint32(utils2.RandomBetween(0, 3)),
-		},
-		Account:        acc,
-		StakingPeriods: uint32(utils2.RandomBetween(5, 100)),
-		WithdrawDelay: Delay{
-			Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
-			Epochs: uint32(utils2.RandomBetween(1, 3)),
-		},
-		StartBlock: startBlock,
-	}
-}
-
-func (e *Engine) GenerateDelegatorConfig(startBlock uint32) Config {
-	config := e.stack.Config()
-	stargate := e.stack.Stargate()
-
-	return Config{
-		QueueDelay: Delay{
-			Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
-			Epochs: uint32(utils2.RandomBetween(0, 3)),
-		},
-		StakingPeriods: uint32(utils2.RandomBetween(3, 120)),
-		WithdrawDelay: Delay{
-			Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
-			Epochs: uint32(utils2.RandomBetween(1, 3)),
-		},
-		StartBlock: startBlock,
-		Account:    stargate,
-	}
 }
 
 func (e *Engine) Run() {
@@ -235,7 +206,7 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 			slog.Error("not generating any more validator cycles, no more validator keys")
 			return
 		}
-		cycle := NewValidatorLifecycle(e.GenerateValidatorConfig(account, block.Number))
+		cycle := NewValidatorLifecycle(e.generator.CreateValidator(account, block.Number))
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }
@@ -256,7 +227,7 @@ func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
 	slog.Info("generating delegator cycles", "amount", amount, "lifecycles", lifecycles, "upperLimit", upperLimit)
 
 	for i := 0; i < amount; i++ {
-		cycle := NewDelegatorLifecycle(e.GenerateDelegatorConfig(block.Number))
+		cycle := NewDelegatorLifecycle(e.generator.CreateDelegator(e.stack.Stargate(), block.Number))
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }
