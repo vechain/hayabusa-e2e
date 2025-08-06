@@ -15,6 +15,7 @@
 ## Future Features
 
 - Point to a live network, eg. devnet.
+- Validator: Stake increases and decreases.
 
 ## How to Run
 
