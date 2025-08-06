@@ -27,9 +27,9 @@ func Test_Staker_GasUsage(t *testing.T) {
 	require.NoError(t, utils.WaitForFork(staker, config.ForkBlock))
 
 	stake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)) // 3x MinStake for each validator
-	addReceipt1 := testutil.Send(t, validator1, staker.AddValidator(validator1.Address(), stake, config.MinStakingPeriod))
-	addReceipt2 := testutil.Send(t, validator2, staker.AddValidator(validator2.Address(), stake, config.MinStakingPeriod))
-	addReceipt3 := testutil.Send(t, validator3, staker.AddValidator(validator3.Address(), stake, config.MinStakingPeriod))
+	addReceipt1 := testutil.Send(t, validator1, staker.AddValidation(validator1.Address(), stake, config.MinStakingPeriod))
+	addReceipt2 := testutil.Send(t, validator2, staker.AddValidation(validator2.Address(), stake, config.MinStakingPeriod))
+	addReceipt3 := testutil.Send(t, validator3, staker.AddValidation(validator3.Address(), stake, config.MinStakingPeriod))
 
 	addr1 := validator1.Address()
 	addr2 := validator2.Address()
@@ -152,10 +152,11 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		MidStakingPeriod:  240,
 		HighStakingPeriod: 259200,
 		Verbosity:         1,
+		Name:              t.Name(),
 	}
 
-	client, _, cancel, err := hayabusa.StartNetwork(t, config)
-	require.NoError(t, err)
-	t.Cleanup(cancel)
-	return config, client
+	network := hayabusa.NewNetwork(config, t.Context())
+	t.Cleanup(network.Stop)
+	require.NoError(t, network.Start())
+	return config, network.ThorClient()
 }

@@ -98,7 +98,7 @@ func main() {
 
 		signer := (*bind.PrivateKeySigner)(acc.PrivateKey)
 
-		sender := staker.AddValidator(node.master, builtin.MinStake(), minStakingPeriod).Send().WithSigner(signer).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidation(node.master, builtin.MinStake(), minStakingPeriod).Send().WithSigner(signer).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 

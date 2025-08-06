@@ -125,7 +125,7 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	for i := firstDelegatedBlock; i < block; i++ {
 		block, err := staker.Raw().Client().Block(strconv.Itoa(int(i)))
 		require.NoError(t, err)
-		if block.Signer == *validation.Master {
+		if block.Signer == validation.Address {
 			blockCount++
 		}
 	}
@@ -454,12 +454,12 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		MinStakingPeriod:  4,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 24,
+		Name:              t.Name(),
 	}
-	client, _, cancel, err := hayabusa.StartNetwork(t, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(cancel)
+	network := hayabusa.NewNetwork(config, t.Context())
+	t.Cleanup(network.Stop)
+	require.NoError(t, network.Start())
+	client := network.ThorClient()
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
@@ -482,7 +482,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidator(account.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(account).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidation(account.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(account).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 
@@ -593,9 +593,9 @@ func receiptToID(receipt *api.Receipt) thor.Address {
 	return thor.BytesToAddress(id.Bytes())
 }
 
-func receiptToDelegationID(t *testing.T, receipt *api.Receipt) thor.Bytes32 {
+func receiptToDelegationID(t *testing.T, receipt *api.Receipt) *big.Int {
 	require.False(t, receipt.Reverted)
-	return receipt.Outputs[0].Events[0].Topics[2]
+	return new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
 }
 
 func receiptToClaimedAmount(t *testing.T, receipt *api.Receipt) *big.Int {
