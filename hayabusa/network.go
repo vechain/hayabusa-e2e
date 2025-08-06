@@ -35,6 +35,10 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
 	repo := "git@github.com:vechain/thor.git"
 
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")

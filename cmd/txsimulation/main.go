@@ -93,6 +93,8 @@ func main() {
 	validators := validations.NewState(stack)
 	engine := lifecycle.NewEngine(stack, validators)
 
+	utils2.WaitForFork(staker, config.ForkBlock)
+
 	defer printOutput(engine)
 
 	// initial seeding of validator accounts
@@ -141,7 +143,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// shut down node 1 to have 1 node offline
+	//shut down node 1 to have 1 node offline
 	nodeConfig := network.NodeConfigs()[1]
 	if err := network.NodeLifecycles()[nodeConfig.GetID()].Stop(); err != nil {
 		slog.Error("failed to stop node", "node", nodeConfig.GetID(), "error", err)
@@ -151,7 +153,7 @@ func main() {
 	slog.Info("✅ delegator lifecycles flushed")
 	slog.Info("🚒 starting engine")
 	engine.Run()
-	slog.Info("exit signal received, flushing lifecycles")
+	slog.Info("exit signal received")
 }
 
 func addManyKeyNode(network *hayabusa.Network) error {
