@@ -15,12 +15,13 @@ require (
 	github.com/cqroot/prompt v0.9.4
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/stretchr/testify v1.10.0
-	github.com/vechain/thor/v2 v2.3.2-0.20250806130803-09d9cc85eecc
+	github.com/vechain/thor/v2 v2.3.2-0.20250806133732-3b686c207eb2
 )
 
 require (
 	github.com/jedib0t/go-pretty/v6 v6.6.7
-	github.com/vechain/networkhub v0.0.5-0.20250728134321-82101b278962
+	github.com/pkg/errors v0.9.1
+	github.com/vechain/networkhub v0.0.5-0.20250730140312-e4bf18e0c15c
 )
 
 require (
@@ -57,7 +58,6 @@ require (
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.22.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect

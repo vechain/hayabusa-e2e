@@ -1,6 +1,7 @@
 package hayabusa
 
 import (
+	"errors"
 	"math/big"
 	"slices"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/vechain/thor/v2/builtin"
 	devgenesis "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -31,10 +33,11 @@ type Config struct {
 }
 
 // Apply the configuration to the genesis file.
-func (h Config) Apply(genesis *genesis.CustomGenesis) {
+func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 	genesis.LaunchTime = uint64(time.Now().Unix())
-	genesis.ForkConfig.AddField("HAYABUSA", h.ForkBlock)
-	genesis.ForkConfig.AddField("HAYABUSA_TP", h.TransitionPeriod)
+	genesis.ForkConfig.AddField("HAYABUSA", c.ForkBlock)
+	genesis.ForkConfig.AddField("HAYABUSA_TP", c.TransitionPeriod)
+	genesis.ExtraData = datagen.RandomHash().String()
 
 	// staker config - set all values
 	stakerIndex := slices.IndexFunc(genesis.Accounts, func(acc devgenesis.Account) bool {
@@ -50,11 +53,11 @@ func (h Config) Apply(genesis *genesis.CustomGenesis) {
 		})
 		stakerIndex = len(genesis.Accounts) - 1
 	}
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("epoch-length")] = uint32ToBytes32(h.EpochLength, 6)
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("cooldown-period")] = uint32ToBytes32(h.CooldownPeriod, 6)
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("staker-low-staking-period")] = uint32ToBytes32(h.MinStakingPeriod, 6)
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("staker-medium-staking-period")] = uint32ToBytes32(h.MidStakingPeriod, 30)
-	genesis.Accounts[stakerIndex].Storage[nameToBytes32("staker-high-staking-period")] = uint32ToBytes32(h.HighStakingPeriod, 180)
+	genesis.Accounts[stakerIndex].Storage[nameToBytes32("epoch-length")] = uint32ToBytes32(c.EpochLength, 6)
+	genesis.Accounts[stakerIndex].Storage[nameToBytes32("cooldown-period")] = uint32ToBytes32(c.CooldownPeriod, 6)
+	genesis.Accounts[stakerIndex].Storage[nameToBytes32("staker-low-staking-period")] = uint32ToBytes32(c.MinStakingPeriod, 6)
+	genesis.Accounts[stakerIndex].Storage[nameToBytes32("staker-medium-staking-period")] = uint32ToBytes32(c.MidStakingPeriod, 30)
+	genesis.Accounts[stakerIndex].Storage[nameToBytes32("staker-high-staking-period")] = uint32ToBytes32(c.HighStakingPeriod, 180)
 
 	// params config - set max-block-proposers
 	paramsIndex := slices.IndexFunc(genesis.Accounts, func(acc devgenesis.Account) bool {
@@ -70,11 +73,27 @@ func (h Config) Apply(genesis *genesis.CustomGenesis) {
 		})
 		paramsIndex = len(genesis.Accounts) - 1
 	}
-	genesis.Accounts[paramsIndex].Storage[nameToBytes32("max-block-proposers")] = uint32ToBytes32(h.MaxBlockProposers, 3)
+	genesis.Accounts[paramsIndex].Storage[nameToBytes32("max-block-proposers")] = uint32ToBytes32(c.MaxBlockProposers, 3)
 
 	addr := Stargate.Address()
-	if !h.StargateAddress.IsZero() {
-		addr = h.StargateAddress
+	if !c.StargateAddress.IsZero() {
+		addr = c.StargateAddress
 	}
 	genesis.Accounts[paramsIndex].Storage[ParamsStargateKey] = thor.BytesToBytes32(addr.Bytes())
+}
+
+func (c *Config) Validate() error {
+	if c.MinStakingPeriod%c.EpochLength != 0 {
+		return errors.New("staker-low-staking-period must be a multiple of epoch-length")
+	}
+	if c.MidStakingPeriod%c.EpochLength != 0 {
+		return errors.New("staker-medium-staking-period must be a multiple of epoch-length")
+	}
+	if c.HighStakingPeriod%c.EpochLength != 0 {
+		return errors.New("staker-high-staking-period must be a multiple of epoch-length")
+	}
+	if c.TransitionPeriod%c.EpochLength != 0 {
+		return errors.New("hayabusa-transition-period must be a multiple of epoch-length")
+	}
+	return nil
 }

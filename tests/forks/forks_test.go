@@ -71,15 +71,18 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 		Name:              t.Name(),
 	}
 
-	network := hayabusa.NewNetwork(config, t.Context())
+	network, err := hayabusa.NewNetwork(config, t.Context())
+	require.NoError(t, err)
 	t.Cleanup(network.Stop)
 	client := network.ThorClient()
 	require.NoError(t, network.Start())
-	nodeConfig := &thorbuilder.DownloadConfig{
-		Branch:  "hayabusa/doublesigning-node",
-		RepoUrl: "git@github.com:vechain/thor.git",
+	nodeConfig := &thorbuilder.Config{
+		DownloadConfig: &thorbuilder.DownloadConfig{
+			Branch:  "hayabusa/doublesigning-node",
+			RepoUrl: "git@github.com:vechain/thor.git",
+		},
 	}
-	if err := network.AttachNode(nodeConfig); err != nil {
+	if err := network.AttachNode(nodeConfig, nil); err != nil {
 		t.Fatalf("failed to attach double signing node: %v", err)
 	}
 

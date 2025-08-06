@@ -25,17 +25,19 @@ type Network struct {
 	config    *Config
 	network   *local.Local
 	genesis   *genesis.CustomGenesis
-	builder   *thorbuilder.Config
 	nodes     []node.Config
 	usedPorts []int // to track used ports for cleanup
-	started   bool
 
 	mu sync.Mutex
 }
 
-func NewNetwork(config *Config, ctx context.Context) *Network {
+func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
+
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
 
 	repo := "git@github.com:vechain/thor.git"
 
@@ -67,15 +69,24 @@ func NewNetwork(config *Config, ctx context.Context) *Network {
 		usedPorts = append(usedPorts, apiPort, p2pPort)
 	}
 
+	network := local.NewEnv()
+	netConfig := &networkhubNetwork.Network{
+		BaseID:      config.Name,
+		Nodes:       nodes,
+		ThorBuilder: thorBuilder,
+	}
+	if _, err := network.LoadConfig(netConfig); err != nil {
+		return nil, fmt.Errorf("failed to load network config: %w", err)
+	}
+
 	return &Network{
 		ctx:       ctx,
 		config:    config,
-		network:   local.NewEnv(),
-		genesis:   Genesis(config),
-		builder:   thorBuilder,
+		network:   network,
+		genesis:   genesis,
 		nodes:     nodes,
 		usedPorts: usedPorts,
-	}
+	}, nil
 }
 
 func (n *Network) ThorClient() *thorclient.Client {
@@ -90,12 +101,10 @@ func (n *Network) Stop() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	globalPortManager.RemovePorts(n.config.Name)
-
 	if err := n.network.StopNetwork(); err != nil {
 		slog.Error("🛑 failed to stop network", "error", err)
 	}
-	n.started = false
+	globalPortManager.RemovePorts(n.config.Name)
 }
 
 func (n *Network) NodeConfigs() []node.Config {
@@ -116,10 +125,6 @@ func (n *Network) Start() error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if n.started {
-		return fmt.Errorf("network %s is already started", n.config.Name)
-	}
-
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
@@ -128,15 +133,6 @@ func (n *Network) Start() error {
 		slog.Info("context done, cleaning up network")
 		n.Stop()
 	}()
-
-	netConfig := &networkhubNetwork.Network{
-		BaseID:      n.config.Name,
-		Nodes:       n.nodes,
-		ThorBuilder: n.builder,
-	}
-	if _, err := n.network.LoadConfig(netConfig); err != nil {
-		return fmt.Errorf("failed to load network config: %w", err)
-	}
 
 	if err := n.network.StartNetwork(); err != nil {
 		return err
@@ -148,22 +144,20 @@ func (n *Network) Start() error {
 		}
 	}
 
-	if err := utils.WaitForPeersConnection(n.nodes, n.config.Nodes-1, n.ctx); err != nil {
+	if err := utils.WaitForPeersConnection(n.nodes, n.ctx); err != nil {
 		return fmt.Errorf("failed to connect all nodes: %w", err)
 	}
-
-	n.started = true
 
 	return nil
 }
 
-func (n *Network) AttachNode(buildConfig *thorbuilder.DownloadConfig) error {
+func (n *Network) AttachNode(buildConfig *thorbuilder.Config, additionalArgs map[string]string) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
-	builder := thorbuilder.New(&thorbuilder.Config{DownloadConfig: buildConfig})
+	builder := thorbuilder.New(buildConfig)
 
 	if err := builder.Download(); err != nil {
 		return fmt.Errorf("failed to download builder: %w", err)
@@ -175,15 +169,14 @@ func (n *Network) AttachNode(buildConfig *thorbuilder.DownloadConfig) error {
 
 	node, apiPort, p2pPort := makeNode(n.config, len(n.nodes), ValidatorAccounts[len(n.nodes)], n.genesis)
 	node.SetExecArtifact(path)
+	node.SetAdditionalArgs(additionalArgs)
 	n.nodes = append(n.nodes, node)
 	n.usedPorts = append(n.usedPorts, apiPort, p2pPort)
 	if err := n.network.AttachNode(node); err != nil {
 		return fmt.Errorf("failed to attach node: %w", err)
 	}
-	if n.started {
-		if err := node.HealthCheck(0, 30*time.Second); err != nil {
-			return fmt.Errorf("failed to health check attached node: %w", err)
-		}
+	if err := node.HealthCheck(0, 30*time.Second); err != nil {
+		return fmt.Errorf("failed to health check attached node: %w", err)
 	}
 
 	return nil
