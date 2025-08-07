@@ -380,7 +380,7 @@ func waitForPoSAndAssertFirstActive(t *testing.T, staker *builtin.Staker, config
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
-	validator, err := staker.Get(validatorID)
+	validator, err := staker.GetValidatorStatus(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
 }
