@@ -47,13 +47,13 @@ type State struct {
 	stack *stack.Stack
 
 	// the below can change based on the validator's status
-	active  map[thor.Address]*builtin.Validator
-	queued  map[thor.Address]*builtin.Validator
-	exiting map[thor.Address]*builtin.Validator
+	active  map[thor.Address]*builtin.ValidatorStake
+	queued  map[thor.Address]*builtin.ValidatorStake
+	exiting map[thor.Address]*builtin.ValidatorStake
 
 	// the below are static and do not change
-	idLookup map[thor.Address]*builtin.Validator
-	exited   map[thor.Address]*builtin.Validator
+	idLookup map[thor.Address]*builtin.ValidatorStatus
+	exited   map[thor.Address]*builtin.ValidatorStake
 
 	mu sync.Mutex
 }
@@ -61,11 +61,11 @@ type State struct {
 func NewState(stack *stack.Stack) *State {
 	s := &State{
 		stack:    stack,
-		active:   make(map[thor.Address]*builtin.Validator),
-		queued:   make(map[thor.Address]*builtin.Validator),
-		idLookup: make(map[thor.Address]*builtin.Validator),
-		exited:   make(map[thor.Address]*builtin.Validator),
-		exiting:  make(map[thor.Address]*builtin.Validator),
+		active:   make(map[thor.Address]*builtin.ValidatorStake),
+		queued:   make(map[thor.Address]*builtin.ValidatorStake),
+		idLookup: make(map[thor.Address]*builtin.ValidatorStatus),
+		exited:   make(map[thor.Address]*builtin.ValidatorStake),
+		exiting:  make(map[thor.Address]*builtin.ValidatorStake),
 	}
 	go s.poll()
 	return s
@@ -103,12 +103,12 @@ func (s *State) poll() {
 
 			mu := sync.Mutex{}
 			wg := sync.WaitGroup{}
-			newValidations := make(map[thor.Address]*builtin.Validator)
+			newValidations := make(map[thor.Address]*builtin.ValidatorStake)
 
 			for id, status := range ids {
 				wg.Add(1)
 				go func(id thor.Address, status builtin.StakerStatus) {
-					validation, err := s.stack.Staker().Get(id)
+					validation, err := s.stack.Staker().GetValidatorStake(id)
 					defer wg.Done()
 					if err != nil {
 						slog.Warn("failed to get validator", "id", id, "error", err)
@@ -146,15 +146,20 @@ func (s *State) QueueValidator(acc bind.Signer) (thor.Address, *api.Receipt, err
 		return thor.Address{}, nil, fmt.Errorf("failed to queue validator %s: %w", acc.Address(), err)
 	}
 	id := thor.BytesToAddress(receipt.Outputs[0].Events[0].Topics[2][:])
-	validation, err := s.stack.Staker().Get(id)
+	validation, err := s.stack.Staker().GetValidatorStatus(id)
 	if err != nil {
-		return thor.Address{}, nil, fmt.Errorf("failed to get validator %s: %w", id.String(), err)
+		return thor.Address{}, nil, fmt.Errorf("failed to get validator status %s: %w", id.String(), err)
+	}
+
+	validationStake, err := s.stack.Staker().GetValidatorStake(id)
+	if err != nil {
+		return thor.Address{}, nil, fmt.Errorf("failed to get validator stake %s: %w", id.String(), err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.idLookup[id] = validation
-	s.queued[id] = validation
+	s.queued[id] = validationStake
 	return id, receipt, nil
 }
 
@@ -164,7 +169,7 @@ func (s *State) DisableAutoRenew(id thor.Address, signer bind.Signer) (*api.Rece
 	if err != nil {
 		return nil, fmt.Errorf("failed to disable auto-renew for validator %s: %w", id.String(), err)
 	}
-	validation, err := s.stack.Staker().Get(id)
+	validation, err := s.stack.Staker().GetValidatorStake(id)
 	if err != nil {
 		return receipt, fmt.Errorf("failed to get validator %s after disabling auto-renew: %w", id.String(), err)
 	}
@@ -176,19 +181,19 @@ func (s *State) DisableAutoRenew(id thor.Address, signer bind.Signer) (*api.Rece
 	return receipt, nil
 }
 
-func (s *State) RandomActiveValidator() (*builtin.Validator, thor.Address) {
+func (s *State) RandomActiveValidator() (*builtin.ValidatorStake, thor.Address) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return randomFromMap(s.active)
 }
 
-func (s *State) RandomQueuedValidator() (*builtin.Validator, thor.Address) {
+func (s *State) RandomQueuedValidator() (*builtin.ValidatorStake, thor.Address) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return randomFromMap(s.queued)
 }
 
-func (s *State) LookupAddress(address thor.Address) (*builtin.Validator, bool) {
+func (s *State) LookupAddress(address thor.Address) (*builtin.ValidatorStatus, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -200,7 +205,7 @@ func (s *State) LookupAddress(address thor.Address) (*builtin.Validator, bool) {
 	return validation, true
 }
 
-func randomFromMap(m map[thor.Address]*builtin.Validator) (*builtin.Validator, thor.Address) {
+func randomFromMap(m map[thor.Address]*builtin.ValidatorStake) (*builtin.ValidatorStake, thor.Address) {
 	if len(m) == 0 {
 		return nil, thor.Address{}
 	}
@@ -214,24 +219,40 @@ func randomFromMap(m map[thor.Address]*builtin.Validator) (*builtin.Validator, t
 }
 
 // updateStatus of a validator. It is not thread-safe, so it should be called with the mutex locked.
-func (s *State) updateStatus(id thor.Address, validation *builtin.Validator) {
+func (s *State) updateStatus(id thor.Address, validation *builtin.ValidatorStake) error {
 	prevValidation, exists := s.idLookup[id]
 	hasUpdates := false
-	if exists && prevValidation.Status != validation.Status {
-		hasUpdates = true
-		slog.Info("🐳validator status changed", "addr", validation.Address, "from", prevValidation.Status, "to", validation.Status)
+	validationStatus, err := s.stack.Staker().GetValidatorStatus(validation.Address)
+	if err != nil {
+		return fmt.Errorf("failed to get validator %s status: %w", id.String(), err)
 	}
-	if exists && prevValidation.ExitBlock != validation.ExitBlock {
+	if exists && prevValidation.Status != validationStatus.Status {
 		hasUpdates = true
-		slog.Info("🤑validator auto-renew status changed", "addr", validation.Address, "from", prevValidation.ExitBlock, "to", validation.ExitBlock)
+		slog.Info("🐳validator status changed", "addr", validation.Address, "from", prevValidation.Status, "to", validationStatus.Status)
 	}
-	if exists && prevValidation.Stake.Cmp(validation.Stake) != 0 {
-		hasUpdates = true
-		slog.Info("🤪validator stake changed", "addr", validation.Address, "from", utils.ScaleToVET(prevValidation.Stake), "to", utils.ScaleToVET(validation.Stake))
+	validationDetails, err := s.stack.Staker().GetValidatorPeriodDetails(validation.Address)
+	if err != nil {
+		return fmt.Errorf("failed to get validator %s period details: %w", id.String(), err)
 	}
-	if exists && prevValidation.Weight.Cmp(validation.Weight) != 0 {
+	prevValidationDetails, err := s.stack.Staker().GetValidatorPeriodDetails(prevValidation.Address)
+	if err != nil {
+		return fmt.Errorf("failed to get validator %s period details: %w", id.String(), err)
+	}
+	if exists && prevValidationDetails.ExitBlock != validationDetails.ExitBlock {
 		hasUpdates = true
-		slog.Info("🚚validator weight changed", "addr", validation.Address, "from", utils.ScaleToVET(prevValidation.Weight), "to", utils.ScaleToVET(validation.Weight))
+		slog.Info("🤑validator auto-renew status changed", "addr", validation.Address, "from", prevValidationDetails.ExitBlock, "to", validationDetails.ExitBlock)
+	}
+	prevValidationStake, err := s.stack.Staker().GetValidatorStake(prevValidation.Address)
+	if err != nil {
+		return fmt.Errorf("failed to get validator %s stake: %w", id.String(), err)
+	}
+	if exists && prevValidationStake.Stake.Cmp(validation.Stake) != 0 {
+		hasUpdates = true
+		slog.Info("🤪validator stake changed", "addr", validation.Address, "from", utils.ScaleToVET(prevValidationStake.Stake), "to", utils.ScaleToVET(validation.Stake))
+	}
+	if exists && prevValidationStake.Weight.Cmp(validation.Weight) != 0 {
+		hasUpdates = true
+		slog.Info("🚚validator weight changed", "addr", validation.Address, "from", utils.ScaleToVET(prevValidationStake.Weight), "to", utils.ScaleToVET(validation.Weight))
 	}
 
 	if !exists {
@@ -240,27 +261,28 @@ func (s *State) updateStatus(id thor.Address, validation *builtin.Validator) {
 	}
 
 	if !hasUpdates {
-		return
+		return nil
 	}
 
 	delete(s.queued, id)
 	delete(s.active, id)
 	delete(s.exiting, id)
-	s.idLookup[id] = validation
+	s.idLookup[id] = validationStatus
 
-	switch validation.Status {
+	switch validationStatus.Status {
 	case builtin.StakerStatusQueued:
 		s.queued[id] = validation
 	case builtin.StakerStatusActive:
-		if validation.ExitBlock == math.MaxUint32 {
+		if validationDetails.ExitBlock == math.MaxUint32 {
 			s.active[id] = validation
 		} else {
 			s.exiting[id] = validation
 		}
 	case builtin.StakerStatusExited:
 		s.exited[id] = validation
-		return
+		return nil
 	default:
-		slog.Warn("unknown status for validator", "id", id, "status", validation.Status)
+		slog.Warn("unknown status for validator", "id", id, "status", validationStatus.Status)
 	}
+	return nil
 }

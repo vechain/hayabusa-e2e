@@ -661,7 +661,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 
 	// Remove delegator
 	_ = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
-	delegation, err := staker.GetDelegation(delegationID)
+	delegation, err := staker.GetDelegationStake(delegationID)
 	assert.NoError(t, err)
 	assert.True(t, delegation.Stake.Sign() == 0)
 	t.Log("✅ - Delegator removed from queued validator")
@@ -746,24 +746,24 @@ func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer,
 }
 
 func assertMatchingValidators(t *testing.T, staker *builtin.Staker, id1 thor.Address, masterAddress thor.Address) {
-	val1, err := staker.Get(id1)
+	val1, err := staker.GetValidatorStake(id1)
 	assert.NoError(t, err)
 
-	val2, err := staker.Get(masterAddress)
+	val2, err := staker.GetValidatorStake(masterAddress)
 	assert.NoError(t, err)
 	assert.Equal(t, val1, val2)
 }
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
-	validator, err := staker.Get(validatorID)
+	validator, err := staker.GetValidatorStatus(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
 func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) error {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
-	validator, err := staker.Get(validatorID)
+	validator, err := staker.GetValidatorStatus(validatorID)
 	assert.NoError(t, err)
 	if validator.Status == builtin.StakerStatusUnknown {
 		return testutil.StakerStatusUnknownError{ValidationID: validatorID.String()}
@@ -773,7 +773,7 @@ func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validato
 }
 
 func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedPeriod uint32) {
-	validator, err := staker.Get(validatorID)
+	validator, err := staker.GetValidatorPeriodDetails(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedPeriod, validator.Period)
 }
