@@ -1,6 +1,8 @@
 package stargate
 
 import (
+	native "github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/thorclient"
 	"log/slog"
 	"math/big"
 	"strconv"
@@ -47,15 +49,34 @@ func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, valid
 }
 
 func runTestStargateSingleDelegator(t *testing.T) error {
-	staker, stargate, config, validationIDs := newDelegationSetup(t)
+	growthStopTimeKey := thor.Blake2b([]byte("growth-stop-time"))
+	staker, stargate, config, validationIDs, client := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
 	ticker := utils.NewTicker(staker.Raw().Client())
 	validation, err := staker.GetValidatorStake(validationID)
 	require.NoError(t, err)
 
+	stopTime, err := client.AccountStorage(&native.Energy.Address, &growthStopTimeKey)
+	assert.NoError(t, err)
+	stopTimeParsed, _ := new(big.Int).SetString(strings.TrimPrefix(stopTime.Value, "0x"), 16)
+	blk, err := client.Block("best")
+	assert.NoError(t, err)
+	time := blk.Timestamp
+	block := blk.Number
+	for time != stopTimeParsed.Uint64() {
+		block = block - 1
+		if block == 0 {
+			break
+		}
+		blk, err = client.Block(strconv.FormatUint(uint64(block), 10))
+		assert.NoError(t, err)
+		time = blk.Timestamp
+		block = blk.Number
+	}
+
 	// wait for the validator to complete 1 staking period
-	block := config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod
+	block = block + 1 + config.MinStakingPeriod
 	require.NoError(t, ticker.WaitForBlock(block))
 	expectedCompletedPeriods := uint32(1)
 	err = waitForCompletedPeriods(ticker, staker, validationID, expectedCompletedPeriods)
@@ -198,7 +219,7 @@ func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_Off(t *testing.T) {
 }
 
 func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
-	staker, stargate, config, validationIDs := newDelegationSetup(t)
+	staker, stargate, config, validationIDs, _ := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
 	ticker := utils.NewTicker(staker.Raw().Client())
@@ -304,7 +325,7 @@ func Test_Stargate_DelegatorFlow_Stake_And_Claim_Auto_Renew_On_And_Off(t *testin
 }
 
 func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) error {
-	staker, stargate, config, validationIDs := newDelegationSetup(t)
+	staker, stargate, config, validationIDs, _ := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
 	ticker := utils.NewTicker(staker.Raw().Client())
@@ -442,7 +463,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	return nil
 }
 
-func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Address) {
+func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Address, thorclient.Client) {
 	t.Helper()
 	config := &hayabusa.Config{
 		Nodes:             3,
@@ -520,7 +541,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 posActive:
 	wg.Wait()
 
-	return staker, stargate, config, validationIDs
+	return staker, stargate, config, validationIDs, *client
 }
 
 func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
