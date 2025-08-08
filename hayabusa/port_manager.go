@@ -27,6 +27,7 @@ func (pm *PortManager) NewPort(id string) int {
 	}
 
 	port := pm.rndPort()
+	println("setting port ", port, id)
 	pm.ports[port] = true
 	pm.portsByID[id] = append(pm.portsByID[id], port)
 
