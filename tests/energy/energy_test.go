@@ -103,7 +103,7 @@ func runEnergyTest(t *testing.T) error {
 	assert.NoError(t, err)
 
 	stopTimeParsed, _ := new(big.Int).SetString(strings.TrimPrefix(stopTime.Value, "0x"), 16)
-	println("stop time =====", stopTimeParsed.Uint64())
+	println("stop time =====", stopTimeParsed.Uint64(), genesisBlock.Timestamp)
 	block := uint32((stopTimeParsed.Uint64() - genesisBlock.Timestamp) / 10) // last PoA block
 
 	poaBlock := block
