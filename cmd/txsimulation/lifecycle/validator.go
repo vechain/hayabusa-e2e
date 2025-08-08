@@ -117,14 +117,18 @@ func (v *ValidatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
 	if v.activatedBlock != 0 {
 		return nil
 	}
-	validation, err := engine.stack.Staker().Get(v.id)
+	stakingPeriods, err := engine.stack.Staker().GetValidatorPeriodDetails(v.id)
 	if err != nil {
 		slog.Error("failed to get validator", "error", err, "id", v.id)
 		return err
 	}
-	if validation.Status == builtin.StakerStatusActive {
+	validationStatus, err := engine.stack.Staker().GetValidatorStatus(v.id)
+	if err != nil {
+		slog.Error("failed to get validator status", "error", err, "id", v.id)
+	}
+	if validationStatus.Status == builtin.StakerStatusActive {
 		slog.Debug("validator activated", "account", v.Account.Address(), "block", block)
-		v.activatedBlock = validation.StartBlock
+		v.activatedBlock = stakingPeriods.StartBlock
 		v.status = StatusActive
 	}
 	return nil
