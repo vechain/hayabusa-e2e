@@ -324,14 +324,14 @@ func Test_Delegations(t *testing.T) {
 		// Verify both delegations
 		delegation, err := staker.GetDelegationStake(firstDelegationID)
 		require.NoError(t, err)
-		assert.Equal(t, firstStake, delegation.Stake)
+		assert.Equal(t, firstStake.VET(), delegation.Stake)
 		delegationPeriodDetails, err := staker.GetDelegationPeriodDetails(firstDelegationID)
 		require.NoError(t, err)
 		assert.False(t, delegationPeriodDetails.Locked)
 
 		delegation, err = staker.GetDelegationStake(secondDelegationID)
 		require.NoError(t, err)
-		assert.Equal(t, secondStake, delegation.Stake)
+		assert.Equal(t, secondStake.VET(), delegation.Stake)
 		delegationPeriodDetails, err = staker.GetDelegationPeriodDetails(secondDelegationID)
 		require.NoError(t, err)
 		assert.False(t, delegationPeriodDetails.Locked)
