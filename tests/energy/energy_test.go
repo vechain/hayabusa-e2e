@@ -143,7 +143,6 @@ func runEnergyTest(t *testing.T) error {
 	for i := firstPoSBlock; i < block-10; i++ {
 		blockDiff := i - poaBlock
 		increase := new(big.Int).Mul(hayabusaGrowth, big.NewInt(int64(blockDiff)))
-		println("expected on last poa", lastPOASupply.String(), increase.String(), blockDiff)
 		expectedSupply := new(big.Int).Add(lastPOASupply, increase)
 		assertSupply(i, expectedSupply)
 		best, err := client.Block(strconv.FormatUint(uint64(i), 10))
