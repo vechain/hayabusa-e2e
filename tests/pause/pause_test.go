@@ -53,7 +53,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Add validation", func(t *testing.T) {
 		// Set Staker pause active, the validator3 could not be added
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, validator3, staker.AddValidation(validator3.Address(), calculateValidatorStake(), config.MinStakingPeriod))
 		require.ErrorContains(t, err, "staker is paused")
 
@@ -71,7 +71,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Validation increases", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to increases
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		increase := big.NewInt(1e18)
 		increase = big.NewInt(0).Mul(increase, big.NewInt(1e6))
 		increase = big.NewInt(0).Mul(increase, big.NewInt(5))
@@ -93,7 +93,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Validation decreases", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to decrease
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		decrease := big.NewInt(1e18)
 		decrease = big.NewInt(0).Mul(decrease, big.NewInt(1e6))
 		decrease = big.NewInt(0).Mul(decrease, big.NewInt(3))
@@ -115,7 +115,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Validator exit", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to exit
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, validator1, staker.SignalExit(id1))
 		require.ErrorContains(t, err, "staker is paused")
 
@@ -133,7 +133,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Validator withdraw", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to withdraw
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, validator1, staker.WithdrawStake(id1))
 		require.ErrorContains(t, err, "staker is paused")
 
@@ -178,12 +178,12 @@ func TestPauseForDelegator(t *testing.T) {
 
 	t.Run("Add Delegation", func(t *testing.T) {
 		// Set delegator pause active, the delegator could not be added
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
 		_, err := sendNoRequire(t, hayabusa.Stargate, staker.AddDelegation(id1, delegatorStake, 100))
 		require.ErrorContains(t, err, "delegator is paused")
 
 		// Set staker pause active, the delegator could not be added
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.AddDelegation(id1, delegatorStake, 100))
 		require.ErrorContains(t, err, "staker is paused")
 
@@ -206,12 +206,12 @@ func TestPauseForDelegator(t *testing.T) {
 
 	t.Run("Delegation Exit", func(t *testing.T) {
 		// Set delegator pause active, the delegator could not be exit
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
 		_, err := sendNoRequire(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
 		require.ErrorContains(t, err, "delegator is paused")
 
 		// Set staker pause active, the delegator could not be exit
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
 		require.ErrorContains(t, err, "staker is paused")
 
@@ -233,12 +233,12 @@ func TestPauseForDelegator(t *testing.T) {
 
 	t.Run("Delegation Withdraw", func(t *testing.T) {
 		// Set delegator pause active, the delegator could not be withdrawn
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
 		_, err := sendNoRequire(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 		require.ErrorContains(t, err, "delegator is paused")
 
 		// Set staker pause active, the delegator could not be withdrawn
-		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 		require.ErrorContains(t, err, "staker is paused")
 
