@@ -64,6 +64,14 @@ func runEnergyTest(t *testing.T) error {
 		assert.False(t, receipt.Reverted)
 	}
 	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10))
+	err = utils.WaitForCondition(staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod, func() (bool, error) {
+		valStake, err := staker.GetValidatorStake(hayabusa.ValidatorAccounts[0].Address())
+		if err != nil {
+			return false, err
+		}
+		return !valStake.Address.IsZero(), nil
+	})
+	assert.NoError(t, err)
 	testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(hayabusa.ValidatorAccounts[0].Address(), delegationStake, 200))
 
 	genesisVET := big.NewInt(0)
