@@ -132,14 +132,14 @@ func (d *DelegatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
 	if d.activatedBlock != 0 {
 		return nil // already activated
 	}
-	delegation, err := engine.stack.Staker().GetDelegation(d.id)
+	delegation, err := engine.stack.Staker().GetDelegationPeriodDetails(d.id)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("failed to get delegation for ID %s", d.ID()))
 	}
 	if !delegation.Locked {
 		return nil // not locked, no activation needed
 	}
-	validator, err := engine.stack.Staker().Get(delegation.Validator)
+	validator, err := engine.stack.Staker().GetValidatorPeriodDetails(d.validationID)
 	if err != nil {
 		slog.Error("failed to get validator for delegation", "error", err, "id", d.ID())
 		return err
@@ -164,7 +164,7 @@ func (d *DelegatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 		slog.Warn("delegator already exit signalled", "id", d.ID())
 		return nil
 	}
-	validation, err := engine.stack.Staker().Get(d.validationID)
+	validation, err := engine.stack.Staker().GetValidatorStatus(d.validationID)
 	if err != nil {
 		slog.Error("failed to get validator for delegation", "error", err, "id", d.ID())
 		return err
