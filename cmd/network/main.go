@@ -66,9 +66,9 @@ func main() {
 		fmt.Printf("    🏰 %s", acc.Address())
 		fmt.Printf("    🔑 %s", hexutil.Encode(acc.D.Bytes()))
 
-		var event *builtin.ValidatorQueuedEvent
+		var event *builtin.ValidationQueuedEvent
 		for _, e := range queuedEvents {
-			if e.Master == acc.Address() {
+			if e.Node == acc.Address() {
 				event = &e
 				break
 			}
@@ -77,7 +77,7 @@ func main() {
 			fmt.Println("    ❌ - No queued event found for this validator")
 			continue
 		} else {
-			fmt.Printf("    ⏳ - Validation ID: %s", hexutil.Encode(event.ValidationID[:]))
+			fmt.Printf("    ⏳ - Validation ID: %s", event.Node.String())
 		}
 	}
 	for i := range 10 {
