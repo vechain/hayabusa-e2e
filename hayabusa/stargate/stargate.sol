@@ -72,10 +72,10 @@ contract Stargate {
         uint256 delegationID = delegationIDs[msg.sender];
         require(delegationID != uint256(0), "not a delegator");
 
-        (address validationID, uint256 stake, uint8 multiplier) = staker.getDelegationStake(delegationID);
+        (address validationID, uint256 stake, uint8 multiplier) = staker.GetDelegation(delegationID);
         require(stake > 0, "delegation is not active");
 
-        (, , , uint32 validatorCompleted) = staker.getValidatorPeriodDetails(validationID);
+        (, , , uint32 validatorCompleted) = staker.GetValidationPeriodDetails(validationID);
 
         uint256 weight = (stake * multiplier) / 100;
 
@@ -130,7 +130,7 @@ contract Stargate {
         }
 
         // max claimable period = minOf (validation completed periods, delegation end period)
-        (, , , uint32 maxClaimablePeriod) = staker.getValidatorPeriodDetails(validationID);
+        (, , , uint32 maxClaimablePeriod) = staker.GetValidationPeriodDetails(validationID);
         if (endPeriod < maxClaimablePeriod) {
             maxClaimablePeriod = endPeriod;
         }
@@ -185,7 +185,7 @@ contract Stargate {
     ) {
         bool active;
         // validator, stake, multiplier
-        (validationID, stake, multiplier) = staker.getDelegationStake(delegationID);
+        (validationID, stake, multiplier) = staker.GetDelegation(delegationID);
         (startPeriod, endPeriod, active) = staker.getDelegationPeriodDetails(delegationID);
         return (validationID, stake, startPeriod, endPeriod, multiplier);
     }

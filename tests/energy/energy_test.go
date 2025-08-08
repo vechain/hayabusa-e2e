@@ -123,7 +123,7 @@ func runEnergyTest(t *testing.T) error {
 	}
 	t.Logf("✅ - PoS growth is as expected")
 
-	rewards, err := staker.GetDelegatorsRewards(hayabusa.ValidatorAccounts[0].Address(), 1)
+	rewards, err := staker.GetDelegatorRewards(hayabusa.ValidatorAccounts[0].Address(), 1)
 	require.NoError(t, err)
 	proposerRewardsPerBlock := big.NewInt(0).Mul(hayabusaGrowth, big.NewInt(3))
 	proposerRewardsPerBlock = proposerRewardsPerBlock.Div(proposerRewardsPerBlock, big.NewInt(10))
