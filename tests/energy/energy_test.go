@@ -3,6 +3,7 @@ package energy
 import (
 	"math/big"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +11,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	native "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
@@ -33,6 +35,8 @@ func runEnergyTest(t *testing.T) error {
 		HighStakingPeriod: 180,
 		Name:              t.Name(),
 	}
+	growthStopTimeKey := thor.Blake2b([]byte("growth-stop-time"))
+
 	network, err := hayabusa.NewNetwork(config, t.Context())
 	require.NoError(t, err)
 	t.Cleanup(network.Stop)
@@ -95,7 +99,12 @@ func runEnergyTest(t *testing.T) error {
 		assertSupply(i, expectedSupply)
 	}
 	t.Logf("✅ - PoA & Transition Period growth is as expected")
-	block := config.ForkBlock + config.TransitionPeriod - 1 // last PoA block
+	stopTime, err := client.AccountStorage(&native.Energy.Address, &growthStopTimeKey)
+	assert.NoError(t, err)
+
+	stopTimeParsed, _ := new(big.Int).SetString(strings.TrimPrefix(stopTime.Value, "0x"), 16)
+	block := uint32((stopTimeParsed.Uint64() - genesisBlock.Timestamp) / 10) // last PoA block
+
 	poaBlock := block
 	lastPOASupply, err := energy.Revision(strconv.FormatUint(uint64(block), 10)).TotalSupply()
 	require.NoError(t, err)
