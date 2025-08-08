@@ -93,6 +93,9 @@ func isPortAvailable(port int) bool {
 	if err != nil {
 		return false
 	}
-	ln.Close()
+	err = ln.Close()
+	if err != nil {
+		return false
+	}
 	return true
 }
