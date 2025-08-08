@@ -12,6 +12,8 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/thor/v2/builtin/staker/stakes"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -25,12 +27,17 @@ func Test_StargateRewards(t *testing.T) {
 	expectedStake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(int64(len(validationIDs))))
 	stargateAddr := hayabusa.Stargate.Address()
 
+	multiplier := uint8(200)
+	delegators := int64(10)
+	dStake := stakes.NewWeightedStake(builtin.MinStake(), multiplier)
+	vStake := validation.WeightedStake(builtin.MinStake())
+
 	for _, validationID := range validationIDs { // evenly distribute delegations among validators
 		senders := &utils.Senders{}
-		for range 10 {
-			sender := staker.AddDelegation(validationID, builtin.MinStake(), 200).Send().WithSigner(hayabusa.Stargate).WithOptions(testutil.TxOptions())
+		for range delegators {
+			sender := staker.AddDelegation(validationID, dStake.VET(), multiplier).Send().WithSigner(hayabusa.Stargate).WithOptions(testutil.TxOptions())
 			senders.Add(sender)
-			expectedStake = expectedStake.Add(expectedStake, builtin.MinStake())
+			expectedStake = expectedStake.Add(expectedStake, dStake.VET())
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_, _, err := senders.Send(ctx)
@@ -68,10 +75,12 @@ func Test_StargateRewards(t *testing.T) {
 
 	totals, err := staker.GetValidationTotals(validationIDs[0])
 	require.NoError(t, err)
-	assert.Equal(t, builtin.MinStake(), big.NewInt(0).Sub(totals.TotalLockedStake, totals.DelegationsLockedStake))
-	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)), big.NewInt(0).Sub(totals.TotalLockedWeight, totals.DelegationsLockedWeight))
-	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10)), totals.DelegationsLockedStake)
-	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(20)), totals.DelegationsLockedWeight)
+
+	combinedDStake := big.NewInt(0).Mul(dStake.VET(), big.NewInt(delegators))
+	combinedDWeight := big.NewInt(0).Mul(dStake.Weight(), big.NewInt(delegators))
+
+	assert.Equal(t, big.NewInt(0).Add(combinedDStake, vStake.VET()), totals.TotalLockedStake)
+	assert.Equal(t, big.NewInt(0).Add(combinedDWeight, vStake.Weight()), totals.TotalLockedWeight)
 }
 
 func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
@@ -299,14 +308,17 @@ func Test_Delegations(t *testing.T) {
 	t.Run("Active delegator can increase/decrease their stake and get reflected in validator totals", func(t *testing.T) {
 		t.Parallel()
 
+		vStakes, err := staker.GetValidatorStake(validationIDs[5])
+		require.NoError(t, err)
+
 		// Create first delegation
-		firstStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
-		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], firstStake, 100))
+		firstStake := stakes.NewWeightedStake(big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)), 100)
+		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], firstStake.VET(), 100))
 		firstDelegationID := testutil.ReceiptToID(receipt)
 
 		// Create second delegation
-		secondStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3))
-		receipt = testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], secondStake, 100))
+		secondStake := stakes.NewWeightedStake(big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)), 100)
+		receipt = testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], secondStake.VET(), 100))
 		secondDelegationID := testutil.ReceiptToID(receipt)
 
 		// Verify both delegations
@@ -329,8 +341,9 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify that the validator has the exact total stake from both delegations
-		expectedTotalStake := big.NewInt(0).Add(firstStake, secondStake)
-		assert.Equal(t, expectedTotalStake, totalsBeforeWithdrawal.DelegationsLockedStake,
+		expectedTotalStake := big.NewInt(0).Add(firstStake.VET(), secondStake.VET())
+		expectedTotalStake = expectedTotalStake.Add(expectedTotalStake, vStakes.Stake)
+		assert.Equal(t, expectedTotalStake, totalsBeforeWithdrawal.TotalLockedStake,
 			"Validator should have exact total stake from both delegations before withdrawal")
 
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(firstDelegationID))
@@ -344,10 +357,10 @@ func Test_Delegations(t *testing.T) {
 		// Verify that the validator has exactly the second delegation stake after withdrawal
 		totalsAfterWithdrawal, err := staker.GetValidationTotals(validationIDs[5])
 		require.NoError(t, err)
-		assert.Equal(t, secondStake, totalsAfterWithdrawal.DelegationsLockedStake,
+		assert.Equal(t, big.NewInt(0).Add(secondStake.VET(), vStakes.Stake), totalsAfterWithdrawal.TotalLockedStake,
 			"Validator should have exactly the second delegation stake after withdrawal")
-		assert.True(t, totalsAfterWithdrawal.DelegationsLockedWeight.Cmp(big.NewInt(0)) > 0,
-			"Validator should have positive weight after withdrawal")
+		assert.Equal(t, big.NewInt(0).Add(firstStake.Weight(), vStakes.Weight), totalsAfterWithdrawal.TotalLockedWeight,
+			"Validator should have the correct total weight after withdrawal")
 	})
 }
 
