@@ -40,7 +40,10 @@ func Test_StargateRewards(t *testing.T) {
 			expectedStake = expectedStake.Add(expectedStake, dStake.VET())
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		_, _, err := senders.Send(ctx)
+		receipts, _, err := senders.Send(ctx)
+		for _, receipt := range receipts {
+			require.False(t, receipt.Reverted)
+		}
 		cancel()
 		require.NoError(t, err)
 	}
