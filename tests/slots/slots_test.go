@@ -72,7 +72,7 @@ func runTestMissedSlot(t *testing.T) error {
 	// wait for PoS
 	block := config.ForkBlock + config.TransitionPeriod
 	ticker := utils.NewTicker(staker.Raw().Client())
-	require.NoError(t, ticker.WaitForBlock(block))
+	require.NoError(t, utils.WaitForPOS(staker, block))
 
 	// wait for a missed slot
 	prev, err := ticker.Wait(35 * time.Second)

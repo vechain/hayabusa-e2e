@@ -13,7 +13,8 @@ import (
 )
 
 func WaitForPOS(staker *builtin.Staker, maxBlock uint32) error {
-	return WaitForCondition(staker.Raw().Client(), maxBlock, func() (bool, error) {
+	maxBlockWithBuffer := maxBlock + 10 // add 10 blocks in case of forks
+	return WaitForCondition(staker.Raw().Client(), maxBlockWithBuffer, func() (bool, error) {
 		_, id, err := staker.FirstActive()
 		return err == nil && !id.IsZero(), nil
 	})

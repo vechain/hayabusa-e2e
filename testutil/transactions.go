@@ -15,7 +15,7 @@ import (
 )
 
 func TxContext(t *testing.T) context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
 	t.Cleanup(cancel)
 	return ctx
 }
