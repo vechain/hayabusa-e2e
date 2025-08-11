@@ -135,7 +135,7 @@ func runEnergyTest(t *testing.T) error {
 	hayabusaGrowth := hayabusa.GetExpectedReward(totalStake)
 
 	firstPoSBlock := poaBlock + 1
-	block = config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod + 10 // wait for 1 staking period
+	block = config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod + 10 // wait for 1 staking period + 10 blocks (to handle forks)
 	require.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(block))
 
 	// check PoS growth -> Should use Hayabusa growth rate
