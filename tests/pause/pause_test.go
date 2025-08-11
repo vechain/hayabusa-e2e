@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,8 +22,7 @@ import (
 )
 
 var (
-	KeyStargateSwitches = thor.BytesToBytes32([]byte("stargate-switches"))
-	executor            = hayabusa.Executor
+	executor = hayabusa.Executor
 )
 
 func TestStakerPauseForValidation(t *testing.T) {
@@ -53,12 +53,12 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Add validation", func(t *testing.T) {
 		// Set Staker pause active, the validator3 could not be added
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, validator3, staker.AddValidation(validator3.Address(), calculateValidatorStake(), config.MinStakingPeriod))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator3 could be add
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b00))
 		receipt, err := sendNoRequire(t, validator3, staker.AddValidation(validator3.Address(), calculateValidatorStake(), config.MinStakingPeriod))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
@@ -71,16 +71,16 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Validation increases", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to increases
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		increase := big.NewInt(1e18)
 		increase = big.NewInt(0).Mul(increase, big.NewInt(1e6))
 		increase = big.NewInt(0).Mul(increase, big.NewInt(5))
 
 		_, err = sendNoRequire(t, validator1, staker.IncreaseStake(id1, increase))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be increases
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b00))
 		receipt, err := sendNoRequire(t, validator1, staker.IncreaseStake(id1, increase))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
@@ -93,16 +93,16 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Validation decreases", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to decrease
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		decrease := big.NewInt(1e18)
 		decrease = big.NewInt(0).Mul(decrease, big.NewInt(1e6))
 		decrease = big.NewInt(0).Mul(decrease, big.NewInt(3))
 
 		_, err = sendNoRequire(t, validator1, staker.DecreaseStake(id1, decrease))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be decrease
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b00))
 		receipt, err := sendNoRequire(t, validator1, staker.DecreaseStake(id1, decrease))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
@@ -115,12 +115,12 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Validator exit", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to exit
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, validator1, staker.SignalExit(id1))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be exit
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0))
 		receipt, err := sendNoRequire(t, validator1, staker.SignalExit(id1))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
@@ -133,16 +133,14 @@ func TestStakerPauseForValidation(t *testing.T) {
 
 	t.Run("Validator withdraw", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to withdraw
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, validator1, staker.WithdrawStake(id1))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be exit
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
-		receipt, err := sendNoRequire(t, validator1, staker.WithdrawStake(id1))
-		require.NoError(t, err)
-		require.NotNil(t, receipt)
-		require.False(t, receipt.Reverted)
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0))
+		_, err := sendNoRequire(t, validator1, staker.WithdrawStake(id1))
+		require.False(t, strings.Contains(err.Error(), "staker is paused"))
 		t.Log("✅ - Validator 1 withdraw tx sent")
 	})
 }
@@ -170,29 +168,32 @@ func TestPauseForDelegator(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusQueued, block)
 
+	// Set hayabusa.Stargate account to parames
+	setParame(t, sequence, parames, thor.KeyDelegatorContractAddress, big.NewInt(0).SetBytes(hayabusa.Stargate.Address().Bytes()))
+
 	delegatorStake := new(big.Int).Mul(big.NewInt(1e18), big.NewInt(1e6))
 	delegatorStake = new(big.Int).Mul(delegatorStake, big.NewInt(10))
 
 	delegationID := big.NewInt(0)
 
 	t.Run("Add Delegation", func(t *testing.T) {
-		// Set Stargate pause active, the delegator could not be added
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(1))
+		// Set delegator pause active, the delegator could not be added
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
 		_, err := sendNoRequire(t, hayabusa.Stargate, staker.AddDelegation(id1, delegatorStake, 100))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "delegator is paused")
 
 		// Set staker pause active, the delegator could not be added
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.AddDelegation(id1, delegatorStake, 100))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
-		// Set staker and stargate pause both active, the delegator could not be added
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(3))
+		// Set staker and delegator pause both active, the delegator could not be added
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b11))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.AddDelegation(id1, delegatorStake, 100))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
-		// Set staker and stargate pause both inactive, the delegator could be added
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
+		// Set staker and delegator pause both inactive, the delegator could be added
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b00))
 		receipt, err := sendNoRequire(t, hayabusa.Stargate, staker.AddDelegation(id1, delegatorStake, 100))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
@@ -204,23 +205,23 @@ func TestPauseForDelegator(t *testing.T) {
 	})
 
 	t.Run("Delegation Exit", func(t *testing.T) {
-		// Set Stargate pause active, the delegator could not be exit
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(1))
+		// Set delegator pause active, the delegator could not be exit
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
 		_, err := sendNoRequire(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "delegator is paused")
 
 		// Set staker pause active, the delegator could not be exit
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
-		// Set staker and stargate pause both active, the delegator could not be exit
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(3))
+		// Set staker and delegator pause both active, the delegator could not be exit
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b11))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
-		// Set staker and stargate pause both inactive, the delegator could be exit
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
+		// Set staker and delegator pause both inactive, the delegator could be exit
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b00))
 		receipt, err := sendNoRequire(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
@@ -231,23 +232,23 @@ func TestPauseForDelegator(t *testing.T) {
 	})
 
 	t.Run("Delegation Withdraw", func(t *testing.T) {
-		// Set Stargate pause active, the delegator could not be withdrawn
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(1))
+		// Set delegator pause active, the delegator could not be withdrawn
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b01))
 		_, err := sendNoRequire(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "delegator is paused")
 
 		// Set staker pause active, the delegator could not be withdrawn
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b10))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
-		// Set staker and stargate pause both active, the delegator could not be withdrawn
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(3))
+		// Set staker and delegator pause both active, the delegator could not be withdrawn
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b11))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
-		// Set staker and stargate pause both inactive, the delegator could be added
-		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
+		// Set staker and delegator pause both inactive, the delegator could be added
+		setParame(t, sequence, parames, thor.KeyStakerSwitches, big.NewInt(0b00))
 		receipt, err := sendNoRequire(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
@@ -380,7 +381,7 @@ func waitForPoSAndAssertFirstActive(t *testing.T, staker *builtin.Staker, config
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
-	validator, err := staker.GetValidatorStatus(validatorID)
+	validator, err := staker.GetValidation(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
 }
