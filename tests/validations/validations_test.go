@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,6 +12,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -721,6 +723,39 @@ func runTestHayabusaTotalStakeDecreased(t *testing.T) error {
 	assertTotalStakeAndWeight(t, staker, 1)
 
 	return nil
+}
+
+func TestBeneficiary(t *testing.T) {
+	config, client := setupTestNetwork(t, 2)
+
+	staker := setupStakerAndWaitForFork(t, client, config)
+
+	validator1 := hayabusa.ValidatorAccounts[0]
+	validator2 := hayabusa.ValidatorAccounts[1]
+	beneficiary := datagen.RandAddress()
+
+	sequence := testutil.NewTxSequence(t)
+	id1 := addValidator(sequence, staker, validator1, config.MinStakingPeriod)
+	id2 := addValidator(sequence, staker, validator2, config.MinStakingPeriod)
+	sequence.Send(validator1, staker.SetBeneficiary(id1, beneficiary))
+	sequence.Send(validator2, staker.SetBeneficiary(id2, beneficiary))
+
+	assert.NoError(t, utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod))
+
+	blockRewards := hayabusa.GetExpectedReward(big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)))
+	ticker := utils.NewTicker(client)
+	block, err := ticker.Wait(time.Second * 20)
+	require.NoError(t, err)
+
+	assert.Equal(t, block.Beneficiary, beneficiary, "Block beneficiary should match the set beneficiary")
+
+	beneficiaryBeforeBlock, err := staker.Raw().Client().Account(&beneficiary, thorclient.Revision(block.ParentID.String()))
+	require.NoError(t, err)
+	beneficiaryAfterBlock, err := staker.Raw().Client().Account(&beneficiary, thorclient.Revision(block.ID.String()))
+	require.NoError(t, err)
+
+	difference := new(big.Int).Sub((*big.Int)(beneficiaryAfterBlock.Energy), (*big.Int)(beneficiaryBeforeBlock.Energy))
+	assert.Equal(t, blockRewards, difference, "Beneficiary should receive the block rewards")
 }
 
 func addValidatorWithStake(seq *testutil.TxSequence, staker *builtin.Staker, signer bind.Signer, stake *big.Int, period uint32) thor.Address {
