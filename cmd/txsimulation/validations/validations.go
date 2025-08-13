@@ -28,10 +28,10 @@ var (
 func RandomStake() *big.Int {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	max := big.NewInt(0).Div(MaxStake, big.NewInt(2))
+	maxStake := big.NewInt(0).Mul(big.NewInt(40), Million)
 
 	// Calculate the range (max - MinStake)
-	rangeStake := new(big.Int).Sub(max, MinStake)
+	rangeStake := new(big.Int).Sub(maxStake, MinStake)
 
 	// Generate a random number within the range
 	randomOffset := new(big.Int).Rand(rng, rangeStake)

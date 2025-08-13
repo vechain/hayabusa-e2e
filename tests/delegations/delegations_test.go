@@ -249,7 +249,7 @@ func Test_Delegations(t *testing.T) {
 
 		// wait for validators current period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*1))
-		receipt = testutil.Send(t, validatorAccount.Endorser, staker.SignalExit(validationIDs[3]))
+		receipt = testutil.Send(t, validatorAccount.Endorser, staker.SignalExit(validatorAccount.Node.Address()))
 
 		// wait for validators last period to end
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
