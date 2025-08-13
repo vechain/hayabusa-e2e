@@ -9,6 +9,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
+	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -17,8 +18,8 @@ import (
 )
 
 type Generator interface {
-	CreateValidator(acc bind.Signer, startBlock uint32) Config
-	CreateDelegator(acc bind.Signer, startBlock uint32) Config
+	CreateValidator(acc *hayabusa.NodePair, startBlock uint32) ValidatorConfig
+	CreateDelegator(acc bind.Signer, startBlock uint32) DelegatorConfig
 }
 
 type Engine struct {

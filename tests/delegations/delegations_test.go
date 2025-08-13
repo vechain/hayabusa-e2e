@@ -217,7 +217,7 @@ func Test_Delegations(t *testing.T) {
 		validatorAccount := hayabusa.ValidatorAccounts[0]
 
 		for _, acc := range hayabusa.ValidatorAccounts {
-			if acc.Address().String() == validator.Address.String() {
+			if acc.Node.Address().String() == validator.Address.String() {
 				validatorAccount = acc
 				break
 			}
@@ -250,7 +250,7 @@ func Test_Delegations(t *testing.T) {
 
 		// wait for validators current period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*1))
-		receipt = testutil.Send(t, validatorAccount, staker.SignalExit(validationIDs[3]))
+		receipt = testutil.Send(t, validatorAccount.Endorser, staker.SignalExit(validationIDs[3]))
 
 		// wait for validators last period to end
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
@@ -396,9 +396,9 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidation(account.Address(), builtin.MinStake(), config.MinStakingPeriod).
+		sender := staker.AddValidation(account.Node.Address(), builtin.MinStake(), config.MinStakingPeriod).
 			Send().
-			WithSigner(account).
+			WithSigner(account.Endorser).
 			WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}

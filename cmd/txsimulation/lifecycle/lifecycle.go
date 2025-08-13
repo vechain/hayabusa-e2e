@@ -80,11 +80,20 @@ type Lifecycle interface {
 }
 
 type Config struct {
-	Account        bind.Signer
 	QueueDelay     Delay
 	StartBlock     uint32
 	StakingPeriods uint32
 	WithdrawDelay  Delay
+}
+
+type ValidatorConfig struct {
+	Config
+	Account *hayabusa.NodePair
+}
+
+type DelegatorConfig struct {
+	Config
+	Account bind.Signer
 }
 
 func (c Config) QueueBlock(config *hayabusa.Config) uint32 {

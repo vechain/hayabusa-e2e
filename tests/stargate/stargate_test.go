@@ -1,8 +1,6 @@
 package stargate
 
 import (
-	native "github.com/vechain/thor/v2/builtin"
-	"github.com/vechain/thor/v2/thorclient"
 	"log/slog"
 	"math/big"
 	"strconv"
@@ -10,6 +8,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	native "github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/thorclient"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -504,7 +505,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidation(account.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(account).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidation(account.Node.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(account.Endorser).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 

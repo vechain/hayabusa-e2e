@@ -17,7 +17,6 @@ import (
 	"github.com/vechain/networkhub/network/node/genesis"
 	"github.com/vechain/networkhub/thorbuilder"
 	"github.com/vechain/thor/v2/thorclient"
-	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
 type Network struct {
@@ -182,7 +181,7 @@ func (n *Network) AttachNode(buildConfig *thorbuilder.Config, additionalArgs map
 	return nil
 }
 
-func makeNode(config *Config, i int, signer *bind.PrivateKeySigner, customGenesis *genesis.CustomGenesis) (node.Config, int, int) {
+func makeNode(config *Config, i int, signer *NodePair, customGenesis *genesis.CustomGenesis) (node.Config, int, int) {
 	verbosity := 3
 	if config.Verbosity > 0 {
 		verbosity = config.Verbosity
@@ -204,7 +203,7 @@ func makeNode(config *Config, i int, signer *bind.PrivateKeySigner, customGenesi
 
 	return &node.BaseNode{
 		ID:             nodeID,
-		Key:            common.Bytes2Hex(signer.D.Bytes()),
+		Key:            common.Bytes2Hex(signer.Node.D.Bytes()),
 		Genesis:        customGenesis,
 		Verbosity:      verbosity,
 		AdditionalArgs: additionalArgs,

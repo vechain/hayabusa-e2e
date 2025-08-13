@@ -11,10 +11,10 @@ import (
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
+	"github.com/vechain/hayabusa-e2e/hayabusa"
 	utils2 "github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
@@ -130,22 +130,22 @@ func (s *State) poll() {
 	}
 }
 
-func (s *State) Withdraw(id thor.Address, signer bind.Signer) (*api.Receipt, error) {
-	sender := s.stack.Staker().WithdrawStake(id)
-	receipt, err := s.stack.SendTransaction(sender, signer)
+func (s *State) Withdraw(acc *hayabusa.NodePair) (*api.Receipt, error) {
+	sender := s.stack.Staker().WithdrawStake(acc.Node.Address())
+	receipt, err := s.stack.SendTransaction(sender, acc.Endorser)
 	if err != nil {
-		return nil, fmt.Errorf("failed to withdraw from validator %s: %w", id.String(), err)
+		return nil, fmt.Errorf("failed to withdraw from validator %s: %w", acc.Node.Address().String(), err)
 	}
 	return receipt, nil
 }
 
-func (s *State) QueueValidator(acc bind.Signer) (thor.Address, *api.Receipt, error) {
-	sender := s.stack.Staker().AddValidation(acc.Address(), RandomStake(), s.stack.Config().MinStakingPeriod)
-	receipt, err := s.stack.SendTransaction(sender, acc)
+func (s *State) QueueValidator(acc *hayabusa.NodePair) (thor.Address, *api.Receipt, error) {
+	sender := s.stack.Staker().AddValidation(acc.Node.Address(), RandomStake(), s.stack.Config().MinStakingPeriod)
+	receipt, err := s.stack.SendTransaction(sender, acc.Endorser)
+	id := acc.Node.Address()
 	if err != nil {
-		return thor.Address{}, nil, fmt.Errorf("failed to queue validator %s: %w", acc.Address(), err)
+		return thor.Address{}, nil, fmt.Errorf("failed to queue validator %s: %w", acc.Node.Address(), err)
 	}
-	id := thor.BytesToAddress(receipt.Outputs[0].Events[0].Topics[2][:])
 	validation, err := s.stack.Staker().GetValidatorStatus(id)
 	if err != nil {
 		return thor.Address{}, nil, fmt.Errorf("failed to get validator status %s: %w", id.String(), err)
@@ -163,20 +163,20 @@ func (s *State) QueueValidator(acc bind.Signer) (thor.Address, *api.Receipt, err
 	return id, receipt, nil
 }
 
-func (s *State) DisableAutoRenew(id thor.Address, signer bind.Signer) (*api.Receipt, error) {
-	sender := s.stack.Staker().SignalExit(id)
-	receipt, err := s.stack.SendTransaction(sender, signer)
+func (s *State) DisableAutoRenew(acc *hayabusa.NodePair) (*api.Receipt, error) {
+	sender := s.stack.Staker().SignalExit(acc.Node.Address())
+	receipt, err := s.stack.SendTransaction(sender, acc.Endorser)
 	if err != nil {
-		return nil, fmt.Errorf("failed to disable auto-renew for validator %s: %w", id.String(), err)
+		return nil, fmt.Errorf("failed to disable auto-renew for validator %s: %w", acc.Node.Address().String(), err)
 	}
-	validation, err := s.stack.Staker().GetValidatorStake(id)
+	validation, err := s.stack.Staker().GetValidatorStake(acc.Node.Address())
 	if err != nil {
-		return receipt, fmt.Errorf("failed to get validator %s after disabling auto-renew: %w", id.String(), err)
+		return receipt, fmt.Errorf("failed to get validator %s after disabling auto-renew: %w", acc.Node.Address().String(), err)
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.updateStatus(id, validation)
+	s.updateStatus(acc.Node.Address(), validation)
 
 	return receipt, nil
 }
@@ -228,7 +228,7 @@ func (s *State) updateStatus(id thor.Address, validation *builtin.ValidatorStake
 	}
 	if exists && prevValidation.Status != validationStatus.Status {
 		hasUpdates = true
-		slog.Info("🐳validator status changed", "addr", validation.Address, "from", prevValidation.Status, "to", validationStatus.Status)
+		slog.Info("🐳 validator status changed", "addr", validation.Address, "from", prevValidation.Status, "to", validationStatus.Status)
 	}
 	validationDetails, err := s.stack.Staker().GetValidatorPeriodDetails(validation.Address)
 	if err != nil {

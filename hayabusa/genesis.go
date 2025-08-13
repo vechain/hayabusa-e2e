@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	ValidatorAccounts  = mustParseKeys(validatorKeys)
+	ValidatorAccounts  = mustCreateNodePairs()
 	Stargate           = mustParseKey("274c9caa1b72003d86eab9ea817f9b4c172246e75a9e20d1baaf44bbf5c89762")
 	ParamsStargateKey  = nameToBytes32("stargate-contract-address")
 	Executor           = (*bind.PrivateKeySigner)(thorgenesis.DevAccounts()[0].PrivateKey)
@@ -49,8 +49,8 @@ func authorities() []thorgenesis.Authority {
 
 	for _, account := range ValidatorAccounts {
 		authorities = append(authorities, thorgenesis.Authority{
-			MasterAddress:   account.Address(),
-			EndorsorAddress: account.Address(),
+			MasterAddress:   account.Node.Address(),
+			EndorsorAddress: account.Endorser.Address(),
 			Identity:        datagen.RandomHash(),
 		})
 	}
@@ -78,7 +78,7 @@ func genesisAccounts() []thorgenesis.Account {
 	}
 
 	for _, account := range ValidatorAccounts {
-		addAccount(account, tenBillion)
+		addAccount(account.Endorser, tenBillion)
 	}
 	addAccount(Executor, tenBillion)
 	for _, account := range AdditionalAccounts {
@@ -109,7 +109,7 @@ func nameToBytes32(name string) string {
 func mustParseKey(hexKey string) *bind.PrivateKeySigner {
 	key, err := crypto.HexToECDSA(hexKey)
 	if err != nil {
-		panic(fmt.Sprintf("failed to parse key: %v", err))
+		panic(fmt.Sprintf("failed to parse key: (%s): %v", hexKey, err))
 	}
 	return (*bind.PrivateKeySigner)(key)
 }
@@ -122,4 +122,17 @@ func mustParseKeys(hexKeys []string) []*bind.PrivateKeySigner {
 	}
 
 	return keys
+}
+
+func mustCreateNodePairs() []*NodePair {
+	pairs := make([]*NodePair, len(endorsorKeys))
+
+	for i, endorsor := range endorsorKeys {
+		pairs[i] = &NodePair{
+			Endorser: mustParseKey(endorsor),
+			Node:     mustParseKey(nodeKeys[i]),
+		}
+	}
+
+	return pairs
 }
