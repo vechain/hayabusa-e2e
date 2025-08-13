@@ -1,6 +1,7 @@
 package slots
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -45,7 +46,7 @@ func runTestMissedSlot(t *testing.T) error {
 
 	node1Config := network.NodeConfigs()[0]
 	node2Config := network.NodeConfigs()[1]
-	client := thorclient.New(node2Config.GetAPIAddr())
+	client := thorclient.New(fmt.Sprintf("http://%s", node2Config.GetAPIAddr()))
 
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
