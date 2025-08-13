@@ -14,7 +14,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -401,6 +400,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 			WithSigner(account.Endorser).
 			WithOptions(testutil.TxOptions())
 		senders.Add(sender)
+		validationIDs[i] = account.Node.Address()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -412,12 +412,6 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
 	}
-	events, err := staker.FilterValidatorQueued(nil, nil, logdb.ASC)
-	if err != nil {
-		t.Fatalf("failed to filter validator queued: %v", err)
-	}
-	for i, event := range events {
-		validationIDs[i] = event.Node
-	}
+
 	return staker, config, validationIDs
 }
