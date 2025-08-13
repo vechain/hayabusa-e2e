@@ -759,12 +759,11 @@ func TestBeneficiary(t *testing.T) {
 }
 
 func addValidatorWithStake(seq *testutil.TxSequence, staker *builtin.Staker, nodePair *hayabusa.NodePair, stake *big.Int, period uint32) thor.Address {
-	receipt := seq.Send(nodePair.Endorser, staker.AddValidation(nodePair.Node.Address(), stake, period))
-	id := receipt.Outputs[0].Events[0].Topics[1]
+	seq.Send(nodePair.Endorser, staker.AddValidation(nodePair.Node.Address(), stake, period))
 	amount := big.NewInt(0).Quo(stake, big.NewInt(1e18))
-	slog.Info("✅ - added validator", "validator", nodePair.Node.Address().String(), "period", period, "stake", amount, "id", id.String())
+	slog.Info("✅ - added validator", "validator", nodePair.Node.Address().String(), "period", period, "stake", amount, "id", nodePair.Node.Address().String())
 
-	return thor.BytesToAddress(id.Bytes())
+	return nodePair.Node.Address()
 }
 
 func addValidator(seq *testutil.TxSequence, staker *builtin.Staker, nodePair *hayabusa.NodePair, period uint32) thor.Address {
