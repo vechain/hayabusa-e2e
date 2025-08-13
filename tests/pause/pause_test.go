@@ -62,7 +62,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 		receipt, err := sendNoRequire(t, validator3.Endorser, staker.AddValidation(validator3.Node.Address(), calculateValidatorStake(), config.MinStakingPeriod))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
-		id3 := thor.BytesToAddress(receipt.Outputs[0].Events[0].Topics[2].Bytes())
+		id3 := validator3.Node.Address()
 
 		block = (receipt.Meta.BlockNumber + config.MinStakingPeriod)
 
