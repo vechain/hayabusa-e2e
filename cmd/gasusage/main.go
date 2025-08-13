@@ -56,22 +56,22 @@ func run(ctx context.Context) error {
 	}
 
 	stake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)) // 3x MinStake for each validator
-	addReceipt1, err := SendTx(ctx, validator1, staker.AddValidation(validator1.Address(), stake, config.MinStakingPeriod))
+	addReceipt1, err := SendTx(ctx, validator1.Endorser, staker.AddValidation(validator1.Node.Address(), stake, config.MinStakingPeriod))
 	if err != nil {
 		return fmt.Errorf("failed to send addValidation transaction: %w", err)
 	}
-	addReceipt2, err := SendTx(ctx, validator2, staker.AddValidation(validator2.Address(), stake, config.MinStakingPeriod))
+	addReceipt2, err := SendTx(ctx, validator2.Endorser, staker.AddValidation(validator2.Node.Address(), stake, config.MinStakingPeriod))
 	if err != nil {
 		return fmt.Errorf("failed to send addValidation transaction: %w", err)
 	}
-	addReceipt3, err := SendTx(ctx, validator3, staker.AddValidation(validator3.Address(), stake, config.MinStakingPeriod))
+	addReceipt3, err := SendTx(ctx, validator3.Endorser, staker.AddValidation(validator3.Node.Address(), stake, config.MinStakingPeriod))
 	if err != nil {
 		return fmt.Errorf("failed to send addValidation transaction: %w", err)
 	}
 
-	addr1 := validator1.Address()
-	addr2 := validator2.Address()
-	addr3 := validator3.Address()
+	addr1 := validator1.Node.Address()
+	addr2 := validator2.Node.Address()
+	addr3 := validator3.Node.Address()
 
 	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		return fmt.Errorf("failed to wait for POS: %w", err)
@@ -122,19 +122,19 @@ func run(ctx context.Context) error {
 
 	// Stake operations
 	fmt.Println("💰 Executing stake operations...")
-	receipt, err := SendTx(ctx, validator1, staker.IncreaseStake(addr1, builtin.MinStake()))
+	receipt, err := SendTx(ctx, validator1.Endorser, staker.IncreaseStake(addr1, builtin.MinStake()))
 	if err != nil {
 		return fmt.Errorf("failed to send increaseStake transaction: %w", err)
 	}
 	tw.AppendRow(table.Row{"increaseStake", receipt.GasUsed})
 
-	receipt, err = SendTx(ctx, validator1, staker.DecreaseStake(addr1, builtin.MinStake()))
+	receipt, err = SendTx(ctx, validator1.Endorser, staker.DecreaseStake(addr1, builtin.MinStake()))
 	if err != nil {
 		return fmt.Errorf("failed to send decreaseStake transaction: %w", err)
 	}
 	tw.AppendRow(table.Row{"decreaseStake", receipt.GasUsed})
 
-	receipt, err = SendTx(ctx, validator1, staker.SignalExit(addr1))
+	receipt, err = SendTx(ctx, validator1.Endorser, staker.SignalExit(addr1))
 	if err != nil {
 		return fmt.Errorf("failed to send signalExit transaction: %w", err)
 	}
@@ -143,12 +143,12 @@ func run(ctx context.Context) error {
 	// Withdrawal operations
 	fmt.Println("💸 Executing withdrawal operations...")
 
-	receipt, err = SendTx(ctx, validator2, staker.SignalExit(addr2))
+	receipt, err = SendTx(ctx, validator2.Endorser, staker.SignalExit(addr2))
 	if err != nil {
 		return fmt.Errorf("failed to send signalExit transaction: %w", err)
 	}
 	tw.AppendRow(table.Row{"updateAutoRenew", receipt.GasUsed})
-	receipt, err = SendTx(ctx, validator2, staker.WithdrawStake(addr2))
+	receipt, err = SendTx(ctx, validator2.Endorser, staker.WithdrawStake(addr2))
 	if err != nil {
 		return fmt.Errorf("failed to send withdrawStake transaction: %w", err)
 	}
