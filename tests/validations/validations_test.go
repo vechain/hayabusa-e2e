@@ -52,7 +52,7 @@ func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
 
 	firstQueued, _, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, firstQueued.Endorsor, validator1PoA.Node.Address())
+	assert.Equal(t, firstQueued.Endorsor, validator1PoA.Endorser.Address())
 	t.Log("✅ - Queued validator OK", "id", id1.String())
 
 	id2 := addValidator(sequence, staker, validator2PoA, config.MinStakingPeriod)
