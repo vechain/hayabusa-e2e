@@ -76,8 +76,9 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 		block = blk.Number
 	}
 
-	// wait for the validator to complete 1 staking period
-	block = block + 1 + config.MinStakingPeriod
+	// wait for the validator to complete 1 staking period after PoS starts
+	posStartBlock := config.ForkBlock + config.TransitionPeriod
+	block = posStartBlock + config.MinStakingPeriod
 	require.NoError(t, ticker.WaitForBlock(block))
 	expectedCompletedPeriods := uint32(1)
 	err = waitForCompletedPeriods(ticker, staker, validationID, expectedCompletedPeriods)

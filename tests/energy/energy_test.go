@@ -93,8 +93,8 @@ func runEnergyTest(t *testing.T) error {
 	genesisBlock, err := client.Block("0")
 	require.NoError(t, err)
 
-	// check PoA + transition period growth -> Should use legacy growth rate
-	for i := uint32(1); i < config.ForkBlock+config.TransitionPeriod; i++ {
+	// check PoA -> Should use legacy growth rate
+	for i := uint32(1); i < config.ForkBlock; i++ {
 		currentBlock, err := client.Block(strconv.FormatUint(uint64(i), 10))
 		require.NoError(t, err)
 
@@ -106,7 +106,8 @@ func runEnergyTest(t *testing.T) error {
 		expectedSupply := new(big.Int).Add(genesisVTHO, growth)
 		assertSupply(i, expectedSupply)
 	}
-	t.Logf("✅ - PoA & Transition Period growth is as expected")
+	t.Logf("✅ - PoA growth is as expected")
+
 	stopTime, err := client.AccountStorage(&native.Energy.Address, &growthStopTimeKey)
 	assert.NoError(t, err)
 
@@ -126,22 +127,24 @@ func runEnergyTest(t *testing.T) error {
 		block = blk.Number
 	}
 
+	assert.Equal(t, blk.Number, config.ForkBlock)
+	t.Logf("✅ - Growth stop time is as expected")
+
 	poaBlock := block
-	lastPOASupply, err := energy.Revision(strconv.FormatUint(uint64(block), 10)).TotalSupply()
+	lastPOASupply, err := energy.Revision(strconv.FormatUint(uint64(poaBlock), 10)).TotalSupply()
 	require.NoError(t, err)
 
 	validatorStaker := new(big.Int).Mul(stake, big.NewInt(int64(validators)))
 	totalStake := new(big.Int).Add(validatorStaker, delegationStake)
 	hayabusaGrowth := hayabusa.GetExpectedReward(totalStake)
 
-	firstPoSBlock := poaBlock + 1
+	firstPoSBlock := poaBlock + config.TransitionPeriod
 	block = config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod + 10 // wait for 1 staking period + 10 blocks (to handle forks)
 	require.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(block))
 
-	// check PoS growth -> Should use Hayabusa growth rate
 	acc1Blocks := 0
 	for i := firstPoSBlock; i < block-10; i++ {
-		blockDiff := i - poaBlock
+		blockDiff := i - firstPoSBlock + 1
 		increase := new(big.Int).Mul(hayabusaGrowth, big.NewInt(int64(blockDiff)))
 		expectedSupply := new(big.Int).Add(lastPOASupply, increase)
 		assertSupply(i, expectedSupply)

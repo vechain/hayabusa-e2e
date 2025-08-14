@@ -311,7 +311,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	queuedStk := new(big.Int).Add(calculateValidatorStake(), stake)
 	assert.Equal(t, queuedStk, queued)
-	assert.Equal(t, new(big.Int).Mul(queuedStk, big.NewInt(2)), queuedWeight)
+	assert.Equal(t, queuedStk, queuedWeight)
 
 	_, validatorID, err = staker.FirstQueued()
 	assert.NoError(t, err)
@@ -409,12 +409,12 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	total, totalWeight, err := staker.TotalStake()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), total)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(6)), totalWeight)
+	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), totalWeight)
 	queued, queuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	// the pending vet increases the queued stake
 	assert.Equal(t, big.NewInt(0).Add(validatorStake, increase), queued)
-	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).Add(validatorStake, increase), big.NewInt(2)), queuedWeight)
+	assert.Equal(t, big.NewInt(0).Add(validatorStake, increase), queuedWeight)
 
 	block += config.MinStakingPeriod
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
@@ -425,8 +425,8 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	total, totalWeight, err = staker.TotalStake()
 	assert.NoError(t, err)
 	expectedTotal := big.NewInt(0).Mul(validatorStake, big.NewInt(3))
-	expectedTotalWeight := big.NewInt(0).Mul(validatorStake, big.NewInt(6))
-	increaseWeight := big.NewInt(0).Mul(increase, big.NewInt(2))
+	expectedTotalWeight := big.NewInt(0).Mul(validatorStake, big.NewInt(3))
+	increaseWeight := big.NewInt(0).Mul(increase, big.NewInt(1))
 	assert.Equal(t, expectedTotal.Add(expectedTotal, increase), total)
 	assert.Equal(t, expectedTotalWeight.Add(expectedTotalWeight, increaseWeight), totalWeight)
 	assertQueuedStakeAndWeight(t, staker, 1)
@@ -451,12 +451,12 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	assert.NoError(t, err)
 	threeStake := big.NewInt(0).Mul(validatorStake, big.NewInt(3))
 	assert.Equal(t, big.NewInt(0).Add(threeStake, increase), total)
-	assert.Equal(t, big.NewInt(0).Mul(big.NewInt(0).Add(threeStake, increase), big.NewInt(2)), totalWeight)
+	assert.Equal(t, big.NewInt(0).Add(threeStake, increase), totalWeight)
 	queued, queuedWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	// the queued stake should not have changed
 	assert.Equal(t, validatorStake, queued)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(2)), queuedWeight)
+	assert.Equal(t, validatorStake, queuedWeight)
 
 	t.Log("✅ - Validator 1 stake decreased")
 	block += config.MinStakingPeriod
@@ -470,18 +470,18 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	expectedTotal = big.NewInt(0).Mul(validatorStake, big.NewInt(3))
 	expectedTotal = big.NewInt(0).Add(expectedTotal, increase)
 	expectedTotal = big.NewInt(0).Sub(expectedTotal, decrease)
-	expectedTotalWeight = big.NewInt(0).Mul(validatorStake, big.NewInt(6))
+	expectedTotalWeight = big.NewInt(0).Mul(validatorStake, big.NewInt(3))
 	expectedTotalWeight = big.NewInt(0).Add(expectedTotalWeight, big.NewInt(0).Mul(increase, big.NewInt(2)))
 	expectedTotalWeight = big.NewInt(0).Sub(expectedTotalWeight, big.NewInt(0).Mul(decrease, big.NewInt(2)))
 	assert.Equal(t, expectedTotal, total)
-	assert.Equal(t, expectedTotalWeight, totalWeight)
+	assert.Equal(t, expectedTotal, totalWeight)
 	assertQueuedStakeAndWeight(t, staker, 1)
 
 	queued, queuedWeight, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	// the queued stake should not have changed
 	assert.Equal(t, validatorStake, queued)
-	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(2)), queuedWeight)
+	assert.Equal(t, validatorStake, queuedWeight)
 
 	validatorWithdraw(t, staker, validator1.Endorser, id1)
 
@@ -577,9 +577,9 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 
 	validatorStake := calculateValidatorStake()
 	expectedInitialQueued := validatorStake
-	expectedInitialQueuedWeight := new(big.Int).Mul(validatorStake, big.NewInt(2))
+	expectedInitialQueuedWeight := new(big.Int).Mul(validatorStake, big.NewInt(1))
 	expectedInitialTotal := new(big.Int).Mul(validatorStake, big.NewInt(2))
-	expectedInitialTotalWeight := new(big.Int).Mul(validatorStake, big.NewInt(4))
+	expectedInitialTotalWeight := new(big.Int).Mul(validatorStake, big.NewInt(2))
 
 	assert.Equal(t, expectedInitialQueued, initialQueued)
 	assert.Equal(t, expectedInitialQueuedWeight, initialQueuedWeight)
@@ -602,11 +602,10 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 	finalTotal, finalTotalWeight, err := staker.TotalStake()
 	assert.NoError(t, err)
 	expectedFinalTotal := new(big.Int).Mul(validatorStake, big.NewInt(3))
-	expectedFinalTotalWeight := new(big.Int).Mul(validatorStake, big.NewInt(6))
 	assert.Equal(t, expectedFinalTotal, finalTotal)
 	t.Log("✅ - Total stake is increased for the value of stake")
-	assert.Equal(t, expectedFinalTotalWeight, finalTotalWeight)
-	t.Log("✅ - Total weight is increased for the 2x value of staked amount")
+	assert.Equal(t, expectedFinalTotal, finalTotalWeight)
+	t.Log("✅ - Total weight is increased for the 1x value of staked amount")
 }
 
 func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
@@ -635,7 +634,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	initialQueued, initialQueuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	expectedInitialQueued := calculateValidatorStake()
-	expectedInitialQueuedWeight := new(big.Int).Mul(expectedInitialQueued, big.NewInt(2))
+	expectedInitialQueuedWeight := new(big.Int).Mul(expectedInitialQueued, big.NewInt(1))
 	assert.Equal(t, expectedInitialQueued, initialQueued)
 	assert.Equal(t, expectedInitialQueuedWeight, initialQueuedWeight)
 	t.Log("✅ - Initial queued stake and weight verified")
@@ -655,7 +654,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	assert.NoError(t, err)
 	expectedFinalQueued := new(big.Int).Add(expectedInitialQueued, delegatorStake)
 	// The multiplier formula divides by 100 so the weight is just the stake
-	expectedFinalQueuedWeight := new(big.Int).Add(initialQueuedWeight, delegatorStake)
+	expectedFinalQueuedWeight := new(big.Int).Add(big.NewInt(0).Mul(initialQueuedWeight, big.NewInt(2)), delegatorStake)
 	assert.Equal(t, expectedFinalQueued, finalQueued)
 	t.Log("✅ - Queued stake is increased for the staked amount")
 	assert.Equal(t, expectedFinalQueuedWeight, finalQueuedWeight)
@@ -852,7 +851,7 @@ func assertQueuedStakeAndWeight(t *testing.T, staker *builtin.Staker, expectedQu
 	queued, queuedWeight, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	expectedQueuedStake := new(big.Int).Mul(validatorStake, big.NewInt(int64(expectedQueuedCount)))
-	expectedQueuedWeight := new(big.Int).Mul(validatorStake, big.NewInt(int64(expectedQueuedCount*2)))
+	expectedQueuedWeight := new(big.Int).Mul(validatorStake, big.NewInt(int64(expectedQueuedCount)))
 	assert.Equal(t, expectedQueuedStake, queued)
 	assert.Equal(t, expectedQueuedWeight, queuedWeight)
 }
@@ -862,9 +861,8 @@ func assertTotalStakeAndWeight(t *testing.T, staker *builtin.Staker, expectedAct
 	total, totalWeight, err := staker.TotalStake()
 	assert.NoError(t, err)
 	expectedTotalStake := new(big.Int).Mul(validatorStake, big.NewInt(int64(expectedActiveCount)))
-	expectedTotalWeight := new(big.Int).Mul(validatorStake, big.NewInt(int64(expectedActiveCount*2)))
 	assert.Equal(t, expectedTotalStake, total)
-	assert.Equal(t, expectedTotalWeight, totalWeight)
+	assert.Equal(t, expectedTotalStake, totalWeight)
 }
 
 func waitForPoSAndAssertFirstActive(t *testing.T, staker *builtin.Staker, config *hayabusa.Config, expectedFirstActive thor.Address) uint32 {

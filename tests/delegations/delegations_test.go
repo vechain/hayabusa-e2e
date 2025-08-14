@@ -13,7 +13,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -29,7 +28,7 @@ func Test_StargateRewards(t *testing.T) {
 	multiplier := uint8(200)
 	delegators := int64(10)
 	dStake := stakes.NewWeightedStake(builtin.MinStake(), multiplier)
-	vStake := validation.WeightedStake(builtin.MinStake())
+	vStake := stakes.NewWeightedStake(builtin.MinStake(), multiplier)
 
 	for _, validationID := range validationIDs { // evenly distribute delegations among validators
 		senders := &utils.Senders{}
@@ -100,7 +99,7 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	assert.False(t, delegationPeriodDetails.Locked)
 	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
-	previousTotalStake, previousTotalWeight, err := staker.TotalStake()
+	previousTotalStake, _, err := staker.TotalStake()
 	require.NoError(t, err)
 
 	// wait for validators current period to activate delegator
@@ -125,10 +124,8 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	assert.Equal(t, expectedTotalStake, currentTotalStake,
 		"Wrong stake after exit")
 
-	expectedWeight := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(int64(multiplier)))
-	expectedWeight = expectedWeight.Quo(expectedWeight, big.NewInt(100))
-	expectedWeight = big.NewInt(0).Sub(previousTotalWeight, expectedWeight)
-	assert.Equal(t, expectedWeight, currentTotalWeight,
+	valNumber := len(validationIDs)
+	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(int64(valNumber))), currentTotalWeight,
 		"Wrong weight after exit")
 }
 
@@ -358,7 +355,9 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, big.NewInt(0).Add(secondStake.VET(), vStakes.Stake), totalsAfterWithdrawal.TotalLockedStake,
 			"Validator should have exactly the second delegation stake after withdrawal")
-		assert.Equal(t, big.NewInt(0).Add(firstStake.Weight(), vStakes.Weight), totalsAfterWithdrawal.TotalLockedWeight,
+
+		expectedWeight := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(5))
+		assert.Equal(t, expectedWeight, totalsAfterWithdrawal.TotalLockedWeight,
 			"Validator should have the correct total weight after withdrawal")
 	})
 }
