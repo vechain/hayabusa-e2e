@@ -101,7 +101,7 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	assert.False(t, delegationPeriodDetails.Locked)
 	require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
 
-	previousTotalStake, previousTotalWeight, err := staker.TotalStake()
+	previousTotalStake, _, err := staker.TotalStake()
 	require.NoError(t, err)
 
 	// wait for validators current period to activate delegator
@@ -126,10 +126,8 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	assert.Equal(t, expectedTotalStake, currentTotalStake,
 		"Wrong stake after exit")
 
-	expectedWeight := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(int64(multiplier)))
-	expectedWeight = expectedWeight.Quo(expectedWeight, big.NewInt(100))
-	expectedWeight = big.NewInt(0).Sub(previousTotalWeight, expectedWeight)
-	assert.Equal(t, expectedWeight, currentTotalWeight,
+	valNumber := len(validationIDs)
+	assert.Equal(t, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(int64(valNumber))), currentTotalWeight,
 		"Wrong weight after exit")
 }
 
@@ -359,7 +357,9 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, big.NewInt(0).Add(secondStake.VET(), vStakes.Stake), totalsAfterWithdrawal.TotalLockedStake,
 			"Validator should have exactly the second delegation stake after withdrawal")
-		assert.Equal(t, big.NewInt(0).Add(firstStake.Weight(), vStakes.Weight), totalsAfterWithdrawal.TotalLockedWeight,
+
+		expectedWeight := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(5))
+		assert.Equal(t, expectedWeight, totalsAfterWithdrawal.TotalLockedWeight,
 			"Validator should have the correct total weight after withdrawal")
 	})
 }
