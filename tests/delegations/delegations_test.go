@@ -13,7 +13,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
-	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -30,7 +29,7 @@ func Test_StargateRewards(t *testing.T) {
 	multiplier := uint8(200)
 	delegators := int64(10)
 	dStake := stakes.NewWeightedStake(builtin.MinStake(), multiplier)
-	vStake := validation.WeightedStake(builtin.MinStake())
+	vStake := stakes.NewWeightedStake(builtin.MinStake(), multiplier)
 
 	for _, validationID := range validationIDs { // evenly distribute delegations among validators
 		senders := &utils.Senders{}
