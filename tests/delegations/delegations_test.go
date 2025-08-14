@@ -13,7 +13,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/builtin/staker/stakes"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -214,7 +213,7 @@ func Test_Delegations(t *testing.T) {
 		validatorAccount := hayabusa.ValidatorAccounts[0]
 
 		for _, acc := range hayabusa.ValidatorAccounts {
-			if acc.Address().String() == validator.Address.String() {
+			if acc.Node.Address().String() == validator.Address.String() {
 				validatorAccount = acc
 				break
 			}
@@ -247,7 +246,7 @@ func Test_Delegations(t *testing.T) {
 
 		// wait for validators current period
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*1))
-		receipt = testutil.Send(t, validatorAccount, staker.SignalExit(validationIDs[3]))
+		receipt = testutil.Send(t, validatorAccount.Endorser, staker.SignalExit(validatorAccount.Node.Address()))
 
 		// wait for validators last period to end
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
@@ -395,11 +394,12 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidation(account.Address(), builtin.MinStake(), config.MinStakingPeriod).
+		sender := staker.AddValidation(account.Node.Address(), builtin.MinStake(), config.MinStakingPeriod).
 			Send().
-			WithSigner(account).
+			WithSigner(account.Endorser).
 			WithOptions(testutil.TxOptions())
 		senders.Add(sender)
+		validationIDs[i] = account.Node.Address()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -411,12 +411,6 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
 	}
-	events, err := staker.FilterValidatorQueued(nil, nil, logdb.ASC)
-	if err != nil {
-		t.Fatalf("failed to filter validator queued: %v", err)
-	}
-	for i, event := range events {
-		validationIDs[i] = event.Node
-	}
+
 	return staker, config, validationIDs
 }

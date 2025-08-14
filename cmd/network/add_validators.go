@@ -18,7 +18,10 @@ func addValidators(staker *builtin.Staker, config *hayabusa.Config) ([]builtin.V
 	for i := range int(config.MaxBlockProposers) {
 		acc := hayabusa.ValidatorAccounts[i]
 		// Add the validator
-		sender := staker.AddValidation(acc.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidation(acc.Node.Address(), builtin.MinStake(), config.MinStakingPeriod).
+			Send().
+			WithSigner(acc.Endorser).
+			WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 

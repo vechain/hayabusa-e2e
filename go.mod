@@ -15,7 +15,7 @@ require (
 	github.com/cqroot/prompt v0.9.4
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/stretchr/testify v1.10.0
-	github.com/vechain/thor/v2 v2.3.2-0.20250814124917-43e054ddb0f6
+	github.com/vechain/thor/v2 v2.3.2-0.20250814140735-b8585eb77b83
 )
 
 require (
