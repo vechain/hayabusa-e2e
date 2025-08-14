@@ -95,7 +95,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 
 	firstQueued, _, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, firstQueued.Endorsor, validator1.Node.Address())
+	assert.Equal(t, firstQueued.Address, validator1.Node.Address())
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
