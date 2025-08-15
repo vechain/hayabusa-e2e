@@ -58,6 +58,7 @@ type PropagatedDoubleSignedBlock struct {
 
 func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.Bytes32, *thorclient.Client, []node.Config, chan PropagatedDoubleSignedBlock) {
 	t.Helper()
+	blockInterval := uint64(5)
 	config := &hayabusa.Config{
 		Nodes:             2,
 		MaxBlockProposers: 6,
@@ -69,6 +70,7 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 		Name:              t.Name(),
+		BlockInterval:     &blockInterval,
 	}
 
 	network, err := hayabusa.NewNetwork(config, t.Context())
@@ -82,6 +84,20 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 			RepoUrl: "git@github.com:vechain/thor.git",
 		},
 	}
+	builder := thorbuilder.New(nodeConfig)
+	err = builder.Download()
+	if err != nil {
+		t.Fatalf("failed to download double signing node: %v", err)
+	}
+
+	filePath := builder.DownloadPath + "/thor/params.go"
+	if config.BlockInterval != nil {
+		blockInterval = *config.BlockInterval
+	}
+	if err := hayabusa.SetBlockInterval(filePath, blockInterval); err != nil {
+		t.Fatalf("failed to patch BlockInterval: %v", err)
+	}
+
 	if err := network.AttachNode(nodeConfig, nil); err != nil {
 		t.Fatalf("failed to attach double signing node: %v", err)
 	}

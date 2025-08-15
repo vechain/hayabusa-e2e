@@ -23,6 +23,7 @@ func TestEnergy(t *testing.T) {
 }
 
 func runEnergyTest(t *testing.T) error {
+	blockInterval := uint64(5)
 	config := &hayabusa.Config{
 		Nodes:             3,
 		MaxBlockProposers: 3,
@@ -34,6 +35,7 @@ func runEnergyTest(t *testing.T) error {
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 180,
 		Name:              t.Name(),
+		BlockInterval:     &blockInterval,
 	}
 	growthStopTimeKey := thor.Blake2b([]byte("growth-stop-time"))
 

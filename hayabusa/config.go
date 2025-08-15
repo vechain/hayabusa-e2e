@@ -30,6 +30,7 @@ type Config struct {
 	StakerVerbosity   int          // Staker verbosity level
 	Debug             bool         // Debug mode for the nodes
 	Name              string       // Name of the network
+	BlockInterval     *uint64      // block interval
 }
 
 // Apply the configuration to the genesis file.
