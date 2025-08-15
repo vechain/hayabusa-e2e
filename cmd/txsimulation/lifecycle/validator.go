@@ -22,7 +22,7 @@ type ValidatorLifecycle struct {
 	withdrawReceipt *api.Receipt // the receipt of the withdraw transaction
 	id              thor.Address
 
-	stakeIncreased  bool   // indicates if the stake was increased for this validator
+	stakeIncreased  bool   // indicates if the stake as previously increased or decreased
 	lastStakeUpdate uint32 // the last block at which the stake was updated
 
 	mu sync.Mutex
