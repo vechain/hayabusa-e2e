@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/network/node/genesis"
 	"github.com/vechain/networkhub/thorbuilder"
+	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 )
 
@@ -58,7 +60,22 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 				IsReusable: true,
 			},
 		}
+		builder := thorbuilder.New(thorBuilder)
+		err := builder.Download()
+		if err != nil {
+			return nil, fmt.Errorf("failed to download thor: %w", err)
+		}
+		workingDir = builder.DownloadPath
 	}
+	filePath := workingDir + "/thor/params.go"
+	blockInterval := thor.BlockInterval
+	if config.BlockInterval != nil {
+		blockInterval = *config.BlockInterval
+	}
+	if err := SetBlockInterval(filePath, blockInterval); err != nil {
+		return nil, fmt.Errorf("failed to patch BlockInterval: %w", err)
+	}
+
 	nodes := make([]node.Config, 0)
 	genesis := Genesis(config)
 	usedPorts := make([]int, 0, config.Nodes*2)
@@ -74,6 +91,8 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 		Nodes:       nodes,
 		ThorBuilder: thorBuilder,
 	}
+	builder := thorbuilder.New(netConfig.ThorBuilder)
+	builder.Download()
 	if _, err := network.LoadConfig(netConfig); err != nil {
 		return nil, fmt.Errorf("failed to load network config: %w", err)
 	}
@@ -210,4 +229,14 @@ func makeNode(config *Config, i int, signer *NodePair, customGenesis *genesis.Cu
 		APIAddr:        fmt.Sprintf("0.0.0.0:%d", apiPort),
 		P2PListenPort:  p2pPort,
 	}, apiPort, p2pPort
+}
+
+func SetBlockInterval(path string, v uint64) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	re := regexp.MustCompile(`(?m)(BlockInterval\s+uint64\s*=\s*)\d+`)
+	out := re.ReplaceAll(b, []byte(fmt.Sprintf("${1}%d", v)))
+	return os.WriteFile(path, out, 0o644)
 }

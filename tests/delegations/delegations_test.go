@@ -364,6 +364,7 @@ func Test_Delegations(t *testing.T) {
 
 func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]thor.Address) {
 	t.Helper()
+	blockInterval := uint64(5)
 	config := &hayabusa.Config{
 		Nodes:             6,
 		MaxBlockProposers: 6,
@@ -375,6 +376,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 		Name:              t.Name(),
+		BlockInterval:     &blockInterval,
 	}
 	network, err := hayabusa.NewNetwork(config, t.Context())
 	require.NoError(t, err)

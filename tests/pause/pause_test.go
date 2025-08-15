@@ -34,7 +34,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 	validator3 := hayabusa.ValidatorAccounts[2]
 	sequence := testutil.NewTxSequence(t)
 
-	staker := setupStakerAndWaitForFork(t, client, config)
+	staker := testutil.SetupStakerAndWaitForFork(t, client, config)
 	parames := setupParames(t, client)
 
 	// Add two validators to the staker
@@ -157,7 +157,7 @@ func TestPauseForDelegator(t *testing.T) {
 	validator3 := hayabusa.ValidatorAccounts[2]
 
 	sequence := testutil.NewTxSequence(t)
-	staker := setupStakerAndWaitForFork(t, client, config)
+	staker := testutil.SetupStakerAndWaitForFork(t, client, config)
 	parames := setupParames(t, client)
 
 	// Add validator to the staker
@@ -256,6 +256,7 @@ func TestPauseForDelegator(t *testing.T) {
 }
 
 func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config, *thorclient.Client) {
+	blockInterval := uint64(5)
 	config := &hayabusa.Config{
 		Nodes:             6,
 		MaxBlockProposers: maxBlockProposers,
@@ -267,6 +268,7 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 		Name:              t.Name(),
+		BlockInterval:     &blockInterval,
 	}
 
 	network, err := hayabusa.NewNetwork(config, t.Context())
@@ -274,13 +276,6 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 	t.Cleanup(network.Stop)
 	require.NoError(t, network.Start())
 	return config, network.ThorClient()
-}
-
-func setupStakerAndWaitForFork(t *testing.T, client *thorclient.Client, config *hayabusa.Config) *builtin.Staker {
-	staker, err := builtin.NewStaker(client)
-	require.NoError(t, err)
-	require.NoError(t, utils.WaitForFork(staker, config.ForkBlock))
-	return staker
 }
 
 func setupParames(t *testing.T, client *thorclient.Client) *builtin.Params {

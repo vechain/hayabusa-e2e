@@ -45,6 +45,7 @@ jobs:
           - tests/energy
           - tests/stargate
           - tests/pause
+          - tests/eviction
       fail-fast: false
 
     steps:
