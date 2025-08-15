@@ -70,8 +70,7 @@ func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
 	}
 
 	validator := hayabusa.MustCreateNodePair(hayabusa.AdditionalAccounts[10])
-	id3 := addValidator(sequence, staker, validator, config.MinStakingPeriod)
-	id3 := testutil.AddValidator(sequence, staker, validator2NonPoA, config.MinStakingPeriod)
+	id3 := testutil.AddValidator(sequence, staker, validator, config.MinStakingPeriod)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusQueued, block)
 	t.Log("✅ - Not a PoA candidate joined")
 
@@ -767,7 +766,7 @@ func addValidatorWithStake(seq *testutil.TxSequence, staker *builtin.Staker, nod
 }
 
 func addValidator(seq *testutil.TxSequence, staker *builtin.Staker, nodePair *hayabusa.NodePair, period uint32) thor.Address {
-	return addValidatorWithStake(seq, staker, nodePair, calculateValidatorStake(), period)
+	return addValidatorWithStake(seq, staker, nodePair, testutil.CalculateValidatorStake(), period)
 }
 
 func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer, validatorID thor.Address) {

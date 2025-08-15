@@ -6,7 +6,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
-	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 	"log/slog"
 	"math/big"
@@ -42,17 +41,16 @@ func SetupStakerAndWaitForFork(t *testing.T, client *thorclient.Client, config *
 	return staker
 }
 
-func AddValidatorWithStake(seq *TxSequence, staker *builtin.Staker, signer bind.Signer, stake *big.Int, period uint32) thor.Address {
-	receipt := seq.Send(signer, staker.AddValidation(signer.Address(), stake, period))
-	id := receipt.Outputs[0].Events[0].Topics[1]
+func AddValidatorWithStake(seq *TxSequence, staker *builtin.Staker, nodePair *hayabusa.NodePair, stake *big.Int, period uint32) thor.Address {
+	seq.Send(nodePair.Endorser, staker.AddValidation(nodePair.Node.Address(), stake, period))
 	amount := big.NewInt(0).Quo(stake, big.NewInt(1e18))
-	slog.Info("✅ - added validator", "validator", signer.Address().String(), "period", period, "stake", amount, "id", id.String())
+	slog.Info("✅ - added validator", "validator", nodePair.Node.Address().String(), "period", period, "stake", amount, "id", nodePair.Node.Address().String())
 
-	return thor.BytesToAddress(id.Bytes())
+	return nodePair.Node.Address()
 }
 
-func AddValidator(seq *TxSequence, staker *builtin.Staker, signer bind.Signer, period uint32) thor.Address {
-	return AddValidatorWithStake(seq, staker, signer, CalculateValidatorStake(), period)
+func AddValidator(seq *TxSequence, staker *builtin.Staker, nodePair *hayabusa.NodePair, period uint32) thor.Address {
+	return AddValidatorWithStake(seq, staker, nodePair, CalculateValidatorStake(), period)
 }
 
 func CalculateValidatorStake() *big.Int {
