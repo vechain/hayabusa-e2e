@@ -21,7 +21,7 @@ type Stack struct {
 	ctx           context.Context
 	staker        *builtin.Staker
 	config        *hayabusa.Config
-	validatorAccs map[thor.Address]bind.Signer
+	validatorAccs map[thor.Address]*hayabusa.NodePair
 	stargateAcc   bind.Signer
 	mu            sync.Mutex // protects the stack from concurrent access
 }
@@ -30,7 +30,7 @@ func NewStack(
 	ctx context.Context,
 	staker *builtin.Staker,
 	config *hayabusa.Config,
-	validatorAccs map[thor.Address]bind.Signer,
+	validatorAccs map[thor.Address]*hayabusa.NodePair,
 	stargateAcc bind.Signer,
 ) *Stack {
 	s := &Stack{
@@ -63,7 +63,7 @@ func (s *Stack) Stargate() bind.Signer {
 	return s.stargateAcc
 }
 
-func (s *Stack) NextValidator() (bind.Signer, error) {
+func (s *Stack) NextValidator() (*hayabusa.NodePair, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

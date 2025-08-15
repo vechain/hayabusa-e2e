@@ -68,12 +68,12 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 
 	initialValidators := hayabusa.ValidatorAccounts[0:90]
-	extraValidators := make(map[thor.Address]bind.Signer)
+	extraValidators := make(map[thor.Address]*hayabusa.NodePair)
 	for _, acc := range hayabusa.ValidatorAccounts[90:100] {
-		extraValidators[acc.Address()] = acc
+		extraValidators[acc.Node.Address()] = acc
 	}
 	for _, acc := range hayabusa.AdditionalAccounts {
-		extraValidators[acc.Address()] = acc
+		extraValidators[acc.Address()] = hayabusa.MustCreateNodePair(acc)
 	}
 
 	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
@@ -143,35 +143,40 @@ type networkHubGenerator struct {
 	config *hayabusa.Config
 }
 
-func (n *networkHubGenerator) CreateValidator(acc bind.Signer, startBlock uint32) lifecycle.Config {
-	return lifecycle.Config{
-		QueueDelay: lifecycle.Delay{
-			Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
-			Epochs: uint32(utils2.RandomBetween(0, 3)),
+func (n *networkHubGenerator) CreateValidator(node *hayabusa.NodePair, startBlock uint32) lifecycle.ValidatorConfig {
+	return lifecycle.ValidatorConfig{
+		Config: lifecycle.Config{
+			QueueDelay: lifecycle.Delay{
+				Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
+				Epochs: uint32(utils2.RandomBetween(0, 3)),
+			},
+
+			StakingPeriods: uint32(utils2.RandomBetween(5, 100)),
+			WithdrawDelay: lifecycle.Delay{
+				Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
+				Epochs: uint32(utils2.RandomBetween(1, 3)),
+			},
+			StartBlock: startBlock,
 		},
-		Account:        acc,
-		StakingPeriods: uint32(utils2.RandomBetween(5, 100)),
-		WithdrawDelay: lifecycle.Delay{
-			Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
-			Epochs: uint32(utils2.RandomBetween(1, 3)),
-		},
-		StartBlock: startBlock,
+		Account: node,
 	}
 }
 
-func (n *networkHubGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) lifecycle.Config {
-	return lifecycle.Config{
-		QueueDelay: lifecycle.Delay{
-			Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
-			Epochs: uint32(utils2.RandomBetween(0, 3)),
+func (n *networkHubGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) lifecycle.DelegatorConfig {
+	return lifecycle.DelegatorConfig{
+		Config: lifecycle.Config{
+			QueueDelay: lifecycle.Delay{
+				Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
+				Epochs: uint32(utils2.RandomBetween(0, 3)),
+			},
+			StakingPeriods: uint32(utils2.RandomBetween(3, 120)),
+			WithdrawDelay: lifecycle.Delay{
+				Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
+				Epochs: uint32(utils2.RandomBetween(1, 3)),
+			},
+			StartBlock: startBlock,
 		},
-		StakingPeriods: uint32(utils2.RandomBetween(3, 120)),
-		WithdrawDelay: lifecycle.Delay{
-			Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
-			Epochs: uint32(utils2.RandomBetween(1, 3)),
-		},
-		StartBlock: startBlock,
-		Account:    acc,
+		Account: acc,
 	}
 }
 
@@ -179,7 +184,7 @@ func addManyKeyNode(network *hayabusa.Network) error {
 	args := make(map[string]string)
 	keys := ""
 	for i := 2; i < 101; i++ {
-		hex := hexutil.Encode(hayabusa.ValidatorAccounts[i].D.Bytes())
+		hex := hexutil.Encode(hayabusa.ValidatorAccounts[i].Node.D.Bytes())
 		hex = strings.TrimPrefix(hex, "0x")
 		keys += hex + ","
 	}

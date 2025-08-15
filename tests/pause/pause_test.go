@@ -54,15 +54,15 @@ func TestStakerPauseForValidation(t *testing.T) {
 	t.Run("Add validation", func(t *testing.T) {
 		// Set Staker pause active, the validator3 could not be added
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
-		_, err = sendNoRequire(t, validator3, staker.AddValidation(validator3.Address(), calculateValidatorStake(), config.MinStakingPeriod))
+		_, err = sendNoRequire(t, validator3.Endorser, staker.AddValidation(validator3.Node.Address(), calculateValidatorStake(), config.MinStakingPeriod))
 		require.ErrorContains(t, err, "revert: staker is paused")
 
 		// Set Staker pause inactive, the validator3 could be add
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
-		receipt, err := sendNoRequire(t, validator3, staker.AddValidation(validator3.Address(), calculateValidatorStake(), config.MinStakingPeriod))
+		receipt, err := sendNoRequire(t, validator3.Endorser, staker.AddValidation(validator3.Node.Address(), calculateValidatorStake(), config.MinStakingPeriod))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
-		id3 := thor.BytesToAddress(receipt.Outputs[0].Events[0].Topics[2].Bytes())
+		id3 := validator3.Node.Address()
 
 		block = (receipt.Meta.BlockNumber + config.MinStakingPeriod)
 
@@ -76,12 +76,12 @@ func TestStakerPauseForValidation(t *testing.T) {
 		increase = big.NewInt(0).Mul(increase, big.NewInt(1e6))
 		increase = big.NewInt(0).Mul(increase, big.NewInt(5))
 
-		_, err = sendNoRequire(t, validator1, staker.IncreaseStake(id1, increase))
+		_, err = sendNoRequire(t, validator1.Endorser, staker.IncreaseStake(id1, increase))
 		require.ErrorContains(t, err, "revert: staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be increases
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
-		receipt, err := sendNoRequire(t, validator1, staker.IncreaseStake(id1, increase))
+		receipt, err := sendNoRequire(t, validator1.Endorser, staker.IncreaseStake(id1, increase))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
 		require.False(t, receipt.Reverted)
@@ -98,12 +98,12 @@ func TestStakerPauseForValidation(t *testing.T) {
 		decrease = big.NewInt(0).Mul(decrease, big.NewInt(1e6))
 		decrease = big.NewInt(0).Mul(decrease, big.NewInt(3))
 
-		_, err = sendNoRequire(t, validator1, staker.DecreaseStake(id1, decrease))
+		_, err = sendNoRequire(t, validator1.Endorser, staker.DecreaseStake(id1, decrease))
 		require.ErrorContains(t, err, "revert: staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be decrease
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
-		receipt, err := sendNoRequire(t, validator1, staker.DecreaseStake(id1, decrease))
+		receipt, err := sendNoRequire(t, validator1.Endorser, staker.DecreaseStake(id1, decrease))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
 		require.False(t, receipt.Reverted)
@@ -116,12 +116,12 @@ func TestStakerPauseForValidation(t *testing.T) {
 	t.Run("Validator exit", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
-		_, err = sendNoRequire(t, validator1, staker.SignalExit(id1))
+		_, err = sendNoRequire(t, validator1.Endorser, staker.SignalExit(id1))
 		require.ErrorContains(t, err, "revert: staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
-		receipt, err := sendNoRequire(t, validator1, staker.SignalExit(id1))
+		receipt, err := sendNoRequire(t, validator1.Endorser, staker.SignalExit(id1))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
 		require.False(t, receipt.Reverted)
@@ -134,12 +134,12 @@ func TestStakerPauseForValidation(t *testing.T) {
 	t.Run("Validator withdraw", func(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to withdraw
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
-		_, err = sendNoRequire(t, validator1, staker.WithdrawStake(id1))
+		_, err = sendNoRequire(t, validator1.Endorser, staker.WithdrawStake(id1))
 		require.ErrorContains(t, err, "revert: staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
-		receipt, err := sendNoRequire(t, validator1, staker.WithdrawStake(id1))
+		receipt, err := sendNoRequire(t, validator1.Endorser, staker.WithdrawStake(id1))
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
 		require.False(t, receipt.Reverted)
@@ -284,17 +284,16 @@ func setupParames(t *testing.T, client *thorclient.Client) *builtin.Params {
 	return params
 }
 
-func addValidator(seq *testutil.TxSequence, staker *builtin.Staker, signer bind.Signer, period uint32) thor.Address {
+func addValidator(seq *testutil.TxSequence, staker *builtin.Staker, signer *hayabusa.NodePair, period uint32) thor.Address {
 	return addValidatorWithStake(seq, staker, signer, calculateValidatorStake(), period)
 }
 
-func addValidatorWithStake(seq *testutil.TxSequence, staker *builtin.Staker, signer bind.Signer, stake *big.Int, period uint32) thor.Address {
-	receipt := seq.Send(signer, staker.AddValidation(signer.Address(), stake, period))
-	id := receipt.Outputs[0].Events[0].Topics[2]
+func addValidatorWithStake(seq *testutil.TxSequence, staker *builtin.Staker, signer *hayabusa.NodePair, stake *big.Int, period uint32) thor.Address {
+	seq.Send(signer.Endorser, staker.AddValidation(signer.Node.Address(), stake, period))
 	amount := big.NewInt(0).Quo(stake, big.NewInt(1e18))
-	slog.Info("✅ - added validator", "validator", signer.Address().String(), "period", period, "stake", amount, "id", id.String())
+	slog.Info("✅ - added validator", "validator", signer.Node.Address().String(), "period", period, "stake", amount, "id", signer.Node.Address())
 
-	return thor.BytesToAddress(id.Bytes())
+	return signer.Node.Address()
 }
 
 func calculateValidatorStake() *big.Int {

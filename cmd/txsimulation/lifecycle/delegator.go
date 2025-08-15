@@ -15,7 +15,7 @@ import (
 )
 
 type DelegatorLifecycle struct {
-	config Config
+	config DelegatorConfig
 
 	status          Status
 	queuedReceipt   *api.Receipt // the receipt of the queued transaction
@@ -28,7 +28,7 @@ type DelegatorLifecycle struct {
 	mu sync.Mutex
 }
 
-func NewDelegatorLifecycle(base Config) *DelegatorLifecycle {
+func NewDelegatorLifecycle(base DelegatorConfig) *DelegatorLifecycle {
 	return &DelegatorLifecycle{
 		config: base,
 	}

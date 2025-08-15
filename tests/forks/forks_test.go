@@ -155,9 +155,9 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 	for i := range validationIDs {
 		senders := &utils.Senders{}
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidation(account.Address(), builtin.MinStake(), config.MinStakingPeriod).
+		sender := staker.AddValidation(account.Node.Address(), builtin.MinStake(), config.MinStakingPeriod).
 			Send().
-			WithSigner(account).
+			WithSigner(account.Endorser).
 			WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 		ctx := context.WithoutCancel(context.Background())

@@ -57,7 +57,7 @@ func runEnergyTest(t *testing.T) error {
 	stake := builtin.MinStake()
 	for i := range validators {
 		acc := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidation(acc.Address(), stake, config.MinStakingPeriod).Send().WithSigner(acc).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidation(acc.Node.Address(), stake, config.MinStakingPeriod).Send().WithSigner(acc.Endorser).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
 	}
 	receipts, _, err := senders.Send(testutil.TxContext(t))
@@ -67,14 +67,14 @@ func runEnergyTest(t *testing.T) error {
 	}
 	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10))
 	err = utils.WaitForCondition(staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod, func() (bool, error) {
-		valStake, err := staker.GetValidatorStake(hayabusa.ValidatorAccounts[0].Address())
+		valStake, err := staker.GetValidatorStake(hayabusa.ValidatorAccounts[0].Node.Address())
 		if err != nil {
 			return false, err
 		}
 		return !valStake.Address.IsZero(), nil
 	})
 	assert.NoError(t, err)
-	testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(hayabusa.ValidatorAccounts[0].Address(), delegationStake, 200))
+	testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(hayabusa.ValidatorAccounts[0].Node.Address(), delegationStake, 200))
 
 	genesisVET := big.NewInt(0)
 	genesisVTHO := big.NewInt(0)
@@ -152,13 +152,13 @@ func runEnergyTest(t *testing.T) error {
 		assertSupply(i, expectedSupply)
 		best, err := client.Block(strconv.FormatUint(uint64(i), 10))
 		require.NoError(t, err)
-		if best.Signer == hayabusa.ValidatorAccounts[0].Address() {
+		if best.Signer == hayabusa.ValidatorAccounts[0].Node.Address() {
 			acc1Blocks++
 		}
 	}
 	t.Logf("✅ - PoS growth is as expected")
 
-	rewards, err := staker.GetDelegatorsRewards(hayabusa.ValidatorAccounts[0].Address(), 1)
+	rewards, err := staker.GetDelegatorsRewards(hayabusa.ValidatorAccounts[0].Node.Address(), 1)
 	require.NoError(t, err)
 	proposerRewardsPerBlock := big.NewInt(0).Mul(hayabusaGrowth, big.NewInt(3))
 	proposerRewardsPerBlock = proposerRewardsPerBlock.Div(proposerRewardsPerBlock, big.NewInt(10))
