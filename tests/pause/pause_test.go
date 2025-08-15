@@ -55,7 +55,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 		// Set Staker pause active, the validator3 could not be added
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
 		_, err = sendNoRequire(t, validator3.Endorser, staker.AddValidation(validator3.Node.Address(), calculateValidatorStake(), config.MinStakingPeriod))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator3 could be add
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
@@ -77,7 +77,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 		increase = big.NewInt(0).Mul(increase, big.NewInt(5))
 
 		_, err = sendNoRequire(t, validator1.Endorser, staker.IncreaseStake(id1, increase))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be increases
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
@@ -99,7 +99,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 		decrease = big.NewInt(0).Mul(decrease, big.NewInt(3))
 
 		_, err = sendNoRequire(t, validator1.Endorser, staker.DecreaseStake(id1, decrease))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be decrease
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
@@ -117,7 +117,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
 		_, err = sendNoRequire(t, validator1.Endorser, staker.SignalExit(id1))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
@@ -135,7 +135,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 		// Set Staker pause active, the validator1 could not to withdraw
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
 		_, err = sendNoRequire(t, validator1.Endorser, staker.WithdrawStake(id1))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set Staker pause inactive, the validator1 could be exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
@@ -179,17 +179,17 @@ func TestPauseForDelegator(t *testing.T) {
 		// Set Stargate pause active, the delegator could not be added
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(1))
 		_, err := sendNoRequire(t, hayabusa.Stargate, staker.AddDelegation(id1, delegatorStake, 100))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "stargate is paused")
 
 		// Set staker pause active, the delegator could not be added
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.AddDelegation(id1, delegatorStake, 100))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set staker and stargate pause both active, the delegator could not be added
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(3))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.AddDelegation(id1, delegatorStake, 100))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "stargate is paused")
 
 		// Set staker and stargate pause both inactive, the delegator could be added
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
@@ -207,17 +207,17 @@ func TestPauseForDelegator(t *testing.T) {
 		// Set Stargate pause active, the delegator could not be exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(1))
 		_, err := sendNoRequire(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "stargate is paused")
 
 		// Set staker pause active, the delegator could not be exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set staker and stargate pause both active, the delegator could not be exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(3))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "stargate is paused")
 
 		// Set staker and stargate pause both inactive, the delegator could be exit
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
@@ -234,17 +234,17 @@ func TestPauseForDelegator(t *testing.T) {
 		// Set Stargate pause active, the delegator could not be withdrawn
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(1))
 		_, err := sendNoRequire(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "stargate is paused")
 
 		// Set staker pause active, the delegator could not be withdrawn
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(2))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
-		require.ErrorContains(t, err, "revert: staker is paused")
+		require.ErrorContains(t, err, "staker is paused")
 
 		// Set staker and stargate pause both active, the delegator could not be withdrawn
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(3))
 		_, err = sendNoRequire(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
-		require.ErrorContains(t, err, "revert: stargate is paused")
+		require.ErrorContains(t, err, "stargate is paused")
 
 		// Set staker and stargate pause both inactive, the delegator could be added
 		setParame(t, sequence, parames, KeyStargateSwitches, big.NewInt(0))
