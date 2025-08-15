@@ -62,13 +62,16 @@ func main() {
 	fmt.Println(" ✅ - Network started successfully")
 	for i := range config.MaxBlockProposers {
 		acc := hayabusa.ValidatorAccounts[i]
-		fmt.Printf("\n  - Validator (%d):", i)
-		fmt.Printf("    🏰 %s", acc.Address())
-		fmt.Printf("    🔑 %s", hexutil.Encode(acc.D.Bytes()))
+		fmt.Printf("\n  - Validator Node (%d):", i)
+		fmt.Printf("    🏰 %s", acc.Node.Address())
+		fmt.Printf("    🔑 %s", hexutil.Encode(acc.Node.D.Bytes()))
+		fmt.Printf("\n  - Validator Endorsor (%d):", i)
+		fmt.Printf("    🏰 %s", acc.Endorser.Address())
+		fmt.Printf("    🔑 %s", hexutil.Encode(acc.Endorser.D.Bytes()))
 
 		var event *builtin.ValidationQueuedEvent
 		for _, e := range queuedEvents {
-			if e.Node == acc.Address() {
+			if e.Node == acc.Node.Address() {
 				event = &e
 				break
 			}

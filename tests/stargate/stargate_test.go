@@ -467,6 +467,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 
 func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Address, thorclient.Client) {
 	t.Helper()
+	blockInterval := uint64(5)
 	config := &hayabusa.Config{
 		Nodes:             3,
 		MaxBlockProposers: 3,
@@ -478,6 +479,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 24,
 		Name:              t.Name(),
+		BlockInterval:     &blockInterval,
 	}
 	network, err := hayabusa.NewNetwork(config, t.Context())
 	require.NoError(t, err)
@@ -506,16 +508,13 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 
 	for i := range validationIDs {
 		account := hayabusa.ValidatorAccounts[i]
-		sender := staker.AddValidation(account.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(account).WithOptions(testutil.TxOptions())
+		sender := staker.AddValidation(account.Node.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(account.Endorser).WithOptions(testutil.TxOptions())
 		senders.Add(sender)
+		validationIDs[i] = account.Node.Address()
 	}
 
-	if receipts, _, err := senders.Send(testutil.TxContext(t)); err != nil {
+	if _, _, err := senders.Send(testutil.TxContext(t)); err != nil {
 		t.Fatal(err)
-	} else {
-		for i := range config.MaxBlockProposers {
-			validationIDs[i] = receiptToID(receipts[i])
-		}
 	}
 
 	posBlock := config.ForkBlock + config.TransitionPeriod
