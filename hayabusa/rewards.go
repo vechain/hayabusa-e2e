@@ -1,10 +1,8 @@
 package hayabusa
 
 import (
-	"math/big"
-	"time"
-
 	"github.com/vechain/thor/v2/thor"
+	"math/big"
 )
 
 func GetExpectedReward(totalStaked *big.Int) *big.Int {
@@ -13,12 +11,7 @@ func GetExpectedReward(totalStaked *big.Int) *big.Int {
 	sqrtStake := new(big.Int).Sqrt(new(big.Int).Div(totalStaked, bigE18))
 	sqrtStake.Mul(sqrtStake, bigE18)
 
-	blockTime := time.Now()
-	isLeap := isLeapYear(blockTime.Year())
 	blocksPerYear := thor.NumberOfBlocksPerYear
-	if isLeap {
-		blocksPerYear = new(big.Int).Add(thor.NumberOfBlocksPerYear, big.NewInt(thor.SeederInterval))
-	}
 
 	curveFactor := thor.InitialCurveFactor
 
@@ -28,14 +21,4 @@ func GetExpectedReward(totalStaked *big.Int) *big.Int {
 	reward.Mul(reward, sqrtStake)
 	reward.Div(reward, blocksPerYear)
 	return reward
-}
-
-func isLeapYear(year int) bool {
-	if year%4 == 0 {
-		if year%100 == 0 {
-			return year%400 == 0
-		}
-		return true
-	}
-	return false
 }
