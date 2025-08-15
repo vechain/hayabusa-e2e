@@ -44,10 +44,10 @@ func TestHayabusaEviction(t *testing.T) {
 	id3 := testutil.AddValidator(sequence, staker, validator3, config.MinStakingPeriod)
 	id4 := testutil.AddValidator(sequence, staker, validator4, config.MinStakingPeriod)
 
-	assert.Equal(t, validator1.Address(), id1)
-	assert.Equal(t, validator2.Address(), id2)
-	assert.Equal(t, validator3.Address(), id3)
-	assert.Equal(t, validator4.Address(), id4)
+	assert.Equal(t, validator1.Node.Address(), id1)
+	assert.Equal(t, validator2.Node.Address(), id2)
+	assert.Equal(t, validator3.Node.Address(), id3)
+	assert.Equal(t, validator4.Node.Address(), id4)
 
 	active, queued, err = staker.GetValidatorsNum()
 	assert.NoError(t, err)
