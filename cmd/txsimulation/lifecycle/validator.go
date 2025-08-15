@@ -5,8 +5,10 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
@@ -19,6 +21,9 @@ type ValidatorLifecycle struct {
 	exitReceipt     *api.Receipt // the receipt of the exit transaction
 	withdrawReceipt *api.Receipt // the receipt of the withdraw transaction
 	id              thor.Address
+
+	stakeIncreased  bool   // indicates if the stake was increased for this validator
+	lastStakeUpdate uint32 // the last block at which the stake was updated
 
 	mu sync.Mutex
 }
@@ -146,7 +151,7 @@ func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 		return nil
 	}
 	if block < v.Config.MinExitBlock(v.activatedBlock, engine.stack.Config()) {
-		return nil
+		return v.stakeChange(engine, block)
 	}
 	receipt, err := engine.validators.DisableAutoRenew(v.Account)
 	if receipt != nil {
@@ -160,6 +165,23 @@ func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 	v.status = StatusExitSignalled
 	slog.Debug("validator exit signalled", "id", v.id, "account", v.Account.Endorser.Address())
 	return nil
+}
+
+func (v *ValidatorLifecycle) stakeChange(engine *Engine, block uint32) error {
+	interval := v.StakeChangeInterval * engine.stack.Config().MinStakingPeriod
+	if v.lastStakeUpdate+interval < block {
+		return nil
+	}
+	var sender *bind.MethodBuilder
+	if v.stakeIncreased {
+		sender = engine.stack.Staker().DecreaseStake(v.Account.Node.Address(), validations.RandomStakeBetween(3, 5))
+	} else {
+		sender = engine.stack.Staker().IncreaseStake(v.Account.Node.Address(), validations.RandomStakeBetween(3, 5))
+	}
+	v.lastStakeUpdate = block
+	v.stakeIncreased = !v.stakeIncreased
+	_, err := engine.stack.SendTransaction(sender, v.Account.Endorser)
+	return err
 }
 
 func (v *ValidatorLifecycle) ProcessExited(engine *Engine, block uint32) error {

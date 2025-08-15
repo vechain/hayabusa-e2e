@@ -88,7 +88,8 @@ type Config struct {
 
 type ValidatorConfig struct {
 	Config
-	Account *hayabusa.NodePair
+	Account             *hayabusa.NodePair
+	StakeChangeInterval uint32 // interval in staking periods to change stake
 }
 
 type DelegatorConfig struct {
