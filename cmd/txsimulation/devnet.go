@@ -29,43 +29,6 @@ const (
 	paramsAddress = "0x0000000000000000000000000000506172616d73"
 )
 
-func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (*lifecycle.Engine, func()) {
-	client := thorclient.New(devnet)
-
-	staker, err := builtin.NewStaker(client)
-	if err != nil {
-		slog.Error("failed to create staker client", "error", err)
-		os.Exit(1)
-	}
-
-	genesis, config, err := loadHayabusaGenesis(genesisURL)
-	if err != nil {
-		slog.Error("failed to load Hayabusa genesis config", "error", err)
-		os.Exit(1)
-	}
-
-	validators, err := loadHayabusaValidators(genesis)
-	if err != nil {
-		slog.Error("failed to load Hayabusa validators", "error", err)
-		os.Exit(1)
-	}
-
-	stack := stack.NewStack(ctx, staker, config, validators, hayabusa.Stargate)
-	validationsState := validations.NewState(stack)
-	generator := &devnetGenerator{
-		config: config,
-		stack:  stack,
-	}
-	engine := lifecycle.NewEngine(stack, validationsState, generator)
-	initializeSyntheticActivity(engine, generator, genesis)
-
-	stop := func() {
-		slog.Info("stopping Hayabusa devnet simulation")
-	}
-
-	return engine, stop
-}
-
 // HayabusaGenesis represents the structure of the Hayabusa genesis.json
 type HayabusaGenesis struct {
 	GasLimit   string `json:"gasLimit"`
@@ -109,6 +72,66 @@ type GenesisAccount struct {
 	Energy  string            `json:"energy"`
 	Code    string            `json:"code,omitempty"`
 	Storage map[string]string `json:"storage,omitempty"`
+}
+type AddressKey struct {
+	Address string `json:"address"`
+	Key     string `json:"key"`
+}
+
+func parseAddressKeysFromEnv(envVar string) (map[string]string, error) {
+	keysStr := os.Getenv(envVar)
+	if keysStr == "" {
+		return nil, fmt.Errorf("%s environment variable is required", envVar)
+	}
+
+	var keys []AddressKey
+	if err := json.Unmarshal([]byte(keysStr), &keys); err != nil {
+		return nil, fmt.Errorf("failed to parse %s JSON: %w", envVar, err)
+	}
+
+	addressKeyMap := make(map[string]string)
+	for _, key := range keys {
+		addressKeyMap[key.Address] = key.Key
+	}
+
+	return addressKeyMap, nil
+}
+
+func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (*lifecycle.Engine, func()) {
+	client := thorclient.New(devnet)
+
+	staker, err := builtin.NewStaker(client)
+	if err != nil {
+		slog.Error("failed to create staker client", "error", err)
+		os.Exit(1)
+	}
+
+	genesis, config, err := loadHayabusaGenesis(genesisURL)
+	if err != nil {
+		slog.Error("failed to load Hayabusa genesis config", "error", err)
+		os.Exit(1)
+	}
+
+	validators, err := loadHayabusaValidators(genesis)
+	if err != nil {
+		slog.Error("failed to load Hayabusa validators", "error", err)
+		os.Exit(1)
+	}
+
+	stack := stack.NewStack(ctx, staker, config, validators, hayabusa.Stargate)
+	validationsState := validations.NewState(stack)
+	generator := &devnetGenerator{
+		config: config,
+		stack:  stack,
+	}
+	engine := lifecycle.NewEngine(stack, validationsState, generator)
+	initializeSyntheticActivity(engine, generator, genesis)
+
+	stop := func() {
+		slog.Info("stopping Hayabusa devnet simulation")
+	}
+
+	return engine, stop
 }
 
 // loadHayabusaGenesis loads Hayabusa genesis configuration
@@ -227,35 +250,33 @@ func parseStorageValue(storageValue string) (uint32, error) {
 
 // Load validators from Hayabusa genesis.json
 func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabusa.NodePair, error) {
-	// Create validators from authority section
 	validators := make(map[thor.Address]*hayabusa.NodePair)
 
-	validatorPrivateKeysStr := os.Getenv("VALIDATOR_PRIVATE_KEYS")
-	if validatorPrivateKeysStr == "" {
-		return nil, fmt.Errorf("VALIDATOR_PRIVATE_KEYS environment variable is required")
+	endorsorKeys, err := parseAddressKeysFromEnv("ENDORSOR_KEYS")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ENDORSOR_KEYS: %w", err)
 	}
-	validatorPrivateKeys := strings.Split(validatorPrivateKeysStr, ",")
 
-	for i, authority := range genesis.Authority {
-		masterAddr := thor.MustParseAddress(authority.MasterAddress)
+	authorityKeys, err := parseAddressKeysFromEnv("AUTHORITY_KEYS")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse AUTHORITY_KEYS: %w", err)
+	}
 
-		// Create endorser signer from the endorsor address
-		endorserKey, err := crypto.HexToECDSA(validatorPrivateKeys[i])
+	for _, authority := range genesis.Authority {
+		endorserKey, err := crypto.HexToECDSA(endorsorKeys[authority.EndorsorAddress])
 		if err != nil {
-			slog.Warn("failed to parse endorser identity", "address", authority.MasterAddress, "error", err)
-			continue
+			return nil, fmt.Errorf("failed to parse endorser key for %s: %w", authority.MasterAddress, err)
 		}
-
 		endorserSigner := bind.NewSigner(endorserKey)
-		endorserAddr := endorserSigner.Address().String()
-		if endorserAddr != authority.EndorsorAddress {
-			slog.Error("endorser address does not match genesis address", "endorser", endorserAddr, "endorser-genesis", authority.EndorsorAddress)
-			return nil, fmt.Errorf("endorser address does not match genesis address %s vs %s", endorserAddr, authority.EndorsorAddress)
-		}
 
-		//TODO: These 2 lines are wrong, the first one creates a new key when it should not
-		nodePair := hayabusa.MustCreateNodePair(endorserSigner)
-		validators[masterAddr] = nodePair
+		nodeKey, err := crypto.HexToECDSA(authorityKeys[authority.MasterAddress])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse master key for %s: %w", authority.MasterAddress, err)
+		}
+		nodeSigner := bind.NewSigner(nodeKey)
+
+		nodePair := hayabusa.NewNodePairWithNode(endorserSigner, nodeSigner)
+		validators[nodeSigner.Address()] = nodePair
 	}
 
 	slog.Info("loaded Hayabusa validators from genesis", "validatorCount", len(validators))
@@ -360,7 +381,7 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 		validatorCount++
 	}
 
-	// Create initial delegators using additional accounts
+	// TODO: this is not correct, we should use the additional accounts from the genesis.json
 	initialDelegators := hayabusa.AdditionalAccounts[0:15] // Use first 15 delegators
 	for i, acc := range initialDelegators {
 		config := generator.CreateDelegator(acc, 0)
