@@ -26,6 +26,7 @@ import (
 
 const (
 	stakerAddress = "0x00000000000000000000000000005374616b6572"
+	paramsAddress = "0x0000000000000000000000000000506172616d73"
 )
 
 func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (*lifecycle.Engine, func()) {
@@ -131,9 +132,11 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 		highStakingPeriod   uint32
 		cooldownPeriod      uint32
 		epochLength         uint32
+		maxBlockProposers   uint32
 	)
 	for _, account := range genesis.Accounts {
-		if account.Address == stakerAddress {
+		switch account.Address {
+		case stakerAddress:
 			for storageKey, storageValue0x := range account.Storage {
 				storageKeyBytes, err := hex.DecodeString(storageKey)
 				if err != nil {
@@ -142,7 +145,7 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 				storageValueStr := strings.TrimPrefix(storageValue0x, "0x")
 				storageValueUint64, err := strconv.ParseUint(storageValueStr, 16, 32)
 				if err != nil {
-					slog.Error("failed to parse energy", "error", err)
+					slog.Error("failed to parse the storage value to uint32", "error", err)
 					return nil, nil, fmt.Errorf("failed to decode storage value: %w", err)
 				}
 				storageValue := uint32(storageValueUint64)
@@ -160,7 +163,24 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 					epochLength = storageValue
 				}
 			}
-			break
+		case paramsAddress:
+			for storageKey, storageValue0x := range account.Storage {
+				storageKeyBytes, err := hex.DecodeString(storageKey)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to decode storage key: %w", err)
+				}
+				storageValueStr := strings.TrimPrefix(storageValue0x, "0x")
+				storageValueUint64, err := strconv.ParseUint(storageValueStr, 16, 32)
+				if err != nil {
+					slog.Error("failed to parse the storage value to uint32", "error", err)
+					return nil, nil, fmt.Errorf("failed to decode storage value: %w", err)
+				}
+				storageValue := uint32(storageValueUint64)
+				paramsParamName := thor.BytesToBytes32(storageKeyBytes).String()
+				if paramsParamName == "max-block-proposers" {
+					maxBlockProposers = storageValue
+				}
+			}
 		}
 	}
 
@@ -168,7 +188,7 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 	// Values not directly related are coming from the networkhub config in terms of proportions
 	config := &hayabusa.Config{
 		Nodes:             1, // Single node in devnet
-		MaxBlockProposers: uint32(len(genesis.Accounts)),
+		MaxBlockProposers: maxBlockProposers,
 		ForkBlock:         uint32(genesis.ForkConfig.HAYABUSA),
 		TransitionPeriod:  uint32(genesis.ForkConfig.HAYABUSA_TP),
 		EpochLength:       epochLength,
