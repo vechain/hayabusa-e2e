@@ -388,7 +388,8 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 		return fmt.Errorf("failed to parse ACCOUNTS_KEYS: %w", err)
 	}
 
-	for i, account := range genesis.Accounts[0:15] {
+	delegatorsCount := 15
+	for i, account := range genesis.Accounts[0:delegatorsCount] {
 		accountKey, err := crypto.HexToECDSA(accountsAddressKeys[account.Address])
 		if err != nil {
 			return fmt.Errorf("failed to parse account key for %s: %w", account.Address, err)
@@ -411,7 +412,7 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 
 	slog.Info("initialized synthetic activity",
 		"validatorCount", validatorCount,
-		"delegatorCount", 15)
+		"delegatorCount", delegatorsCount)
 
 	return nil
 }
