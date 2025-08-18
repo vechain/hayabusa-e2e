@@ -125,7 +125,10 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		stack:  stack,
 	}
 	engine := lifecycle.NewEngine(stack, validationsState, generator)
-	initializeSyntheticActivity(engine, generator, genesis)
+	if err := initializeSyntheticActivity(engine, generator, genesis); err != nil {
+		slog.Error("failed to initialize synthetic activity", "error", err)
+		os.Exit(1)
+	}
 
 	stop := func() {
 		slog.Info("stopping Hayabusa devnet simulation")
@@ -252,24 +255,24 @@ func parseStorageValue(storageValue string) (uint32, error) {
 func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabusa.NodePair, error) {
 	validators := make(map[thor.Address]*hayabusa.NodePair)
 
-	endorsorKeys, err := parseAddressKeysFromEnv("ENDORSOR_KEYS")
+	endorsorAddressKeys, err := parseAddressKeysFromEnv("ENDORSOR_KEYS")
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ENDORSOR_KEYS: %w", err)
 	}
 
-	authorityKeys, err := parseAddressKeysFromEnv("AUTHORITY_KEYS")
+	authorityAddressKeys, err := parseAddressKeysFromEnv("AUTHORITY_KEYS")
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse AUTHORITY_KEYS: %w", err)
 	}
 
 	for _, authority := range genesis.Authority {
-		endorserKey, err := crypto.HexToECDSA(endorsorKeys[authority.EndorsorAddress])
+		endorserKey, err := crypto.HexToECDSA(endorsorAddressKeys[authority.EndorsorAddress])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse endorser key for %s: %w", authority.MasterAddress, err)
 		}
 		endorserSigner := bind.NewSigner(endorserKey)
 
-		nodeKey, err := crypto.HexToECDSA(authorityKeys[authority.MasterAddress])
+		nodeKey, err := crypto.HexToECDSA(authorityAddressKeys[authority.MasterAddress])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse master key for %s: %w", authority.MasterAddress, err)
 		}
@@ -352,12 +355,12 @@ func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) li
 }
 
 // Initialize realistic synthetic activity
-func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGenerator, genesis *HayabusaGenesis) {
+func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGenerator, genesis *HayabusaGenesis) error {
 	// Load validators from Hayabusa genesis.json
 	validators, err := loadHayabusaValidators(genesis)
 	if err != nil {
 		slog.Error("failed to load validators for synthetic activity", "error", err)
-		return
+		return err
 	}
 
 	// Create initial validators with different strategies
@@ -381,10 +384,18 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 		validatorCount++
 	}
 
-	// TODO: this is not correct, we should use the additional accounts from the genesis.json
-	initialDelegators := hayabusa.AdditionalAccounts[0:15] // Use first 15 delegators
-	for i, acc := range initialDelegators {
-		config := generator.CreateDelegator(acc, 0)
+	accountsAddressKeys, err := parseAddressKeysFromEnv("ACCOUNTS_KEYS")
+	if err != nil {
+		return fmt.Errorf("failed to parse ACCOUNTS_KEYS: %w", err)
+	}
+
+	for i, account := range genesis.Accounts[0:15] {
+		accountKey, err := crypto.HexToECDSA(accountsAddressKeys[account.Address])
+		if err != nil {
+			return fmt.Errorf("failed to parse account key for %s: %w", account.Address, err)
+		}
+		delegatorSigner := bind.NewSigner(accountKey)
+		config := generator.CreateDelegator(delegatorSigner, 0)
 
 		// Distribute delegation strategies
 		if i < 5 { // 5 long-term delegators
@@ -400,6 +411,8 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 	}
 
 	slog.Info("initialized synthetic activity",
-		"validators", validatorCount,
-		"delegators", len(initialDelegators))
+		"validatorCount", validatorCount,
+		"delegatorCount", 15)
+
+	return nil
 }
