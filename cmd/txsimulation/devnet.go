@@ -144,8 +144,6 @@ func loadHayabusaGenesisConfig(genesisURL string) (*hayabusa.Config, error) {
 
 // Load validators from Hayabusa genesis.json
 func loadHayabusaValidators(genesisURL string) (map[thor.Address]*hayabusa.NodePair, error) {
-	// Fetch genesis.json from Hayabusa official repository
-
 	resp, err := http.Get(genesisURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
