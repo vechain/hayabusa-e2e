@@ -206,6 +206,11 @@ func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabus
 		}
 
 		endorserSigner := bind.NewSigner(endorserKey)
+		endorserAddr := endorserSigner.Address().String()
+		if endorserAddr != authority.EndorsorAddress {
+			slog.Error("endorser address does not match genesis address", "endorser", endorserAddr, "endorser-genesis", authority.EndorsorAddress)
+			return nil, fmt.Errorf("endorser address does not match genesis address %s vs %s", endorserAddr, authority.EndorsorAddress)
+		}
 
 		//TODO: These 2 lines are wrong, the first one creates a new key when it should not
 		nodePair := hayabusa.MustCreateNodePair(endorserSigner)
