@@ -356,7 +356,6 @@ func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) li
 
 // Initialize realistic synthetic activity
 func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGenerator, genesis *HayabusaGenesis) error {
-	// Load validators from Hayabusa genesis.json
 	validators, err := loadHayabusaValidators(genesis)
 	if err != nil {
 		slog.Error("failed to load validators for synthetic activity", "error", err)
