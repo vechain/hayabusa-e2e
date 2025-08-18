@@ -2,9 +2,365 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"math/big"
+	"net/http"
+	"os"
+
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
+	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
+	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
-func startAgainstDevnet(ctx context.Context, devnet string) (*lifecycle.Engine, func()) {
-	panic("Devnet support is not implemented yet")
+func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (*lifecycle.Engine, func()) {
+	client := thorclient.New(devnet)
+
+	// 2. Create staker client
+	staker, err := builtin.NewStaker(client)
+	if err != nil {
+		slog.Error("failed to create staker client", "error", err)
+		os.Exit(1)
+	}
+
+	// 3. Load Hayabusa genesis configuration
+	config, err := loadHayabusaGenesisConfig(genesisURL)
+	if err != nil {
+		slog.Error("failed to load Hayabusa genesis config", "error", err)
+		os.Exit(1)
+	}
+
+	// 4. Load validators from Hayabusa genesis.json
+	extraValidators, err := loadHayabusaValidators(genesisURL)
+	if err != nil {
+		slog.Error("failed to load Hayabusa validators", "error", err)
+		os.Exit(1)
+	}
+
+	// 5. Create stack and components
+	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
+	validators := validations.NewState(stack)
+	generator := &devnetGenerator{
+		config: config,
+		stack:  stack,
+	}
+	engine := lifecycle.NewEngine(stack, validators, generator)
+
+	// 6. Initialize synthetic activity
+	initializeSyntheticActivity(engine, generator, genesisURL)
+
+	// 7. Start continuous synthetic activity
+	activityManager := NewSyntheticActivityManager(engine, generator, config)
+	activityManager.StartContinuousActivity()
+
+	// 8. Cleanup function
+	stop := func() {
+		slog.Info("stopping Hayabusa devnet simulation")
+		// Cleanup logic if needed
+	}
+
+	return engine, stop
+}
+
+// HayabusaGenesis represents the structure of the Hayabusa genesis.json
+type HayabusaGenesis struct {
+	GasLimit   string `json:"gasLimit"`
+	ExtraData  string `json:"extraData"`
+	ForkConfig struct {
+		VIP191      int `json:"VIP191"`
+		ETH_CONST   int `json:"ETH_CONST"`
+		BLOCKLIST   int `json:"BLOCKLIST"`
+		ETH_IST     int `json:"ETH_IST"`
+		VIP214      int `json:"VIP214"`
+		FINALITY    int `json:"FINALITY"`
+		GALACTICA   int `json:"GALACTICA"`
+		HAYABUSA    int `json:"HAYABUSA"`
+		HAYABUSA_TP int `json:"HAYABUSA_TP"`
+	} `json:"forkConfig"`
+	Accounts []struct {
+		Address string `json:"address"`
+		Balance string `json:"balance"`
+		Energy  string `json:"energy"`
+	} `json:"accounts"`
+	Authority []struct {
+		MasterAddress   string `json:"masterAddress"`
+		EndorsorAddress string `json:"endorsorAddress"`
+		Identity        string `json:"identity"`
+	} `json:"authority"`
+	Executor struct {
+		Approvers []struct {
+			Address  string `json:"address"`
+			Identity string `json:"identity"`
+		} `json:"approvers"`
+	} `json:"executor"`
+	Params struct {
+		ExecutorAddress     string `json:"executorAddress"`
+		BaseGasPrice        string `json:"baseGasPrice"`
+		RewardRatio         string `json:"rewardRatio"`
+		ProposerEndorsement string `json:"proposerEndorsement"`
+	} `json:"params"`
+	LaunchTime int64 `json:"launchTime"`
+}
+
+// Load Hayabusa genesis configuration from the official genesis.json
+func loadHayabusaGenesisConfig(genesisURL string) (*hayabusa.Config, error) {
+	// Fetch genesis.json from Hayabusa official repository
+
+	resp, err := http.Get(genesisURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read genesis.json: %w", err)
+	}
+
+	var genesis HayabusaGenesis
+	if err := json.Unmarshal(body, &genesis); err != nil {
+		return nil, fmt.Errorf("failed to parse genesis.json: %w", err)
+	}
+
+	// Create config based on parsed genesis.json
+	config := &hayabusa.Config{
+		Nodes:             1, // Single node in devnet
+		MaxBlockProposers: uint32(len(genesis.Accounts)),
+		ForkBlock:         uint32(genesis.ForkConfig.HAYABUSA),
+		TransitionPeriod:  uint32(genesis.ForkConfig.HAYABUSA_TP), // From genesis.json: HAYABUSA_TP
+		EpochLength:       90,
+		CooldownPeriod:    4320,
+		MinStakingPeriod:  100,
+		MidStakingPeriod:  1000,
+		HighStakingPeriod: 10000,
+	}
+
+	slog.Info("loaded Hayabusa genesis configuration",
+		"transitionPeriod", config.TransitionPeriod,
+		"authorityCount", len(genesis.Authority),
+		"accountCount", len(genesis.Accounts))
+
+	return config, nil
+}
+
+// Load validators from Hayabusa genesis.json
+func loadHayabusaValidators(genesisURL string) (map[thor.Address]*hayabusa.NodePair, error) {
+	// Fetch genesis.json from Hayabusa official repository
+
+	resp, err := http.Get(genesisURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read genesis.json: %w", err)
+	}
+
+	var genesis HayabusaGenesis
+	if err := json.Unmarshal(body, &genesis); err != nil {
+		return nil, fmt.Errorf("failed to parse genesis.json: %w", err)
+	}
+
+	// Create validators from authority section
+	validators := make(map[thor.Address]*hayabusa.NodePair)
+
+	for _, authority := range genesis.Authority {
+		masterAddr := thor.MustParseAddress(authority.MasterAddress)
+
+		// Create endorser signer from the endorsor address
+		endorserKey, err := crypto.HexToECDSA(authority.Identity)
+		if err != nil {
+			slog.Warn("failed to parse endorser identity", "address", authority.MasterAddress, "error", err)
+			continue
+		}
+
+		endorserSigner := bind.NewSigner(endorserKey)
+
+		// Create NodePair using the endorser as the base
+		nodePair := hayabusa.MustCreateNodePair(endorserSigner)
+
+		validators[masterAddr] = nodePair
+	}
+
+	slog.Info("loaded Hayabusa validators from genesis", "validatorCount", len(validators))
+
+	return validators, nil
+}
+
+// Devnet generator with realistic synthetic activity
+type devnetGenerator struct {
+	config *hayabusa.Config
+	stack  *stack.Stack
+}
+
+func (g *devnetGenerator) CreateValidator(acc *hayabusa.NodePair, startBlock uint32) lifecycle.ValidatorConfig {
+	// Create validators with different staking strategies
+	stakingStrategy := utils.RandomBetween(1, 4)
+	var stakingPeriods uint32
+	var queueDelay lifecycle.Delay
+
+	switch stakingStrategy {
+	case 1: // Long-term validators
+		stakingPeriods = uint32(utils.RandomBetween(100, 500))
+		queueDelay = lifecycle.Delay{Blocks: 0, Epochs: 0}
+	case 2: // Medium-term validators
+		stakingPeriods = uint32(utils.RandomBetween(30, 100))
+		queueDelay = lifecycle.Delay{Blocks: uint32(utils.RandomBetween(1, 10)), Epochs: 0}
+	case 3: // Short-term validators
+		stakingPeriods = uint32(utils.RandomBetween(6, 30))
+		queueDelay = lifecycle.Delay{Blocks: uint32(utils.RandomBetween(5, 20)), Epochs: 0}
+	case 4: // Validators with entry delay
+		stakingPeriods = uint32(utils.RandomBetween(20, 80))
+		queueDelay = lifecycle.Delay{Blocks: 0, Epochs: uint32(utils.RandomBetween(1, 5))}
+	}
+
+	return lifecycle.ValidatorConfig{
+		Config: lifecycle.Config{
+			QueueDelay:     queueDelay,
+			StartBlock:     startBlock,
+			StakingPeriods: stakingPeriods,
+			WithdrawDelay:  lifecycle.Delay{Blocks: uint32(utils.RandomBetween(1, 10)), Epochs: 0},
+		},
+		Account: acc,
+	}
+}
+
+func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) lifecycle.DelegatorConfig {
+	// Create delegators with different strategies
+	delegationStrategy := utils.RandomBetween(1, 3)
+	var stakingPeriods uint32
+	var queueDelay lifecycle.Delay
+
+	switch delegationStrategy {
+	case 1: // Long-term delegators
+		stakingPeriods = uint32(utils.RandomBetween(50, 200))
+		queueDelay = lifecycle.Delay{Blocks: 0, Epochs: 0}
+	case 2: // Medium-term delegators
+		stakingPeriods = uint32(utils.RandomBetween(20, 50))
+		queueDelay = lifecycle.Delay{Blocks: uint32(utils.RandomBetween(1, 15)), Epochs: 0}
+	case 3: // Short-term delegators
+		stakingPeriods = uint32(utils.RandomBetween(6, 20))
+		queueDelay = lifecycle.Delay{Blocks: uint32(utils.RandomBetween(5, 25)), Epochs: 0}
+	}
+
+	return lifecycle.DelegatorConfig{
+		Config: lifecycle.Config{
+			QueueDelay:     queueDelay,
+			StartBlock:     startBlock,
+			StakingPeriods: stakingPeriods,
+			WithdrawDelay:  lifecycle.Delay{Blocks: uint32(utils.RandomBetween(1, 15)), Epochs: 0},
+		},
+		Account: acc,
+	}
+}
+
+// Initialize realistic synthetic activity
+func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGenerator, genesisURL string) {
+	// Load validators from Hayabusa genesis.json
+	validators, err := loadHayabusaValidators(genesisURL)
+	if err != nil {
+		slog.Error("failed to load validators for synthetic activity", "error", err)
+		return
+	}
+
+	// Create initial validators with different strategies
+	validatorCount := 0
+	for _, nodePair := range validators {
+		if validatorCount >= 20 { // Limit to first 20 validators
+			break
+		}
+
+		config := generator.CreateValidator(nodePair, 0)
+
+		// Distribute staking strategies
+		if validatorCount < 5 { // 5 long-term validators
+			config.StakingPeriods = uint32(utils.RandomBetween(200, 500))
+		} else if validatorCount < 12 { // 7 medium-term validators
+			config.StakingPeriods = uint32(utils.RandomBetween(50, 150))
+		} else { // 8 short-term validators
+			config.StakingPeriods = uint32(utils.RandomBetween(10, 40))
+		}
+
+		cycle := lifecycle.NewValidatorLifecycle(config)
+		engine.AddLifecycle(cycle)
+		validatorCount++
+	}
+
+	// Create initial delegators using additional accounts
+	initialDelegators := hayabusa.AdditionalAccounts[0:15] // Use first 15 delegators
+	for i, acc := range initialDelegators {
+		config := generator.CreateDelegator(acc, 0)
+
+		// Distribute delegation strategies
+		if i < 5 { // 5 long-term delegators
+			config.StakingPeriods = uint32(utils.RandomBetween(100, 300))
+		} else if i < 10 { // 5 medium-term delegators
+			config.StakingPeriods = uint32(utils.RandomBetween(30, 80))
+		} else { // 5 short-term delegators
+			config.StakingPeriods = uint32(utils.RandomBetween(10, 30))
+		}
+
+		cycle := lifecycle.NewDelegatorLifecycle(config)
+		engine.AddLifecycle(cycle)
+	}
+
+	slog.Info("initialized synthetic activity",
+		"validators", validatorCount,
+		"delegators", len(initialDelegators))
+}
+
+// Extend engine to generate continuous activity
+func (g *devnetGenerator) GenerateContinuousActivity(engine *lifecycle.Engine, currentBlock uint32) {
+	// Generate new validators periodically
+	if utils.RandomBetween(1, 100) <= 15 { // 15% probability per block
+		if validator, err := g.stack.NextValidator(); err == nil {
+			config := g.CreateValidator(validator, currentBlock)
+			cycle := lifecycle.NewValidatorLifecycle(config)
+			engine.AddLifecycle(cycle)
+			slog.Debug("generated new validator lifecycle", "block", currentBlock)
+		}
+	}
+
+	// Generate new delegators periodically
+	if utils.RandomBetween(1, 100) <= 20 { // 20% probability per block
+		// Use additional accounts for delegators
+		if len(hayabusa.AdditionalAccounts) > 0 {
+			randomIndex := utils.RandomBetween(0, len(hayabusa.AdditionalAccounts)-1)
+			acc := hayabusa.AdditionalAccounts[randomIndex]
+			config := g.CreateDelegator(acc, currentBlock)
+			cycle := lifecycle.NewDelegatorLifecycle(config)
+			engine.AddLifecycle(cycle)
+			slog.Debug("generated new delegator lifecycle", "block", currentBlock)
+		}
+	}
+}
+
+// Helper functions for specific operations
+func (g *devnetGenerator) IncreaseValidatorStake(validator *lifecycle.ValidatorLifecycle, amount *big.Int) error {
+	// Implement stake increase for active validators
+	if validator.Status() == lifecycle.StatusActive {
+		// Logic to increase stake
+		slog.Debug("increasing validator stake", "validator", validator.ID(), "amount", amount)
+	}
+	return nil
+}
+
+func (g *devnetGenerator) DecreaseValidatorStake(validator *lifecycle.ValidatorLifecycle, amount *big.Int) error {
+	// Implement stake decrease for active validators
+	if validator.Status() == lifecycle.StatusActive {
+		// Logic to decrease stake
+		slog.Debug("decreasing validator stake", "validator", validator.ID(), "amount", amount)
+	}
+	return nil
 }

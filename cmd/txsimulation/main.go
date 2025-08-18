@@ -17,6 +17,7 @@ import (
 var (
 	networkHubFlag = flag.Bool("networkhub", false, "Run against NetworkHub")
 	devnetFlag     = flag.String("devnet", "", "Run against Devnet")
+	genesisURLFlag = flag.String("genesis-url", "https://vechain.github.io/thor-hayabusa/genesis.json", "Genesis JSON URL (only used with --devnet)")
 )
 
 func main() {
@@ -36,7 +37,7 @@ func main() {
 	if *networkHubFlag {
 		engine, stop = startAgainstNetworkHub(ctx)
 	} else {
-		engine, stop = startAgainstDevnet(ctx, *devnetFlag)
+		engine, stop = startAgainstDevnet(ctx, *devnetFlag, *genesisURLFlag)
 	}
 
 	defer stop()
