@@ -49,11 +49,7 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		stack:  stack,
 	}
 	engine := lifecycle.NewEngine(stack, validationsState, generator)
-
 	initializeSyntheticActivity(engine, generator, genesis)
-
-	activityManager := NewSyntheticActivityManager(engine, generator, config)
-	activityManager.StartContinuousActivity()
 
 	stop := func() {
 		slog.Info("stopping Hayabusa devnet simulation")
