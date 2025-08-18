@@ -6,11 +6,8 @@ import (
 	"time"
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
-	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
 // SyntheticActivityManager handles continuous synthetic activity
@@ -142,80 +139,4 @@ func (sam *SyntheticActivityManager) exitDelegator() {
 			break
 		}
 	}
-}
-
-// ValidatorOperations implements specific operations for validators
-type ValidatorOperations struct {
-	stack *stack.Stack
-}
-
-// NewValidatorOperations creates new validator operations
-func NewValidatorOperations(stack *stack.Stack) *ValidatorOperations {
-	return &ValidatorOperations{stack: stack}
-}
-
-// Entry simulates validator entry
-func (vo *ValidatorOperations) Entry(validator *hayabusa.NodePair, amount *big.Int) error {
-	slog.Info("validator entry", "validator", validator.Node.Address(), "amount", amount)
-	// Here would go the real validator entry logic
-	return nil
-}
-
-// Exit simulates validator exit
-func (vo *ValidatorOperations) Exit(validatorID thor.Address) error {
-	slog.Info("validator exit", "validator", validatorID)
-	// Here would go the real validator exit logic
-	return nil
-}
-
-// Withdrawal simulates validator fund withdrawal
-func (vo *ValidatorOperations) Withdrawal(validatorID thor.Address, amount *big.Int) error {
-	slog.Info("validator withdrawal", "validator", validatorID, "amount", amount)
-	// Here would go the real withdrawal logic
-	return nil
-}
-
-// Increase simulates validator stake increase
-func (vo *ValidatorOperations) Increase(validatorID thor.Address, amount *big.Int) error {
-	slog.Info("validator stake increase", "validator", validatorID, "amount", amount)
-	// Here would go the real stake increase logic
-	return nil
-}
-
-// Decrease simulates validator stake decrease
-func (vo *ValidatorOperations) Decrease(validatorID thor.Address, amount *big.Int) error {
-	slog.Info("validator stake decrease", "validator", validatorID, "amount", amount)
-	// Here would go the real stake decrease logic
-	return nil
-}
-
-// Queue simulates validator queuing
-func (vo *ValidatorOperations) Queue(validator *hayabusa.NodePair) error {
-	slog.Info("validator queue", "validator", validator.Node.Address())
-	// Here would go the real queuing logic
-	return nil
-}
-
-// DelegatorOperations implements specific operations for delegators
-type DelegatorOperations struct {
-	stack *stack.Stack
-}
-
-// NewDelegatorOperations creates new delegator operations
-func NewDelegatorOperations(stack *stack.Stack) *DelegatorOperations {
-	return &DelegatorOperations{stack: stack}
-}
-
-// Entry simulates delegator entry
-func (do *DelegatorOperations) Entry(delegator bind.Signer, validatorID thor.Address, amount *big.Int) error {
-	slog.Info("delegator entry", "delegator", delegator.Address(), "validator", validatorID, "amount", amount)
-	// Here would go the real delegator entry logic
-	return nil
-}
-
-// Exit simulates delegator exit
-func (do *DelegatorOperations) Exit(delegatorID *big.Int) error {
-	slog.Info("delegator exit", "delegation", delegatorID)
-	// Here would go the real delegator exit logic
-	return nil
 }

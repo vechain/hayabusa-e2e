@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/big"
 	"net/http"
 	"os"
 
@@ -311,49 +310,4 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 	slog.Info("initialized synthetic activity",
 		"validators", validatorCount,
 		"delegators", len(initialDelegators))
-}
-
-// Extend engine to generate continuous activity
-func (g *devnetGenerator) GenerateContinuousActivity(engine *lifecycle.Engine, currentBlock uint32) {
-	// Generate new validators periodically
-	if utils.RandomBetween(1, 100) <= 15 { // 15% probability per block
-		if validator, err := g.stack.NextValidator(); err == nil {
-			config := g.CreateValidator(validator, currentBlock)
-			cycle := lifecycle.NewValidatorLifecycle(config)
-			engine.AddLifecycle(cycle)
-			slog.Debug("generated new validator lifecycle", "block", currentBlock)
-		}
-	}
-
-	// Generate new delegators periodically
-	if utils.RandomBetween(1, 100) <= 20 { // 20% probability per block
-		// Use additional accounts for delegators
-		if len(hayabusa.AdditionalAccounts) > 0 {
-			randomIndex := utils.RandomBetween(0, len(hayabusa.AdditionalAccounts)-1)
-			acc := hayabusa.AdditionalAccounts[randomIndex]
-			config := g.CreateDelegator(acc, currentBlock)
-			cycle := lifecycle.NewDelegatorLifecycle(config)
-			engine.AddLifecycle(cycle)
-			slog.Debug("generated new delegator lifecycle", "block", currentBlock)
-		}
-	}
-}
-
-// Helper functions for specific operations
-func (g *devnetGenerator) IncreaseValidatorStake(validator *lifecycle.ValidatorLifecycle, amount *big.Int) error {
-	// Implement stake increase for active validators
-	if validator.Status() == lifecycle.StatusActive {
-		// Logic to increase stake
-		slog.Debug("increasing validator stake", "validator", validator.ID(), "amount", amount)
-	}
-	return nil
-}
-
-func (g *devnetGenerator) DecreaseValidatorStake(validator *lifecycle.ValidatorLifecycle, amount *big.Int) error {
-	// Implement stake decrease for active validators
-	if validator.Status() == lifecycle.StatusActive {
-		// Logic to decrease stake
-		slog.Debug("decreasing validator stake", "validator", validator.ID(), "amount", amount)
-	}
-	return nil
 }
