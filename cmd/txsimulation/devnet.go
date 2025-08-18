@@ -30,27 +30,27 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		os.Exit(1)
 	}
 
-	config, err := loadHayabusaGenesisConfig(genesisURL)
+	genesis, config, err := loadHayabusaGenesis(genesisURL)
 	if err != nil {
 		slog.Error("failed to load Hayabusa genesis config", "error", err)
 		os.Exit(1)
 	}
 
-	extraValidators, err := loadHayabusaValidators(genesisURL)
+	validators, err := loadHayabusaValidators(genesis)
 	if err != nil {
 		slog.Error("failed to load Hayabusa validators", "error", err)
 		os.Exit(1)
 	}
 
-	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
-	validators := validations.NewState(stack)
+	stack := stack.NewStack(ctx, staker, config, validators, hayabusa.Stargate)
+	validationsState := validations.NewState(stack)
 	generator := &devnetGenerator{
 		config: config,
 		stack:  stack,
 	}
-	engine := lifecycle.NewEngine(stack, validators, generator)
+	engine := lifecycle.NewEngine(stack, validationsState, generator)
 
-	initializeSyntheticActivity(engine, generator, genesisURL)
+	initializeSyntheticActivity(engine, generator, genesis)
 
 	activityManager := NewSyntheticActivityManager(engine, generator, config)
 	activityManager.StartContinuousActivity()
@@ -102,22 +102,22 @@ type HayabusaGenesis struct {
 	LaunchTime int64 `json:"launchTime"`
 }
 
-// Load Hayabusa genesis configuration from the official genesis.json
-func loadHayabusaGenesisConfig(genesisURL string) (*hayabusa.Config, error) {
+// loadHayabusaGenesis loads Hayabusa genesis configuration
+func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config, error) {
 	resp, err := http.Get(genesisURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
+		return nil, nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read genesis.json: %w", err)
+		return nil, nil, fmt.Errorf("failed to read genesis.json: %w", err)
 	}
 
 	var genesis HayabusaGenesis
 	if err := json.Unmarshal(body, &genesis); err != nil {
-		return nil, fmt.Errorf("failed to parse genesis.json: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse genesis.json: %w", err)
 	}
 
 	// Create config based on parsed genesis.json
@@ -139,27 +139,11 @@ func loadHayabusaGenesisConfig(genesisURL string) (*hayabusa.Config, error) {
 		"authorityCount", len(genesis.Authority),
 		"accountCount", len(genesis.Accounts))
 
-	return config, nil
+	return &genesis, config, nil
 }
 
 // Load validators from Hayabusa genesis.json
-func loadHayabusaValidators(genesisURL string) (map[thor.Address]*hayabusa.NodePair, error) {
-	resp, err := http.Get(genesisURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read genesis.json: %w", err)
-	}
-
-	var genesis HayabusaGenesis
-	if err := json.Unmarshal(body, &genesis); err != nil {
-		return nil, fmt.Errorf("failed to parse genesis.json: %w", err)
-	}
-
+func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabusa.NodePair, error) {
 	// Create validators from authority section
 	validators := make(map[thor.Address]*hayabusa.NodePair)
 
@@ -254,9 +238,9 @@ func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) li
 }
 
 // Initialize realistic synthetic activity
-func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGenerator, genesisURL string) {
+func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGenerator, genesis *HayabusaGenesis) {
 	// Load validators from Hayabusa genesis.json
-	validators, err := loadHayabusaValidators(genesisURL)
+	validators, err := loadHayabusaValidators(genesis)
 	if err != nil {
 		slog.Error("failed to load validators for synthetic activity", "error", err)
 		return
@@ -264,19 +248,17 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 
 	// Create initial validators with different strategies
 	validatorCount := 0
-	for _, nodePair := range validators {
-		if validatorCount >= 20 { // Limit to first 20 validators
-			break
-		}
+	totalValidators := len(validators)
 
+	for _, nodePair := range validators {
 		config := generator.CreateValidator(nodePair, 0)
 
-		// Distribute staking strategies
-		if validatorCount < 5 { // 5 long-term validators
+		// Distribute staking strategies based on available validators
+		if validatorCount < totalValidators/3 { // First third: long-term validators
 			config.StakingPeriods = uint32(utils.RandomBetween(200, 500))
-		} else if validatorCount < 12 { // 7 medium-term validators
+		} else if validatorCount < (totalValidators*2)/3 { // Second third: medium-term validators
 			config.StakingPeriods = uint32(utils.RandomBetween(50, 150))
-		} else { // 8 short-term validators
+		} else { // Last third: short-term validators
 			config.StakingPeriods = uint32(utils.RandomBetween(10, 40))
 		}
 

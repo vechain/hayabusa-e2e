@@ -66,10 +66,10 @@ go run ./cmd/txsimulation
 ## Synthetic Activity
 
 ### Initialization
-- **20 Validators**: Distributed across different staking strategies
-  - 5 long-term validators (200-500 periods)
-  - 7 medium-term validators (50-150 periods)
-  - 8 short-term validators (10-40 periods)
+- **All Available Validators**: Uses all validators from the genesis.json (typically 11 for Hayabusa)
+  - First third: Long-term validators (200-500 periods)
+  - Second third: Medium-term validators (50-150 periods)
+  - Last third: Short-term validators (10-40 periods)
 
 - **15 Delegators**: With different delegation strategies
   - 5 long-term delegators (100-300 periods)
