@@ -57,7 +57,6 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 
 	stop := func() {
 		slog.Info("stopping Hayabusa devnet simulation")
-		// TODO: implement cleanup logic
 	}
 
 	return engine, stop
@@ -105,8 +104,6 @@ type HayabusaGenesis struct {
 
 // Load Hayabusa genesis configuration from the official genesis.json
 func loadHayabusaGenesisConfig(genesisURL string) (*hayabusa.Config, error) {
-	// Fetch genesis.json from Hayabusa official repository
-
 	resp, err := http.Get(genesisURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
@@ -124,16 +121,17 @@ func loadHayabusaGenesisConfig(genesisURL string) (*hayabusa.Config, error) {
 	}
 
 	// Create config based on parsed genesis.json
+	// Values not directly related are coming from the networkhub config in terms of proportions
 	config := &hayabusa.Config{
 		Nodes:             1, // Single node in devnet
 		MaxBlockProposers: uint32(len(genesis.Accounts)),
 		ForkBlock:         uint32(genesis.ForkConfig.HAYABUSA),
 		TransitionPeriod:  uint32(genesis.ForkConfig.HAYABUSA_TP),
-		EpochLength:       90,
-		CooldownPeriod:    4320,
-		MinStakingPeriod:  100,
-		MidStakingPeriod:  1000,
-		HighStakingPeriod: 10000,
+		EpochLength:       uint32(genesis.ForkConfig.HAYABUSA_TP),
+		CooldownPeriod:    uint32(genesis.ForkConfig.HAYABUSA_TP),
+		MinStakingPeriod:  uint32(genesis.ForkConfig.HAYABUSA_TP),
+		MidStakingPeriod:  uint32(8 * genesis.ForkConfig.HAYABUSA_TP),
+		HighStakingPeriod: uint32(43200 * genesis.ForkConfig.HAYABUSA_TP),
 	}
 
 	slog.Info("loaded Hayabusa genesis configuration",
