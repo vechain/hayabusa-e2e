@@ -25,28 +25,24 @@ import (
 func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (*lifecycle.Engine, func()) {
 	client := thorclient.New(devnet)
 
-	// 2. Create staker client
 	staker, err := builtin.NewStaker(client)
 	if err != nil {
 		slog.Error("failed to create staker client", "error", err)
 		os.Exit(1)
 	}
 
-	// 3. Load Hayabusa genesis configuration
 	config, err := loadHayabusaGenesisConfig(genesisURL)
 	if err != nil {
 		slog.Error("failed to load Hayabusa genesis config", "error", err)
 		os.Exit(1)
 	}
 
-	// 4. Load validators from Hayabusa genesis.json
 	extraValidators, err := loadHayabusaValidators(genesisURL)
 	if err != nil {
 		slog.Error("failed to load Hayabusa validators", "error", err)
 		os.Exit(1)
 	}
 
-	// 5. Create stack and components
 	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
 	validators := validations.NewState(stack)
 	generator := &devnetGenerator{
@@ -55,17 +51,14 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 	}
 	engine := lifecycle.NewEngine(stack, validators, generator)
 
-	// 6. Initialize synthetic activity
 	initializeSyntheticActivity(engine, generator, genesisURL)
 
-	// 7. Start continuous synthetic activity
 	activityManager := NewSyntheticActivityManager(engine, generator, config)
 	activityManager.StartContinuousActivity()
 
-	// 8. Cleanup function
 	stop := func() {
 		slog.Info("stopping Hayabusa devnet simulation")
-		// Cleanup logic if needed
+		// TODO: implement cleanup logic
 	}
 
 	return engine, stop
@@ -136,7 +129,7 @@ func loadHayabusaGenesisConfig(genesisURL string) (*hayabusa.Config, error) {
 		Nodes:             1, // Single node in devnet
 		MaxBlockProposers: uint32(len(genesis.Accounts)),
 		ForkBlock:         uint32(genesis.ForkConfig.HAYABUSA),
-		TransitionPeriod:  uint32(genesis.ForkConfig.HAYABUSA_TP), // From genesis.json: HAYABUSA_TP
+		TransitionPeriod:  uint32(genesis.ForkConfig.HAYABUSA_TP),
 		EpochLength:       90,
 		CooldownPeriod:    4320,
 		MinStakingPeriod:  100,
