@@ -398,11 +398,11 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 		config := generator.CreateDelegator(delegatorSigner, 0)
 
 		// Distribute delegation strategies
-		if i < 5 { // 5 long-term delegators
+		if i < delegatorsCount/3 { // Long-term delegators
 			config.StakingPeriods = uint32(utils.RandomBetween(100, 300))
-		} else if i < 10 { // 5 medium-term delegators
+		} else if i < (delegatorsCount*2)/3 { // Medium-term delegators
 			config.StakingPeriods = uint32(utils.RandomBetween(30, 80))
-		} else { // 5 short-term delegators
+		} else { // Short-term delegators
 			config.StakingPeriods = uint32(utils.RandomBetween(10, 30))
 		}
 
