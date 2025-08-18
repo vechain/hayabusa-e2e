@@ -81,13 +81,7 @@ type HayabusaGenesis struct {
 		HAYABUSA    int `json:"HAYABUSA"`
 		HAYABUSA_TP int `json:"HAYABUSA_TP"`
 	} `json:"forkConfig"`
-	Accounts []struct {
-		Address string            `json:"address"`
-		Balance string            `json:"balance"`
-		Energy  string            `json:"energy"`
-		Code    string            `json:"code,omitempty"`
-		Storage map[string]string `json:"storage,omitempty"`
-	} `json:"accounts"`
+	Accounts  []GenesisAccount `json:"accounts"`
 	Authority []struct {
 		MasterAddress   string `json:"masterAddress"`
 		EndorsorAddress string `json:"endorsorAddress"`
@@ -108,6 +102,15 @@ type HayabusaGenesis struct {
 	LaunchTime int64 `json:"launchTime"`
 }
 
+// GenesisAccount represents an account in the genesis.json
+type GenesisAccount struct {
+	Address string            `json:"address"`
+	Balance string            `json:"balance"`
+	Energy  string            `json:"energy"`
+	Code    string            `json:"code,omitempty"`
+	Storage map[string]string `json:"storage,omitempty"`
+}
+
 // loadHayabusaGenesis loads Hayabusa genesis configuration
 func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config, error) {
 	resp, err := http.Get(genesisURL)
@@ -126,82 +129,100 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 		return nil, nil, fmt.Errorf("failed to parse genesis.json: %w", err)
 	}
 
-	var (
-		lowStakingPeriod    uint32
-		mediumStakingPeriod uint32
-		highStakingPeriod   uint32
-		cooldownPeriod      uint32
-		epochLength         uint32
-		maxBlockProposers   uint32
-	)
-	for _, account := range genesis.Accounts {
-		switch account.Address {
-		case stakerAddress:
-			for storageKey, storageValue0x := range account.Storage {
-				storageKeyBytes, err := hex.DecodeString(storageKey)
-				if err != nil {
-					return nil, nil, fmt.Errorf("failed to decode storage key: %w", err)
-				}
-				storageValueStr := strings.TrimPrefix(storageValue0x, "0x")
-				storageValueUint64, err := strconv.ParseUint(storageValueStr, 16, 32)
-				if err != nil {
-					slog.Error("failed to parse the storage value to uint32", "error", err)
-					return nil, nil, fmt.Errorf("failed to decode storage value: %w", err)
-				}
-				storageValue := uint32(storageValueUint64)
-				stakerParamName := thor.BytesToBytes32(storageKeyBytes).String()
-				switch stakerParamName {
-				case "staker-low-staking-period":
-					lowStakingPeriod = storageValue
-				case "staker-medium-staking-period":
-					mediumStakingPeriod = storageValue
-				case "staker-high-staking-period":
-					highStakingPeriod = storageValue
-				case "cooldown-period":
-					cooldownPeriod = storageValue
-				case "epoch-length":
-					epochLength = storageValue
-				}
-			}
-		case paramsAddress:
-			for storageKey, storageValue0x := range account.Storage {
-				storageKeyBytes, err := hex.DecodeString(storageKey)
-				if err != nil {
-					return nil, nil, fmt.Errorf("failed to decode storage key: %w", err)
-				}
-				storageValueStr := strings.TrimPrefix(storageValue0x, "0x")
-				storageValueUint64, err := strconv.ParseUint(storageValueStr, 16, 32)
-				if err != nil {
-					slog.Error("failed to parse the storage value to uint32", "error", err)
-					return nil, nil, fmt.Errorf("failed to decode storage value: %w", err)
-				}
-				storageValue := uint32(storageValueUint64)
-				paramsParamName := thor.BytesToBytes32(storageKeyBytes).String()
-				if paramsParamName == "max-block-proposers" {
-					maxBlockProposers = storageValue
-				}
-			}
-		}
-	}
-
-	// Create config based on parsed genesis.json
-	// Values not directly related are coming from the networkhub config in terms of proportions
-	config := &hayabusa.Config{
-		Nodes:             1, // Single node in devnet
-		MaxBlockProposers: maxBlockProposers,
-		ForkBlock:         uint32(genesis.ForkConfig.HAYABUSA),
-		TransitionPeriod:  uint32(genesis.ForkConfig.HAYABUSA_TP),
-		EpochLength:       epochLength,
-		CooldownPeriod:    cooldownPeriod,
-		MinStakingPeriod:  lowStakingPeriod,
-		MidStakingPeriod:  mediumStakingPeriod,
-		HighStakingPeriod: highStakingPeriod,
+	config, err := extractConfigFromAccounts(genesis.Accounts, &genesis)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to extract config from accounts: %w", err)
 	}
 
 	slog.Info("loaded Hayabusa genesis configuration",
 		"config", config)
 
 	return &genesis, config, nil
+}
+
+func extractConfigFromAccounts(accounts []GenesisAccount, genesis *HayabusaGenesis) (*hayabusa.Config, error) {
+	config := &hayabusa.Config{
+		Nodes:            1,
+		ForkBlock:        uint32(genesis.ForkConfig.HAYABUSA),
+		TransitionPeriod: uint32(genesis.ForkConfig.HAYABUSA_TP),
+	}
+
+	var stakerAccount, paramsAccount *GenesisAccount
+
+	for _, account := range accounts {
+		switch account.Address {
+		case stakerAddress:
+			stakerAccount = &account
+		case paramsAddress:
+			paramsAccount = &account
+		}
+	}
+
+	if stakerAccount != nil {
+		if err := processStakerConfig(config, stakerAccount.Storage); err != nil {
+			return nil, fmt.Errorf("failed to process staker config: %w", err)
+		}
+	}
+
+	if paramsAccount != nil {
+		if err := processParamsConfig(config, paramsAccount.Storage); err != nil {
+			return nil, fmt.Errorf("failed to process params config: %w", err)
+		}
+	}
+
+	return config, nil
+}
+
+func processStakerConfig(config *hayabusa.Config, storage map[string]string) error {
+	paramMappings := map[string]*uint32{
+		"staker-low-staking-period":    &config.MinStakingPeriod,
+		"staker-medium-staking-period": &config.MidStakingPeriod,
+		"staker-high-staking-period":   &config.HighStakingPeriod,
+		"cooldown-period":              &config.CooldownPeriod,
+		"epoch-length":                 &config.EpochLength,
+	}
+
+	return processStorageValues(storage, paramMappings)
+}
+
+func processParamsConfig(config *hayabusa.Config, storage map[string]string) error {
+	paramMappings := map[string]*uint32{
+		"max-block-proposers": &config.MaxBlockProposers,
+	}
+
+	return processStorageValues(storage, paramMappings)
+}
+
+func processStorageValues(storage map[string]string, paramMappings map[string]*uint32) error {
+	for storageKey, storageValue := range storage {
+		storageKeyBytes, err := hex.DecodeString(storageKey)
+		if err != nil {
+			return fmt.Errorf("failed to decode storage key %s: %w", storageKey, err)
+		}
+
+		paramName := thor.BytesToBytes32(storageKeyBytes).String()
+
+		if fieldPtr, exists := paramMappings[paramName]; exists {
+			value, err := parseStorageValue(storageValue)
+			if err != nil {
+				return fmt.Errorf("failed to parse storage value for %s: %w", paramName, err)
+			}
+			*fieldPtr = value
+		}
+	}
+
+	return nil
+}
+
+func parseStorageValue(storageValue string) (uint32, error) {
+	valueStr := strings.TrimPrefix(storageValue, "0x")
+
+	value, err := strconv.ParseUint(valueStr, 16, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid storage value format: %s", storageValue)
+	}
+
+	return uint32(value), nil
 }
 
 // Load validators from Hayabusa genesis.json
