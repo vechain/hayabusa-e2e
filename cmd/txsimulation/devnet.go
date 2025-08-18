@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
@@ -19,6 +22,10 @@ import (
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
+)
+
+const (
+	stakerAddress = "0x00000000000000000000000000005374616b6572"
 )
 
 func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (*lifecycle.Engine, func()) {
@@ -74,9 +81,11 @@ type HayabusaGenesis struct {
 		HAYABUSA_TP int `json:"HAYABUSA_TP"`
 	} `json:"forkConfig"`
 	Accounts []struct {
-		Address string `json:"address"`
-		Balance string `json:"balance"`
-		Energy  string `json:"energy"`
+		Address string            `json:"address"`
+		Balance string            `json:"balance"`
+		Energy  string            `json:"energy"`
+		Code    string            `json:"code,omitempty"`
+		Storage map[string]string `json:"storage,omitempty"`
 	} `json:"accounts"`
 	Authority []struct {
 		MasterAddress   string `json:"masterAddress"`
@@ -116,6 +125,45 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 		return nil, nil, fmt.Errorf("failed to parse genesis.json: %w", err)
 	}
 
+	var (
+		lowStakingPeriod    uint32
+		mediumStakingPeriod uint32
+		highStakingPeriod   uint32
+		cooldownPeriod      uint32
+		epochLength         uint32
+	)
+	for _, account := range genesis.Accounts {
+		if account.Address == stakerAddress {
+			for storageKey, storageValue0x := range account.Storage {
+				storageKeyBytes, err := hex.DecodeString(storageKey)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to decode storage key: %w", err)
+				}
+				storageValueStr := strings.TrimPrefix(storageValue0x, "0x")
+				storageValueUint64, err := strconv.ParseUint(storageValueStr, 16, 32)
+				if err != nil {
+					slog.Error("failed to parse energy", "error", err)
+					return nil, nil, fmt.Errorf("failed to decode storage value: %w", err)
+				}
+				storageValue := uint32(storageValueUint64)
+				stakerParamName := thor.BytesToBytes32(storageKeyBytes).String()
+				switch stakerParamName {
+				case "staker-low-staking-period":
+					lowStakingPeriod = storageValue
+				case "staker-medium-staking-period":
+					mediumStakingPeriod = storageValue
+				case "staker-high-staking-period":
+					highStakingPeriod = storageValue
+				case "cooldown-period":
+					cooldownPeriod = storageValue
+				case "epoch-length":
+					epochLength = storageValue
+				}
+			}
+			break
+		}
+	}
+
 	// Create config based on parsed genesis.json
 	// Values not directly related are coming from the networkhub config in terms of proportions
 	config := &hayabusa.Config{
@@ -123,17 +171,15 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 		MaxBlockProposers: uint32(len(genesis.Accounts)),
 		ForkBlock:         uint32(genesis.ForkConfig.HAYABUSA),
 		TransitionPeriod:  uint32(genesis.ForkConfig.HAYABUSA_TP),
-		EpochLength:       uint32(genesis.ForkConfig.HAYABUSA_TP),
-		CooldownPeriod:    uint32(genesis.ForkConfig.HAYABUSA_TP),
-		MinStakingPeriod:  uint32(genesis.ForkConfig.HAYABUSA_TP),
-		MidStakingPeriod:  uint32(8 * genesis.ForkConfig.HAYABUSA_TP),
-		HighStakingPeriod: uint32(43200 * genesis.ForkConfig.HAYABUSA_TP),
+		EpochLength:       epochLength,
+		CooldownPeriod:    cooldownPeriod,
+		MinStakingPeriod:  lowStakingPeriod,
+		MidStakingPeriod:  mediumStakingPeriod,
+		HighStakingPeriod: highStakingPeriod,
 	}
 
 	slog.Info("loaded Hayabusa genesis configuration",
-		"transitionPeriod", config.TransitionPeriod,
-		"authorityCount", len(genesis.Authority),
-		"accountCount", len(genesis.Accounts))
+		"config", config)
 
 	return &genesis, config, nil
 }
@@ -143,11 +189,17 @@ func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabus
 	// Create validators from authority section
 	validators := make(map[thor.Address]*hayabusa.NodePair)
 
-	for _, authority := range genesis.Authority {
+	validatorPrivateKeysStr := os.Getenv("VALIDATOR_PRIVATE_KEYS")
+	if validatorPrivateKeysStr == "" {
+		return nil, fmt.Errorf("VALIDATOR_PRIVATE_KEYS environment variable is required")
+	}
+	validatorPrivateKeys := strings.Split(validatorPrivateKeysStr, ",")
+
+	for i, authority := range genesis.Authority {
 		masterAddr := thor.MustParseAddress(authority.MasterAddress)
 
 		// Create endorser signer from the endorsor address
-		endorserKey, err := crypto.HexToECDSA(authority.Identity)
+		endorserKey, err := crypto.HexToECDSA(validatorPrivateKeys[i])
 		if err != nil {
 			slog.Warn("failed to parse endorser identity", "address", authority.MasterAddress, "error", err)
 			continue
@@ -155,9 +207,8 @@ func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabus
 
 		endorserSigner := bind.NewSigner(endorserKey)
 
-		// Create NodePair using the endorser as the base
+		//TODO: These 2 lines are wrong, the first one creates a new key when it should not
 		nodePair := hayabusa.MustCreateNodePair(endorserSigner)
-
 		validators[masterAddr] = nodePair
 	}
 
