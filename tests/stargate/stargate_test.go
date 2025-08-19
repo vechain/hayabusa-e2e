@@ -611,11 +611,6 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 	return stargate
 }
 
-func receiptToID(receipt *api.Receipt) thor.Address {
-	id := receipt.Outputs[0].Events[0].Topics[2]
-	return thor.BytesToAddress(id.Bytes())
-}
-
 func receiptToDelegationID(t *testing.T, receipt *api.Receipt) *big.Int {
 	require.False(t, receipt.Reverted)
 	return new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
