@@ -262,15 +262,12 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	executorSigner := bind.NewSigner(executorKey)
 
 	receipt, _, err = params.Set(stargateKey, stargateAddress).Send().WithSigner(executorSigner).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
-
 	if err != nil || receipt == nil {
 		return nil, fmt.Errorf("failed to set stargate address in params: %w", err)
 	}
 	if receipt.Reverted {
 		return nil, fmt.Errorf("transaction to set stargate address in params reverted: %s", receipt.Meta.TxID)
 	}
-
-	slog.Info("stargate address set in params", "stargateAddress", stargateAddress)
 
 	return accountSigner, nil
 }
