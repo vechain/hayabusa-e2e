@@ -78,25 +78,6 @@ type AddressKey struct {
 	Key     string `json:"key"`
 }
 
-func parseAddressKeysFromEnv(envVar string) (map[string]string, error) {
-	keysStr := os.Getenv(envVar)
-	if keysStr == "" {
-		return nil, fmt.Errorf("%s environment variable is required", envVar)
-	}
-
-	var keys []AddressKey
-	if err := json.Unmarshal([]byte(keysStr), &keys); err != nil {
-		return nil, fmt.Errorf("failed to parse %s JSON: %w", envVar, err)
-	}
-
-	addressKeyMap := make(map[string]string)
-	for _, key := range keys {
-		addressKeyMap[key.Address] = key.Key
-	}
-
-	return addressKeyMap, nil
-}
-
 func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (*lifecycle.Engine, func()) {
 	client := thorclient.New(devnet)
 
@@ -164,6 +145,25 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 		"config", config)
 
 	return &genesis, config, nil
+}
+
+func parseAddressKeysFromEnv(envVar string) (map[string]string, error) {
+	keysStr := os.Getenv(envVar)
+	if keysStr == "" {
+		return nil, fmt.Errorf("%s environment variable is required", envVar)
+	}
+
+	var keys []AddressKey
+	if err := json.Unmarshal([]byte(keysStr), &keys); err != nil {
+		return nil, fmt.Errorf("failed to parse %s JSON: %w", envVar, err)
+	}
+
+	addressKeyMap := make(map[string]string)
+	for _, key := range keys {
+		addressKeyMap[key.Address] = key.Key
+	}
+
+	return addressKeyMap, nil
 }
 
 func extractConfigFromAccounts(accounts []GenesisAccount, genesis *HayabusaGenesis) (*hayabusa.Config, error) {
