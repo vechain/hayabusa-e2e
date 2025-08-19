@@ -99,6 +99,8 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		os.Exit(1)
 	}
 
+	//TODO: set stargate address
+
 	stack := stack.NewStack(ctx, staker, config, validators, hayabusa.Stargate)
 	validationsState := validations.NewState(stack)
 	generator := &devnetGenerator{
@@ -145,6 +147,42 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 		"config", config)
 
 	return &genesis, config, nil
+}
+
+// Load validators from Hayabusa genesis.json
+func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabusa.NodePair, error) {
+	validators := make(map[thor.Address]*hayabusa.NodePair)
+
+	endorsorAddressKeys, err := parseAddressKeysFromEnv("ENDORSOR_KEYS")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ENDORSOR_KEYS: %w", err)
+	}
+
+	authorityAddressKeys, err := parseAddressKeysFromEnv("AUTHORITY_KEYS")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse AUTHORITY_KEYS: %w", err)
+	}
+
+	for _, authority := range genesis.Authority {
+		endorserKey, err := crypto.HexToECDSA(endorsorAddressKeys[authority.EndorsorAddress])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse endorser key for %s: %w", authority.EndorsorAddress, err)
+		}
+		endorserSigner := bind.NewSigner(endorserKey)
+
+		nodeKey, err := crypto.HexToECDSA(authorityAddressKeys[authority.MasterAddress])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse master key for %s: %w", authority.MasterAddress, err)
+		}
+		nodeSigner := bind.NewSigner(nodeKey)
+
+		nodePair := hayabusa.NewNodePairWithNode(endorserSigner, nodeSigner)
+		validators[nodeSigner.Address()] = nodePair
+	}
+
+	slog.Info("loaded Hayabusa validators from genesis", "validatorCount", len(validators))
+
+	return validators, nil
 }
 
 func parseAddressKeysFromEnv(envVar string) (map[string]string, error) {
@@ -249,42 +287,6 @@ func parseStorageValue(storageValue string) (uint32, error) {
 	}
 
 	return uint32(value), nil
-}
-
-// Load validators from Hayabusa genesis.json
-func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabusa.NodePair, error) {
-	validators := make(map[thor.Address]*hayabusa.NodePair)
-
-	endorsorAddressKeys, err := parseAddressKeysFromEnv("ENDORSOR_KEYS")
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse ENDORSOR_KEYS: %w", err)
-	}
-
-	authorityAddressKeys, err := parseAddressKeysFromEnv("AUTHORITY_KEYS")
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse AUTHORITY_KEYS: %w", err)
-	}
-
-	for _, authority := range genesis.Authority {
-		endorserKey, err := crypto.HexToECDSA(endorsorAddressKeys[authority.EndorsorAddress])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse endorser key for %s: %w", authority.EndorsorAddress, err)
-		}
-		endorserSigner := bind.NewSigner(endorserKey)
-
-		nodeKey, err := crypto.HexToECDSA(authorityAddressKeys[authority.MasterAddress])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse master key for %s: %w", authority.MasterAddress, err)
-		}
-		nodeSigner := bind.NewSigner(nodeKey)
-
-		nodePair := hayabusa.NewNodePairWithNode(endorserSigner, nodeSigner)
-		validators[nodeSigner.Address()] = nodePair
-	}
-
-	slog.Info("loaded Hayabusa validators from genesis", "validatorCount", len(validators))
-
-	return validators, nil
 }
 
 // Devnet generator with realistic synthetic activity
