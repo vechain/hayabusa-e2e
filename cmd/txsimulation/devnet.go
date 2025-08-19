@@ -270,8 +270,9 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		time.Sleep(1 * time.Second)
 	}
 	if receipt == nil {
-		slog.Error("failed to get transaction receipt to set stargate")
-		return nil, fmt.Errorf("failed to get transaction receipt to set stargate")
+		errorMessage := "failed to get transaction receipt to set stargate"
+		slog.Error(errorMessage)
+		return nil, fmt.Errorf("%s", errorMessage)
 	}
 
 	// The stargate contract should be deployed by now
