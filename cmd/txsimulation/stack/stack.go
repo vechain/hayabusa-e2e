@@ -63,6 +63,17 @@ func (s *Stack) Stargate() bind.Signer {
 	return s.stargateAcc
 }
 
+func (s *Stack) RandomStakingPeriod() uint32 {
+	switch utils.RandomInt(0, 3) {
+	case 0:
+		return s.config.MinStakingPeriod
+	case 1:
+		return s.config.MidStakingPeriod
+	default:
+		return s.config.HighStakingPeriod
+	}
+}
+
 func (s *Stack) NextValidator() (*hayabusa.NodePair, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

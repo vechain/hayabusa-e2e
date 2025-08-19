@@ -101,8 +101,8 @@ func (c Config) QueueBlock(config *hayabusa.Config) uint32 {
 	return c.StartBlock + c.QueueDelay.Blocks + (c.QueueDelay.Epochs * config.EpochLength)
 }
 
-func (c Config) MinExitBlock(activatedBlock uint32, config *hayabusa.Config) uint32 {
-	return activatedBlock + (c.StakingPeriods * config.MinStakingPeriod)
+func (c Config) MinExitBlock(activatedBlock, stakingPeriod uint32) uint32 {
+	return activatedBlock + (c.StakingPeriods * stakingPeriod)
 }
 
 func (c Config) MinWithdrawBlock(exitBlock uint32, config *hayabusa.Config) uint32 {
