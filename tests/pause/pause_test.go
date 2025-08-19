@@ -256,7 +256,6 @@ func TestPauseForDelegator(t *testing.T) {
 }
 
 func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config, *thorclient.Client) {
-	blockInterval := uint64(5)
 	config := &hayabusa.Config{
 		Nodes:             6,
 		MaxBlockProposers: maxBlockProposers,
@@ -268,7 +267,7 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 		Name:              t.Name(),
-		BlockInterval:     &blockInterval,
+		BlockInterval:     uint64(5),
 	}
 
 	network, err := hayabusa.NewNetwork(config, t.Context())
