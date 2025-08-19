@@ -139,8 +139,8 @@ func (s *State) Withdraw(acc *hayabusa.NodePair) (*api.Receipt, error) {
 	return receipt, nil
 }
 
-func (s *State) QueueValidator(acc *hayabusa.NodePair) (thor.Address, *api.Receipt, error) {
-	sender := s.stack.Staker().AddValidation(acc.Node.Address(), RandomStake(), s.stack.Config().MinStakingPeriod)
+func (s *State) QueueValidator(acc *hayabusa.NodePair, stakingPeriodLength uint32) (thor.Address, *api.Receipt, error) {
+	sender := s.stack.Staker().AddValidation(acc.Node.Address(), RandomStake(), stakingPeriodLength)
 	receipt, err := s.stack.SendTransaction(sender, acc.Endorser)
 	id := acc.Node.Address()
 	if err != nil {

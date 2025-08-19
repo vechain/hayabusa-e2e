@@ -22,8 +22,9 @@ type ValidatorLifecycle struct {
 	withdrawReceipt *api.Receipt // the receipt of the withdraw transaction
 	id              thor.Address
 
-	stakeIncreased  bool   // indicates if the stake as previously increased or decreased
-	lastStakeUpdate uint32 // the last block at which the stake was updated
+	stakingPeriodLength uint32 // the length of the staking period in blocks
+	stakeIncreased      bool   // indicates if the stake as previously increased or decreased
+	lastStakeUpdate     uint32 // the last block at which the stake was updated
 
 	mu sync.Mutex
 }
@@ -99,7 +100,8 @@ func (v *ValidatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	}
 	slog.Debug("queuing validator", "account", v.Account.Node.Address(), "block", block)
 
-	id, receipt, err := engine.validators.QueueValidator(v.Account)
+	period := engine.stack.RandomStakingPeriod()
+	id, receipt, err := engine.validators.QueueValidator(v.Account, period)
 	if err != nil {
 		slog.Error("failed to queue validator", "error", err, "account", v.Account.Node.Address())
 		return err
@@ -108,6 +110,7 @@ func (v *ValidatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	v.id = id
 	v.queuedReceipt = receipt
 	v.status = StatusQueued
+	v.stakingPeriodLength = period
 
 	return nil
 }
@@ -150,7 +153,7 @@ func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 	if v.status == StatusExitSignalled {
 		return nil
 	}
-	if block < v.Config.MinExitBlock(v.activatedBlock, engine.stack.Config()) {
+	if block < v.Config.MinExitBlock(v.activatedBlock, v.stakingPeriodLength) {
 		return v.stakeChange(engine, block)
 	}
 	receipt, err := engine.validators.DisableAutoRenew(v.Account)
@@ -168,7 +171,7 @@ func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 }
 
 func (v *ValidatorLifecycle) stakeChange(engine *Engine, block uint32) error {
-	interval := v.StakeChangeInterval * engine.stack.Config().MinStakingPeriod
+	interval := v.StakeChangeInterval * v.stakingPeriodLength
 	if v.lastStakeUpdate+interval < block {
 		return nil
 	}

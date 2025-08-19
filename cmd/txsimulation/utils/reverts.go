@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )

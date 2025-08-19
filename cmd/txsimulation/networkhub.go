@@ -30,8 +30,8 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 		EpochLength:       6,
 		CooldownPeriod:    6,
 		MinStakingPeriod:  6,
-		MidStakingPeriod:  48,
-		HighStakingPeriod: 259200,
+		MidStakingPeriod:  12,
+		HighStakingPeriod: 24,
 	}
 	network, err := hayabusa.NewNetwork(config, ctx)
 	if err != nil {

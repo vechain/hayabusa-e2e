@@ -17,13 +17,14 @@ import (
 type DelegatorLifecycle struct {
 	config DelegatorConfig
 
-	status          Status
-	queuedReceipt   *api.Receipt // the receipt of the queued transaction
-	activatedBlock  uint32       // the block at which this lifecycle was activated
-	exitReceipt     *api.Receipt // the receipt of the exit transaction
-	withdrawReceipt *api.Receipt // the receipt of the withdraw transaction
-	id              *big.Int
-	validationID    thor.Address
+	status              Status
+	queuedReceipt       *api.Receipt // the receipt of the queued transaction
+	activatedBlock      uint32       // the block at which this lifecycle was activated
+	stakingPeriodLength uint32
+	exitReceipt         *api.Receipt // the receipt of the exit transaction
+	withdrawReceipt     *api.Receipt // the receipt of the withdraw transaction
+	id                  *big.Int
+	validationID        thor.Address
 
 	mu sync.Mutex
 }
@@ -103,6 +104,12 @@ func (d *DelegatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	}
 	slog.Debug("queuing delegator", "validation", validation.Address.String())
 
+	stakingPeriodInfo, err := engine.stack.Staker().GetValidatorPeriodDetails(validationID)
+	if err != nil {
+		slog.Error("failed to get staking period info for validation", "error", err, "id", validationID)
+		return err
+	}
+
 	position := delegations.RandomPosition()
 	eth := big.NewInt(1e18)
 	stake := big.NewInt(0).Mul(position.Stake, eth)
@@ -117,6 +124,7 @@ func (d *DelegatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	d.id = big.NewInt(0).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
 	d.queuedReceipt = receipt
 	d.status = StatusQueued
+	d.stakingPeriodLength = stakingPeriodInfo.Period
 
 	slog.Debug("delegator queued", "id", d.ID())
 	return nil
@@ -147,8 +155,7 @@ func (d *DelegatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
 	slog.Debug("delegation activated", "id", d.ID(), "block", block)
 
 	d.status = StatusActive
-	d.activatedBlock = validator.StartBlock +
-		(delegation.StartPeriod * engine.stack.Config().MinStakingPeriod)
+	d.activatedBlock = validator.StartBlock + (delegation.StartPeriod * d.stakingPeriodLength)
 
 	return nil
 }
@@ -169,7 +176,7 @@ func (d *DelegatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 		slog.Error("failed to get validator for delegation", "error", err, "id", d.ID())
 		return err
 	}
-	lastActiveBlock := d.config.MinExitBlock(d.activatedBlock, engine.stack.Config())
+	lastActiveBlock := d.config.MinExitBlock(d.activatedBlock, d.stakingPeriodLength)
 	if block < lastActiveBlock && validation.Status < builtin.StakerStatusExited {
 		return nil
 	}
