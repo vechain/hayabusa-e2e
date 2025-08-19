@@ -209,13 +209,23 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	bytes, err := hexutil.Decode("0x" + bytecode)
 
 	clause := tx.NewClause(nil).WithData(bytes)
-	trx := new(tx.Builder).
+	initialBaseFee := new(big.Int).SetUint64(thor.InitialBaseFee)
+	feesHistory, err := staker.Raw().Client().FeesHistory(1, "best", []float64{0.5})
+	if err != nil {
+		slog.Error("failed to get fees history", "error", err)
+		return nil, err
+	}
+	baseFee := (*big.Int)(feesHistory.BaseFeePerGas[0])
+	maxPriorityFeePerGas := new(big.Int).Div(new(big.Int).Mul(baseFee, big.NewInt(5)), big.NewInt(100))
+	maxFeePerGas := new(big.Int).Add(initialBaseFee, maxPriorityFeePerGas)
+	trx := tx.NewBuilder(tx.TypeDynamicFee).
 		Clause(clause).
 		Gas(40_000_000).
 		Nonce(datagen.RandUint64()).
 		ChainTag(chainTag).
 		Expiration(100000).
-		GasPriceCoef(255).
+		MaxFeePerGas(maxFeePerGas).
+		MaxPriorityFeePerGas(maxPriorityFeePerGas).
 		Build()
 
 	trx, err = accountSigner.SignTransaction(trx)
