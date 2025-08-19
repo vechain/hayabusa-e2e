@@ -77,6 +77,7 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 
 	stargateSigner, err := setStargate(staker)
 	if err != nil {
+		slog.Error("failed to set stargate", "error", err)
 		os.Exit(1)
 	}
 
@@ -262,6 +263,7 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	executorSigner := bind.NewSigner(executorKey)
 
 	receipt, _, err = params.Set(stargateKey, stargateAddress).Send().WithSigner(executorSigner).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
+
 	if err != nil || receipt == nil {
 		return nil, fmt.Errorf("failed to set stargate address in params: %w", err)
 	}
