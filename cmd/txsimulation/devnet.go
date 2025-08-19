@@ -185,9 +185,12 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	}
 
 	stargateKey := thor.MustParseBytes32(hayabusa.ParamsStargateKey)
-	stargateAddress, _ := params.Get(stargateKey)
+	stargateAddress, err := params.Get(stargateKey)
 
-	if stargateAddress != nil {
+	if err != nil {
+		slog.Error("failed to get stargate address from params", "error", err)
+	}
+	if stargateAddress != nil && stargateAddress.Cmp(big.NewInt(0)) != 0 {
 		slog.Info("stargate address already set in params", "stargateAddress", stargateAddress)
 		return accountSigner, nil
 	}
@@ -210,7 +213,7 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		Gas(40_000_000).
 		Nonce(datagen.RandUint64()).
 		ChainTag(chainTag).
-		Expiration(10000).
+		Expiration(100000).
 		GasPriceCoef(255).
 		Build()
 
@@ -246,13 +249,17 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	receipt, _, err = params.Set(stargateKey, stargateAddress).Send().WithSigner(hayabusa.Executor).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
-	if err != nil {
+	// TODO: signer has to be the executor
+	receipt, _, err = params.Set(stargateKey, stargateAddress).Send().WithSigner(nil).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
+
+	if err != nil || receipt == nil {
 		return nil, fmt.Errorf("failed to set stargate address in params: %w", err)
 	}
 	if receipt.Reverted {
 		return nil, fmt.Errorf("transaction to set stargate address in params reverted: %s", receipt.Meta.TxID)
 	}
+
+	slog.Info("stargate address set in params", "stargateAddress", stargateAddress)
 
 	return accountSigner, nil
 }
