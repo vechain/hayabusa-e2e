@@ -3,10 +3,14 @@ package lifecycle
 import (
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -14,6 +18,9 @@ import (
 
 type ValidatorLifecycle struct {
 	ValidatorConfig
+	validations *validations.State
+	delegations *delegations.PositionManager
+	stack       *stack.Stack
 
 	status          Status
 	queuedReceipt   *api.Receipt // the receipt of the queued transaction
@@ -29,9 +36,17 @@ type ValidatorLifecycle struct {
 	mu sync.Mutex
 }
 
-func NewValidatorLifecycle(config ValidatorConfig) *ValidatorLifecycle {
+func NewValidatorLifecycle(
+	config ValidatorConfig,
+	validations *validations.State,
+	delegations *delegations.PositionManager,
+	stack *stack.Stack,
+) *ValidatorLifecycle {
 	return &ValidatorLifecycle{
 		ValidatorConfig: config,
+		validations:     validations,
+		delegations:     delegations,
+		stack:           stack,
 	}
 }
 
@@ -70,16 +85,21 @@ func (v *ValidatorLifecycle) Info() *Info {
 	}
 }
 
-func (v *ValidatorLifecycle) Process(engine *Engine, block uint32) error {
+func (v *ValidatorLifecycle) Process(block uint32) error {
+	status, ok := v.validations.LookupAddress(v.id)
+	if ok && status.Status == builtin.StakerStatusExited {
+		v.delegations.UnregisterValidator(v.id)
+	}
+
 	switch v.status {
 	case StatusPending:
-		return v.ProcessPending(engine, block)
+		return v.ProcessPending(block)
 	case StatusQueued:
-		return v.ProcessQueued(engine, block)
+		return v.ProcessQueued(block)
 	case StatusActive:
-		return v.ProcessActive(engine, block)
+		return v.ProcessActive(block)
 	case StatusExitSignalled:
-		return v.ProcessExited(engine, block)
+		return v.ProcessExited(block)
 	case StatusWithdrawn:
 
 	}
@@ -87,7 +107,7 @@ func (v *ValidatorLifecycle) Process(engine *Engine, block uint32) error {
 	return nil
 }
 
-func (v *ValidatorLifecycle) ProcessPending(engine *Engine, block uint32) error {
+func (v *ValidatorLifecycle) ProcessPending(block uint32) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -95,14 +115,17 @@ func (v *ValidatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 		return nil
 	}
 
-	if block < v.Config.QueueBlock(engine.stack.Config()) {
+	if block < v.Config.QueueBlock(v.stack.Config()) {
 		return nil
 	}
 	slog.Debug("queuing validator", "account", v.Account.Node.Address(), "block", block)
 
-	period := engine.stack.RandomStakingPeriod()
-	id, receipt, err := engine.validators.QueueValidator(v.Account, period)
+	period := v.stack.RandomStakingPeriod()
+	id, receipt, err := v.validations.QueueValidator(v.Account, period)
 	if err != nil {
+		if strings.Contains(err.Error(), " validator already exists") {
+			return v.setQueuedReceipt()
+		}
 		slog.Error("failed to queue validator", "error", err, "account", v.Account.Node.Address())
 		return err
 	}
@@ -115,7 +138,46 @@ func (v *ValidatorLifecycle) ProcessPending(engine *Engine, block uint32) error 
 	return nil
 }
 
-func (v *ValidatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
+func (v *ValidatorLifecycle) setQueuedReceipt() error {
+	offset := uint64(0)
+	limit := uint64(1000)
+	var id thor.Bytes32
+	for {
+		events, err := v.stack.Staker().FilterValidatorQueued(nil, &api.Options{Limit: limit, Offset: offset}, logdb.ASC)
+		if err != nil {
+			slog.Error("failed to filter validator queued events", "error", err, "id", v.id)
+			return err
+		}
+		for _, event := range events {
+			if event.Node == v.id {
+				v.status = StatusQueued
+				v.stakingPeriodLength = event.Period
+				v.id = event.Node
+				break
+			}
+		}
+
+		if !id.IsZero() || len(events) == 0 {
+			break
+		}
+		offset += limit
+	}
+	if !id.IsZero() {
+		receipt, err := v.stack.Client().TransactionReceipt(&id)
+		if err != nil {
+			slog.Error("failed to get transaction receipt for queued validator", "error", err, "id", v.id)
+			return err
+		}
+		v.queuedReceipt = receipt
+
+		slog.Debug("validator queued", "id", v.id, "account", v.Account.Node.Address())
+		return nil
+	}
+
+	return nil
+}
+
+func (v *ValidatorLifecycle) ProcessQueued(block uint32) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -125,12 +187,12 @@ func (v *ValidatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
 	if v.activatedBlock != 0 {
 		return nil
 	}
-	stakingPeriods, err := engine.stack.Staker().GetValidatorPeriodDetails(v.id)
+	stakingPeriods, err := v.stack.Staker().GetValidatorPeriodDetails(v.id)
 	if err != nil {
 		slog.Error("failed to get validator", "error", err, "id", v.id)
 		return err
 	}
-	validationStatus, err := engine.stack.Staker().GetValidatorStatus(v.id)
+	validationStatus, err := v.stack.Staker().GetValidatorStatus(v.id)
 	if err != nil {
 		slog.Error("failed to get validator status", "error", err, "id", v.id)
 	}
@@ -142,7 +204,7 @@ func (v *ValidatorLifecycle) ProcessQueued(engine *Engine, block uint32) error {
 	return nil
 }
 
-func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
+func (v *ValidatorLifecycle) ProcessActive(block uint32) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -154,9 +216,9 @@ func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 		return nil
 	}
 	if block < v.Config.MinExitBlock(v.activatedBlock, v.stakingPeriodLength) {
-		return v.stakeChange(engine, block)
+		return v.stakeChange(block)
 	}
-	receipt, err := engine.validators.DisableAutoRenew(v.Account)
+	receipt, err := v.validations.DisableAutoRenew(v.Account)
 	if receipt != nil {
 		v.status = StatusExitSignalled
 		v.exitReceipt = receipt
@@ -170,24 +232,24 @@ func (v *ValidatorLifecycle) ProcessActive(engine *Engine, block uint32) error {
 	return nil
 }
 
-func (v *ValidatorLifecycle) stakeChange(engine *Engine, block uint32) error {
+func (v *ValidatorLifecycle) stakeChange(block uint32) error {
 	interval := v.StakeChangeInterval * v.stakingPeriodLength
-	if v.lastStakeUpdate+interval < block {
+	if v.lastStakeUpdate+interval > block {
 		return nil
 	}
 	var sender *bind.MethodBuilder
 	if v.stakeIncreased {
-		sender = engine.stack.Staker().DecreaseStake(v.Account.Node.Address(), validations.RandomStakeBetween(3, 5))
+		sender = v.stack.Staker().DecreaseStake(v.Account.Node.Address(), validations.RandomStakeBetween(3, 5))
 	} else {
-		sender = engine.stack.Staker().IncreaseStake(v.Account.Node.Address(), validations.RandomStakeBetween(3, 5))
+		sender = v.stack.Staker().IncreaseStake(v.Account.Node.Address(), validations.RandomStakeBetween(3, 5))
 	}
 	v.lastStakeUpdate = block
 	v.stakeIncreased = !v.stakeIncreased
-	_, err := engine.stack.SendTransaction(sender, v.Account.Endorser)
+	_, err := v.stack.SendTransaction(sender, v.Account.Endorser)
 	return err
 }
 
-func (v *ValidatorLifecycle) ProcessExited(engine *Engine, block uint32) error {
+func (v *ValidatorLifecycle) ProcessExited(block uint32) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -198,10 +260,10 @@ func (v *ValidatorLifecycle) ProcessExited(engine *Engine, block uint32) error {
 	if v.status != StatusExitSignalled || v.exitReceipt == nil {
 		return errors.New("cannot withdraw validator that has not signalled exit")
 	}
-	if block < v.Config.MinWithdrawBlock(v.exitReceipt.Meta.BlockNumber, engine.stack.Config()) {
+	if block < v.Config.MinWithdrawBlock(v.exitReceipt.Meta.BlockNumber, v.stack.Config()) {
 		return nil
 	}
-	receipt, err := engine.validators.Withdraw(v.Account)
+	receipt, err := v.validations.Withdraw(v.Account)
 	if err != nil {
 		slog.Error("failed to withdraw validator", "error", err, "id", v.id)
 		return err

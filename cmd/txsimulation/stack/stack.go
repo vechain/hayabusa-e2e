@@ -93,8 +93,9 @@ func (s *Stack) NextValidator() (*hayabusa.NodePair, error) {
 }
 
 func (s *Stack) SendTransaction(method *bind.MethodBuilder, signer bind.Signer) (*api.Receipt, error) {
-	txCtx, cancel := context.WithTimeout(s.Context(), 2*time.Minute)
+	txCtx, cancel := context.WithTimeout(s.Context(), 30*time.Second)
 	defer cancel()
+
 	receipt, _, err := method.Send().
 		WithOptions(testutil.TxOptions()).
 		WithSigner(signer).

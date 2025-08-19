@@ -72,7 +72,7 @@ type Info struct {
 }
 
 type Lifecycle interface {
-	Process(engine *Engine, block uint32) error
+	Process(block uint32) error
 	Status() Status
 	Type() Type
 	Info() *Info
