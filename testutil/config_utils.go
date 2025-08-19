@@ -15,17 +15,18 @@ import (
 
 func SetupTestNetworkWithEpochAndBlockInterval(t *testing.T, maxBlockProposers uint32, epochLength uint32, blockInterval uint64) (*hayabusa.Config, *thorclient.Client, hayabusa.Network) {
 	config := &hayabusa.Config{
-		Nodes:             6,
-		MaxBlockProposers: maxBlockProposers,
-		ForkBlock:         0,
-		TransitionPeriod:  10,
-		EpochLength:       epochLength,
-		CooldownPeriod:    2,
-		MinStakingPeriod:  4,
-		MidStakingPeriod:  12,
-		HighStakingPeriod: 259200,
-		Name:              t.Name(),
-		BlockInterval:     blockInterval,
+		Nodes:                      6,
+		MaxBlockProposers:          maxBlockProposers,
+		ForkBlock:                  0,
+		TransitionPeriod:           10,
+		EpochLength:                epochLength,
+		CooldownPeriod:             2,
+		MinStakingPeriod:           4,
+		MidStakingPeriod:           12,
+		HighStakingPeriod:          259200,
+		Name:                       t.Name(),
+		BlockInterval:              blockInterval,
+		ValidatorEvictionThreshold: 10,
 	}
 
 	network, err := hayabusa.NewNetwork(config, t.Context())

@@ -26,12 +26,13 @@ type Config struct {
 	Debug             bool         // Debug mode for the nodes
 	Name              string       // Name of the network
 
-	EpochLength       uint32 // epoch-length
-	CooldownPeriod    uint32 // cooldown-period
-	MinStakingPeriod  uint32 // staker-low-staking-period
-	MidStakingPeriod  uint32 // staker-medium-staking-period
-	HighStakingPeriod uint32 // staker-high-staking-period
-	BlockInterval     uint64 // block interval
+	EpochLength                uint32 // epoch-length
+	CooldownPeriod             uint32 // cooldown-period
+	MinStakingPeriod           uint32 // staker-low-staking-period
+	MidStakingPeriod           uint32 // staker-medium-staking-period
+	HighStakingPeriod          uint32 // staker-high-staking-period
+	BlockInterval              uint64 // block interval
+	ValidatorEvictionThreshold uint32 // validator eviction threshold
 }
 
 // Apply the configuration to the genesis file.
@@ -86,12 +87,13 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 		c.EpochLength = thor.EpochLength
 	}
 	genesis.Config = &thor.Config{
-		BlockInterval:       c.BlockInterval,
-		EpochLength:         c.EpochLength,
-		CooldownPeriod:      c.CooldownPeriod,
-		LowStakingPeriod:    c.MinStakingPeriod,
-		MediumStakingPeriod: c.MidStakingPeriod,
-		HighStakingPeriod:   c.HighStakingPeriod,
+		BlockInterval:              c.BlockInterval,
+		EpochLength:                c.EpochLength,
+		CooldownPeriod:             c.CooldownPeriod,
+		LowStakingPeriod:           c.MinStakingPeriod,
+		MediumStakingPeriod:        c.MidStakingPeriod,
+		HighStakingPeriod:          c.HighStakingPeriod,
+		ValidatorEvictionThreshold: c.ValidatorEvictionThreshold,
 	}
 }
 
