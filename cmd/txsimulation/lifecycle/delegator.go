@@ -118,28 +118,28 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 	}
 
 	var position *delegations.Position
-	var validator thor.Address
+	var validatorID thor.Address
 
 	initParams := func() {
-		_, validator = d.validations.RandomActiveValidator()
-		if validator.IsZero() {
+		_, validatorID = d.validations.RandomActiveValidator()
+		if validatorID.IsZero() {
 			return
 		}
-		position, _ = d.delegations.NewPosition(validator)
+		position, _ = d.delegations.NewPosition(validatorID)
 	}
 	for position == nil {
 		initParams()
 	}
 
-	stakingPeriodInfo, err := d.stack.Staker().GetValidatorPeriodDetails(validator)
+	stakingPeriodInfo, err := d.stack.Staker().GetValidatorPeriodDetails(validatorID)
 	if err != nil {
-		slog.Error("failed to get staking period info for validation", "error", err, "id", validator)
+		slog.Error("failed to get staking period info for validation", "error", err, "id", validatorID)
 		return err
 	}
 
 	eth := big.NewInt(1e18)
 	stake := big.NewInt(0).Mul(position.Stake, eth)
-	sender := d.stack.Staker().AddDelegation(validator, stake, position.Multiplier)
+	sender := d.stack.Staker().AddDelegation(validatorID, stake, position.Multiplier)
 	receipt, err := d.stack.SendTransaction(sender, d.config.Account)
 	if err != nil {
 		slog.Error("failed to queue delegator", "error", err)
@@ -147,7 +147,7 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 	}
 
 	d.position = position
-	d.validationID = validator
+	d.validationID = validatorID
 	d.id = big.NewInt(0).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
 	d.queuedReceipt = receipt
 	d.status = StatusQueued
