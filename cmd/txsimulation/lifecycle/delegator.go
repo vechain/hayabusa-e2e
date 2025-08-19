@@ -85,6 +85,11 @@ func (d *DelegatorLifecycle) ID() string {
 }
 
 func (d *DelegatorLifecycle) Process(block uint32) error {
+	defer func() {
+		if d.status == StatusWithdrawn {
+			d.delegations.UnregisterDelegator(d.position, d.validationID)
+		}
+	}()
 	switch d.status {
 	case StatusPending:
 		return d.ProcessPending(block)
@@ -221,8 +226,6 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 func (d *DelegatorLifecycle) ProcessExited(block uint32) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
-	d.delegations.UnregisterDelegator(d.position, d.validationID)
 
 	if d.withdrawReceipt != nil {
 		return nil
