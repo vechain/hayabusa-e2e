@@ -139,7 +139,7 @@ func (e *Engine) Run() {
 
 			e.mu.Unlock()
 
-			slog.Info("validations status",
+			slog.Info("🚒  validations status",
 				"pending", validationStatus[StatusPending],
 				"queued", validationStatus[StatusQueued],
 				"active", validationStatus[StatusActive],
@@ -147,13 +147,15 @@ func (e *Engine) Run() {
 				"withdrawn", validationStatus[StatusWithdrawn],
 			)
 
-			slog.Info("delegations status",
+			slog.Info("🚒  delegations status",
 				"pending", delegationStatus[StatusPending],
 				"queued", delegationStatus[StatusQueued],
 				"active", delegationStatus[StatusActive],
 				"exit signalled", delegationStatus[StatusExitSignalled],
 				"withdrawn", delegationStatus[StatusWithdrawn],
 			)
+
+			slog.Info(e.delegations.Summary())
 		}
 	}
 }
@@ -177,7 +179,6 @@ func (e *Engine) Flush(status Status) error {
 				}
 			}(lifecycle, best))
 		}
-		e.workerPool.Wait()
 
 		processed = true
 		for _, lifecycle := range e.lifecycles {
@@ -230,7 +231,7 @@ func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
 	}
 	upperLimit := math.Sqrt(float64(e.delegations.TotalSupply()) - float64(lifecycles))
 	amount := utils2.RandomBetween(int(upperLimit)/2, int(upperLimit))
-	amount = min(amount, 50) // Limit to 50 to avoid full blocks
+	amount = min(amount, 80) // Limit to 50 to avoid full blocks
 
 	slog.Info("generating delegator cycles", "amount", amount, "lifecycles", lifecycles, "upperLimit", upperLimit)
 

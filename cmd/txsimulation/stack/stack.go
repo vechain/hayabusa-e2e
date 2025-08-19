@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
-	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -24,6 +25,7 @@ type Stack struct {
 	validatorAccs map[thor.Address]*hayabusa.NodePair
 	stargateAcc   bind.Signer
 	mu            sync.Mutex // protects the stack from concurrent access
+	best          atomic.Pointer[api.JSONCollapsedBlock]
 }
 
 func NewStack(
@@ -92,12 +94,43 @@ func (s *Stack) NextValidator() (*hayabusa.NodePair, error) {
 	panic("stack: no validators available")
 }
 
+func (s *Stack) bestBlock() (*api.JSONCollapsedBlock, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var best *api.JSONCollapsedBlock
+	cached := s.best.Load()
+	if cached == nil || time.Since(time.Unix(int64(cached.Timestamp), 0)) > 6*time.Second {
+		block, err := s.Client().Block("best")
+		if err != nil {
+			return nil, err
+		}
+		best = block
+		s.best.Store(best)
+	} else {
+		best = cached
+	}
+	return best, nil
+}
+
 func (s *Stack) SendTransaction(method *bind.MethodBuilder, signer bind.Signer) (*api.Receipt, error) {
-	txCtx, cancel := context.WithTimeout(s.Context(), 30*time.Second)
+	txCtx, cancel := context.WithTimeout(s.Context(), time.Minute)
 	defer cancel()
 
+	best, err := s.bestBlock()
+	if err != nil {
+		slog.Error("failed to get best block", "error", err)
+		return nil, err
+	}
+
+	gas := uint64(1_000_000)
+	options := &bind.TxOptions{
+		MaxFeePerGas: big.NewInt(0).Mul((*big.Int)(best.BaseFeePerGas), big.NewInt(2)),
+		Gas:          &gas,
+	}
+
 	receipt, _, err := method.Send().
-		WithOptions(testutil.TxOptions()).
+		WithOptions(options).
 		WithSigner(signer).
 		SubmitAndConfirm(txCtx)
 	if err != nil {

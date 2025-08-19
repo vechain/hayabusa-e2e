@@ -22,6 +22,7 @@ type DelegatorLifecycle struct {
 	delegations *delegations.PositionManager
 	stack       *stack.Stack
 
+	position            *delegations.Position
 	status              Status
 	queuedReceipt       *api.Receipt // the receipt of the queued transaction
 	activatedBlock      uint32       // the block at which this lifecycle was activated
@@ -140,6 +141,7 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 		return err
 	}
 
+	d.position = position
 	d.validationID = validator
 	d.id = big.NewInt(0).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
 	d.queuedReceipt = receipt
@@ -219,6 +221,8 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 func (d *DelegatorLifecycle) ProcessExited(block uint32) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
+	d.delegations.UnregisterDelegator(d.position, d.validationID)
 
 	if d.withdrawReceipt != nil {
 		return nil

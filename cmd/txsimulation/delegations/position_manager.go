@@ -54,6 +54,43 @@ func (pm *PositionManager) TotalSupply() int {
 	return total
 }
 
+func (pm *PositionManager) UnregisterDelegator(position *Position, validator thor.Address) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	if pm.validatorActive[validator] == nil {
+		return
+	}
+
+	if count, exists := pm.validatorActive[validator][position.Name]; exists && count > 0 {
+		pm.validatorActive[validator][position.Name]--
+		pm.totalActive[position.Name]--
+		if pm.totalActive[position.Name] < 0 {
+			pm.totalActive[position.Name] = 0
+		}
+	}
+}
+
+func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	if pm.validatorActive[validator] == nil {
+		return
+	}
+
+	for positionID, count := range pm.validatorActive[validator] {
+		if count > 0 {
+			pm.totalActive[positionID] -= count
+			if pm.totalActive[positionID] < 0 {
+				pm.totalActive[positionID] = 0
+			}
+		}
+	}
+	delete(pm.validatorActive, validator)
+	slog.Info("unregistered validator", "address", validator.String())
+}
+
 func (pm *PositionManager) NewPosition(validator thor.Address) (*Position, bool) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
@@ -136,26 +173,6 @@ func (pm *PositionManager) addressToScore(validator thor.Address) float64 {
 	}
 	// Normalize to 0-1 range
 	return float64(score) / float64(^uint64(0))
-}
-
-func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
-	if pm.validatorActive[validator] == nil {
-		return
-	}
-
-	for positionID, count := range pm.validatorActive[validator] {
-		if count > 0 {
-			pm.totalActive[positionID] -= count
-			if pm.totalActive[positionID] < 0 {
-				pm.totalActive[positionID] = 0
-			}
-		}
-	}
-	delete(pm.validatorActive, validator)
-	slog.Info("unregistered validator", "address", validator.String())
 }
 
 func (pm *PositionManager) Summary() string {
