@@ -38,9 +38,20 @@ const (
 	paramsAddress = "0x0000000000000000000000000000506172616d73"
 )
 
+type LowercaseString string
+
+func (s *LowercaseString) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	*s = LowercaseString(strings.ToLower(str))
+	return nil
+}
+
 type AddressKey struct {
-	Address string `json:"address"`
-	Key     string `json:"key"`
+	Address LowercaseString `json:"address"`
+	Key     LowercaseString `json:"key"`
 }
 
 func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (*lifecycle.Engine, func()) {
@@ -66,7 +77,6 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 
 	stargateSigner, err := setStargate(staker)
 	if err != nil {
-		slog.Error("failed to set stargate address", "error", err)
 		os.Exit(1)
 	}
 
@@ -135,13 +145,13 @@ func loadHayabusaValidators(genesis *genesisthor.CustomGenesis) (map[thor.Addres
 	for _, authority := range genesis.Authority {
 		endorserKey, err := crypto.HexToECDSA(endorsorAddressKeys[authority.EndorsorAddress.String()])
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse endorser key for %s: %w", authority.EndorsorAddress, err)
+			return nil, fmt.Errorf("failed to parse endorser key %s: %w", endorsorAddressKeys[authority.EndorsorAddress.String()], err)
 		}
 		endorserSigner := bind.NewSigner(endorserKey)
 
 		nodeKey, err := crypto.HexToECDSA(authorityAddressKeys[authority.MasterAddress.String()])
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse master key for %s: %w", authority.MasterAddress, err)
+			return nil, fmt.Errorf("failed to parse master key %s: %w", authorityAddressKeys[authority.MasterAddress.String()], err)
 		}
 		nodeSigner := bind.NewSigner(nodeKey)
 
@@ -161,7 +171,7 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		os.Exit(1)
 	}
 
-	accountKey, err := crypto.HexToECDSA(accountsKeys[0].Key)
+	accountKey, err := crypto.HexToECDSA(string(accountsKeys[0].Key))
 	if err != nil {
 		slog.Error("failed to parse account key", "error", err)
 		return nil, err
@@ -175,10 +185,7 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	}
 
 	stargateKey := thor.MustParseBytes32(hayabusa.ParamsStargateKey)
-	stargateAddress, err := params.Get(stargateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get stargate address from params: %w", err)
-	}
+	stargateAddress, _ := params.Get(stargateKey)
 
 	if stargateAddress != nil {
 		slog.Info("stargate address already set in params", "stargateAddress", stargateAddress)
@@ -272,7 +279,7 @@ func parseAddressKeysFromEnvToMap(envVar string) (map[string]string, error) {
 
 	addressKeyMap := make(map[string]string)
 	for _, key := range addressKeys {
-		addressKeyMap[key.Address] = key.Key
+		addressKeyMap[string(key.Address)] = string(key.Key)
 	}
 
 	return addressKeyMap, nil

@@ -31,7 +31,7 @@ The transaction simulator supports execution against both local networks (Networ
 
 ```bash
 # Connect to Hayabusa devnet with custom genesis URL
-go run ./cmd/txsimulation --devnet https://hayabusa.live.dev.node.vechain.org/ --genesis-url https://vechain.github.io/thor-hayabusa/genesis.json
+go run ./cmd/txsimulation --devnet https://hayabusa.live.dev.node.vechain.org --genesis-url https://vechain.github.io/thor-hayabusa/genesis.json
 ```
 
 ### Run against NetworkHub (Local Network)
