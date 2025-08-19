@@ -158,7 +158,8 @@ func (n *networkHubGenerator) CreateValidator(node *hayabusa.NodePair, startBloc
 			},
 			StartBlock: startBlock,
 		},
-		Account: node,
+		Account:             node,
+		StakeChangeInterval: uint32(utils2.RandomBetween(5, 20)),
 	}
 }
 
@@ -172,7 +173,7 @@ func (n *networkHubGenerator) CreateDelegator(acc bind.Signer, startBlock uint32
 			StakingPeriods: uint32(utils2.RandomBetween(3, 120)),
 			WithdrawDelay: lifecycle.Delay{
 				Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
-				Epochs: uint32(utils2.RandomBetween(1, 3)),
+				Epochs: uint32(utils2.RandomBetween(5, 10)),
 			},
 			StartBlock: startBlock,
 		},

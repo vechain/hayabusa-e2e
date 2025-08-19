@@ -19,27 +19,27 @@ import (
 )
 
 var (
-	Eth      = big.NewInt(1e18)                            // 1 ETH in wei
-	Million  = big.NewInt(1e6)                             // 1 million VET
-	MaxStake = big.NewInt(0).Mul(big.NewInt(600), Million) // 600 million VET
-	MinStake = big.NewInt(0).Mul(big.NewInt(25), Million)  // 1 million VET
+	Eth     = big.NewInt(1e18) // 1 ETH in wei
+	Million = big.NewInt(1e6)  // 1 million VET
 )
 
 func RandomStake() *big.Int {
+	return RandomStakeBetween(25, 40)
+}
+
+// RandomStakeBetween generates a random number between min and max.
+// It will be scaled to millions of VET.
+func RandomStakeBetween(min, max uint8) *big.Int {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	maxStake := big.NewInt(0).Mul(big.NewInt(40), Million)
+	maxStake := big.NewInt(0).Mul(big.NewInt(int64(max)), Million)
 
-	// Calculate the range (max - MinStake)
-	rangeStake := new(big.Int).Sub(maxStake, MinStake)
+	minStake := big.NewInt(0).Mul(big.NewInt(int64(min)), Million)
 
-	// Generate a random number within the range
+	rangeStake := new(big.Int).Sub(maxStake, minStake)
 	randomOffset := new(big.Int).Rand(rng, rangeStake)
-
-	stake := new(big.Int).Add(MinStake, randomOffset)
+	stake := new(big.Int).Add(minStake, randomOffset)
 	stake = stake.Mul(stake, Eth) // Convert to wei
-
-	// Add MinStake to ensure the value is within the desired range
 	return stake
 }
 
