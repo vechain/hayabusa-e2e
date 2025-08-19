@@ -268,7 +268,7 @@ func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabus
 	for _, authority := range genesis.Authority {
 		endorserKey, err := crypto.HexToECDSA(endorsorAddressKeys[authority.EndorsorAddress])
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse endorser key for %s: %w", authority.MasterAddress, err)
+			return nil, fmt.Errorf("failed to parse endorser key for %s: %w", authority.EndorsorAddress, err)
 		}
 		endorserSigner := bind.NewSigner(endorserKey)
 
