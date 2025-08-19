@@ -125,6 +125,15 @@ func (s *State) poll() {
 			for id, validation := range newValidations {
 				s.updateStatus(id, validation)
 			}
+
+			slog.Info(" 🐥 validator status",
+				"active", len(s.active),
+				"queued", len(s.queued),
+				"exiting", len(s.exiting),
+				"exited", len(s.exited),
+				"total", len(s.idLookup),
+			)
+
 			s.mu.Unlock()
 		}
 	}

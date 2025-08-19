@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
@@ -77,9 +78,10 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 
 	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
+	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven)
 	validators := validations.NewState(stack)
 	generator := &networkHubGenerator{config: config}
-	engine := lifecycle.NewEngine(stack, validators, generator)
+	engine := lifecycle.NewEngine(stack, validators, delegations, generator)
 
 	utils.WaitForFork(staker, config.ForkBlock)
 
@@ -94,7 +96,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 			config.StakingPeriods = uint32(utils2.RandomBetween(6, 12)) // create 20 short term validators
 		}
 		config.QueueDelay = lifecycle.Delay{Blocks: 0, Epochs: 0}
-		cycle := lifecycle.NewValidatorLifecycle(config)
+		cycle := lifecycle.NewValidatorLifecycle(config, validators, delegations, stack)
 		engine.AddLifecycle(cycle)
 	}
 
@@ -120,7 +122,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 	for i := range uint32(200) {
 		config := generator.CreateDelegator(stack.Stargate(), best.Number)
 		config.QueueDelay = lifecycle.Delay{Blocks: i % 3, Epochs: 0}
-		cycle := lifecycle.NewDelegatorLifecycle(config)
+		cycle := lifecycle.NewDelegatorLifecycle(config, validators, delegations, stack)
 		engine.AddLifecycle(cycle)
 	}
 
