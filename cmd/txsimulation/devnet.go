@@ -106,7 +106,7 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		slog.Error("failed to load Hayabusa validators", "error", err)
 		os.Exit(1)
 	}
-	
+
 	stargateSigner, err := setStargate(staker)
 	if err != nil {
 		slog.Error("failed to set stargate address", "error", err)
@@ -198,13 +198,6 @@ func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabus
 }
 
 func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
-	genesis, err := staker.Raw().Client().Block("0")
-	if err != nil {
-		slog.Error("failed to get genesis block to set stargate", "error", err)
-		return nil, err
-	}
-	chainTag := genesis.ID[31]
-
 	accountsKeys, err := parseAddressKeysFromEnv("ACCOUNTS_KEYS")
 	if err != nil {
 		slog.Error("failed to parse ACCOUNTS_KEYS", "error", err)
@@ -217,6 +210,31 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		return nil, err
 	}
 	accountSigner := bind.NewSigner(accountKey)
+
+	// Check if stargate address is already set in params
+	params, err := builtin.NewParams(staker.Raw().Client())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create params: %w", err)
+	}
+
+	stargateKey := thor.MustParseBytes32(hayabusa.ParamsStargateKey)
+	stargateAddress, err := params.Get(stargateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stargate address from params: %w", err)
+	}
+
+	if stargateAddress != nil {
+		slog.Info("stargate address already set in params", "stargateAddress", stargateAddress)
+		return accountSigner, nil
+	}
+
+	// If stargate address is not set in params, deploy stargate contract
+	genesis, err := staker.Raw().Client().Block("0")
+	if err != nil {
+		slog.Error("failed to get genesis block to set stargate", "error", err)
+		return nil, err
+	}
+	chainTag := genesis.ID[31]
 
 	bytecode := stargate.Bin
 	bytecode = strings.TrimSpace(bytecode)
@@ -260,18 +278,12 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	contractAddr := receipt.Outputs[0].ContractAddress
 
 	// Set stargate address in params
-	params, err := builtin.NewParams(staker.Raw().Client())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create params: %w", err)
-	}
-
-	key := thor.MustParseBytes32(hayabusa.ParamsStargateKey)
-	value := new(big.Int).SetBytes(contractAddr.Bytes())
+	stargateAddress = new(big.Int).SetBytes(contractAddr.Bytes())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	receipt, _, err = params.Set(key, value).Send().WithSigner(hayabusa.Executor).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
+	receipt, _, err = params.Set(stargateKey, stargateAddress).Send().WithSigner(hayabusa.Executor).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set stargate address in params: %w", err)
 	}
