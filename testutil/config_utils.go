@@ -1,15 +1,16 @@
 package testutil
 
 import (
+	"log/slog"
+	"math/big"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/builtin"
-	"log/slog"
-	"math/big"
-	"testing"
 )
 
 func SetupTestNetworkWithEpochAndBlockInterval(t *testing.T, maxBlockProposers uint32, epochLength uint32, blockInterval uint64) (*hayabusa.Config, *thorclient.Client, hayabusa.Network) {
@@ -24,7 +25,7 @@ func SetupTestNetworkWithEpochAndBlockInterval(t *testing.T, maxBlockProposers u
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 259200,
 		Name:              t.Name(),
-		BlockInterval:     &blockInterval,
+		BlockInterval:     blockInterval,
 	}
 
 	network, err := hayabusa.NewNetwork(config, t.Context())
