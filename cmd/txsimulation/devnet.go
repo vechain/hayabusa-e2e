@@ -7,21 +7,29 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	"github.com/vechain/hayabusa-e2e/hayabusa/stargate"
+	"github.com/vechain/hayabusa-e2e/testutil"
+	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
+	"github.com/vechain/thor/v2/tx"
 )
 
 const (
@@ -98,10 +106,14 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		slog.Error("failed to load Hayabusa validators", "error", err)
 		os.Exit(1)
 	}
+	
+	stargateSigner, err := setStargate(staker)
+	if err != nil {
+		slog.Error("failed to set stargate address", "error", err)
+		os.Exit(1)
+	}
 
-	//TODO: set stargate address
-
-	stack := stack.NewStack(ctx, staker, config, validators, hayabusa.Stargate)
+	stack := stack.NewStack(ctx, staker, config, validators, stargateSigner)
 	validationsState := validations.NewState(stack)
 	generator := &devnetGenerator{
 		config: config,
@@ -153,12 +165,12 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabusa.NodePair, error) {
 	validators := make(map[thor.Address]*hayabusa.NodePair)
 
-	endorsorAddressKeys, err := parseAddressKeysFromEnv("ENDORSOR_KEYS")
+	endorsorAddressKeys, err := parseAddressKeysFromEnvToMap("ENDORSOR_KEYS")
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ENDORSOR_KEYS: %w", err)
 	}
 
-	authorityAddressKeys, err := parseAddressKeysFromEnv("AUTHORITY_KEYS")
+	authorityAddressKeys, err := parseAddressKeysFromEnvToMap("AUTHORITY_KEYS")
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse AUTHORITY_KEYS: %w", err)
 	}
@@ -185,19 +197,113 @@ func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabus
 	return validators, nil
 }
 
-func parseAddressKeysFromEnv(envVar string) (map[string]string, error) {
+func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
+	genesis, err := staker.Raw().Client().Block("0")
+	if err != nil {
+		slog.Error("failed to get genesis block to set stargate", "error", err)
+		return nil, err
+	}
+	chainTag := genesis.ID[31]
+
+	accountsKeys, err := parseAddressKeysFromEnv("ACCOUNTS_KEYS")
+	if err != nil {
+		slog.Error("failed to parse ACCOUNTS_KEYS", "error", err)
+		os.Exit(1)
+	}
+
+	accountKey, err := crypto.HexToECDSA(accountsKeys[0].Key)
+	if err != nil {
+		slog.Error("failed to parse account key", "error", err)
+		return nil, err
+	}
+	accountSigner := bind.NewSigner(accountKey)
+
+	bytecode := stargate.Bin
+	bytecode = strings.TrimSpace(bytecode)
+	bytes, err := hexutil.Decode("0x" + bytecode)
+
+	clause := tx.NewClause(nil).WithData(bytes)
+	trx := new(tx.Builder).
+		Clause(clause).
+		Gas(40_000_000).
+		Nonce(datagen.RandUint64()).
+		ChainTag(chainTag).
+		Expiration(10000).
+		GasPriceCoef(255).
+		Build()
+
+	trx, err = accountSigner.SignTransaction(trx)
+	if err != nil {
+		slog.Error("failed to sign transaction to set stargate", "error", err)
+		return nil, err
+	}
+	res, err := staker.Raw().Client().SendTransaction(trx)
+	if err != nil {
+		slog.Error("failed to send transaction to set stargate", "error", err)
+		return nil, err
+	}
+
+	var receipt *api.Receipt
+	for range 30 {
+		receipt, err = staker.Raw().Client().TransactionReceipt(res.ID)
+		if err == nil && receipt != nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+	if receipt == nil {
+		slog.Error("failed to get transaction receipt to set stargate")
+		return nil, fmt.Errorf("failed to get transaction receipt to set stargate")
+	}
+
+	// The stargate contract should be deployed by now
+	contractAddr := receipt.Outputs[0].ContractAddress
+
+	// Set stargate address in params
+	params, err := builtin.NewParams(staker.Raw().Client())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create params: %w", err)
+	}
+
+	key := thor.MustParseBytes32(hayabusa.ParamsStargateKey)
+	value := new(big.Int).SetBytes(contractAddr.Bytes())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	receipt, _, err = params.Set(key, value).Send().WithSigner(hayabusa.Executor).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set stargate address in params: %w", err)
+	}
+	if receipt.Reverted {
+		return nil, fmt.Errorf("transaction to set stargate address in params reverted: %s", receipt.Meta.TxID)
+	}
+
+	return accountSigner, nil
+}
+
+func parseAddressKeysFromEnv(envVar string) ([]AddressKey, error) {
 	keysStr := os.Getenv(envVar)
 	if keysStr == "" {
 		return nil, fmt.Errorf("%s environment variable is required", envVar)
 	}
 
-	var keys []AddressKey
-	if err := json.Unmarshal([]byte(keysStr), &keys); err != nil {
+	var addressKeys []AddressKey
+	if err := json.Unmarshal([]byte(keysStr), &addressKeys); err != nil {
 		return nil, fmt.Errorf("failed to parse %s JSON: %w", envVar, err)
 	}
 
+	return addressKeys, nil
+}
+
+func parseAddressKeysFromEnvToMap(envVar string) (map[string]string, error) {
+	addressKeys, err := parseAddressKeysFromEnv(envVar)
+	if err != nil {
+		return nil, err
+	}
+
 	addressKeyMap := make(map[string]string)
-	for _, key := range keys {
+	for _, key := range addressKeys {
 		addressKeyMap[key.Address] = key.Key
 	}
 
@@ -385,7 +491,7 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 		validatorCount++
 	}
 
-	accountsAddressKeys, err := parseAddressKeysFromEnv("ACCOUNTS_KEYS")
+	accountsAddressKeys, err := parseAddressKeysFromEnvToMap("ACCOUNTS_KEYS")
 	if err != nil {
 		return fmt.Errorf("failed to parse ACCOUNTS_KEYS: %w", err)
 	}
