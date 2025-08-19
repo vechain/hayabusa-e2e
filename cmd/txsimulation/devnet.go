@@ -249,8 +249,19 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// TODO: signer has to be the executor
-	receipt, _, err = params.Set(stargateKey, stargateAddress).Send().WithSigner(nil).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
+	executorAddressKeys, err := parseAddressKeysFromEnv("EXECUTOR_KEYS")
+	if err != nil {
+		slog.Error("failed to parse EXECUTOR_KEYS", "error", err)
+		os.Exit(1)
+	}
+	executorKey, err := crypto.HexToECDSA(string(executorAddressKeys[0].Key))
+	if err != nil {
+		slog.Error("failed to parse executor key", "error", err)
+		os.Exit(1)
+	}
+	executorSigner := bind.NewSigner(executorKey)
+
+	receipt, _, err = params.Set(stargateKey, stargateAddress).Send().WithSigner(executorSigner).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
 
 	if err != nil || receipt == nil {
 		return nil, fmt.Errorf("failed to set stargate address in params: %w", err)
