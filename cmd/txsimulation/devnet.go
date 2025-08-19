@@ -288,7 +288,9 @@ func extractConfigFromAccounts(accounts []genesisthor.Account, genesis *genesist
 	var stakerAccount, paramsAccount *genesisthor.Account
 
 	for _, account := range accounts {
-		switch account.Address.String() {
+		accountAddr := account.Address.String()
+
+		switch accountAddr {
 		case stakerAddress:
 			stakerAccount = &account
 		case paramsAddress:
@@ -333,12 +335,14 @@ func processParamsConfig(config *hayabusa.Config, storage map[string]thor.Bytes3
 
 func processStorageValues(storage map[string]thor.Bytes32, paramMappings map[string]*uint32) error {
 	for storageKey, storageValue := range storage {
-		storageKeyBytes, err := hex.DecodeString(storageKey)
+		storageKeyWithout0x := strings.TrimPrefix(storageKey, "0x")
+		storageKeyBytes, err := hex.DecodeString(storageKeyWithout0x)
 		if err != nil {
 			return fmt.Errorf("failed to decode storage key %s: %w", storageKey, err)
 		}
 
-		paramName := thor.BytesToBytes32(storageKeyBytes).String()
+		paramName := string(storageKeyBytes)
+		paramName = strings.TrimLeft(paramName, "\x00")
 
 		if fieldPtr, exists := paramMappings[paramName]; exists {
 			value, err := parseStorageValue(storageValue)
