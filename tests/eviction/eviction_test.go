@@ -1,6 +1,9 @@
 package eviction
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
@@ -8,12 +11,10 @@ import (
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
-	"math/big"
-	"testing"
 )
 
 func TestHayabusaEviction(t *testing.T) {
-	config, client, network := testutil.SetupTestNetworkWithEpochAndBlockInterval(t, 3, 1, 1)
+	config, client, network := testutil.SetupTestNetworkWithEpochAndBlockInterval(t, 3, 2, 2)
 
 	validator2Node := network.NodeConfigs()[1]
 
@@ -89,7 +90,7 @@ func TestHayabusaEviction(t *testing.T) {
 	})
 
 	offlineBlock := config.ForkBlock + config.TransitionPeriod
-	exitBlock := offlineBlock + (config.EpochLength + thor.OfflineValidatorEvictionThresholdEpochs) + 1
+	exitBlock := offlineBlock + config.EpochLength + config.ValidatorEvictionThreshold + 1
 	ticker := utils.NewTicker(staker.Raw().Client())
 	t.Log("✅ waiting for block", exitBlock)
 	require.NoError(t, ticker.WaitForBlock(exitBlock))

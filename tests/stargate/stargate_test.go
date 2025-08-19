@@ -467,7 +467,6 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 
 func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Address, thorclient.Client) {
 	t.Helper()
-	blockInterval := uint64(5)
 	config := &hayabusa.Config{
 		Nodes:             3,
 		MaxBlockProposers: 3,
@@ -479,7 +478,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 24,
 		Name:              t.Name(),
-		BlockInterval:     &blockInterval,
+		BlockInterval:     uint64(5),
 	}
 	network, err := hayabusa.NewNetwork(config, t.Context())
 	require.NoError(t, err)
