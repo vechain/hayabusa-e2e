@@ -55,6 +55,10 @@ func (pm *PositionManager) TotalSupply() int {
 }
 
 func (pm *PositionManager) UnregisterDelegator(position *Position, validator thor.Address) {
+	if position == nil {
+		slog.Warn("attempted to unregister nil position for validator", "address", validator.String())
+		return
+	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
