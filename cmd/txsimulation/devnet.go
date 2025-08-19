@@ -24,6 +24,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa/stargate"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/thor/v2/api"
+	genesisthor "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -37,50 +38,6 @@ const (
 	paramsAddress = "0x0000000000000000000000000000506172616d73"
 )
 
-// HayabusaGenesis represents the structure of the Hayabusa genesis.json
-type HayabusaGenesis struct {
-	GasLimit   string `json:"gasLimit"`
-	ExtraData  string `json:"extraData"`
-	ForkConfig struct {
-		VIP191      int `json:"VIP191"`
-		ETH_CONST   int `json:"ETH_CONST"`
-		BLOCKLIST   int `json:"BLOCKLIST"`
-		ETH_IST     int `json:"ETH_IST"`
-		VIP214      int `json:"VIP214"`
-		FINALITY    int `json:"FINALITY"`
-		GALACTICA   int `json:"GALACTICA"`
-		HAYABUSA    int `json:"HAYABUSA"`
-		HAYABUSA_TP int `json:"HAYABUSA_TP"`
-	} `json:"forkConfig"`
-	Accounts  []GenesisAccount `json:"accounts"`
-	Authority []struct {
-		MasterAddress   string `json:"masterAddress"`
-		EndorsorAddress string `json:"endorsorAddress"`
-		Identity        string `json:"identity"`
-	} `json:"authority"`
-	Executor struct {
-		Approvers []struct {
-			Address  string `json:"address"`
-			Identity string `json:"identity"`
-		} `json:"approvers"`
-	} `json:"executor"`
-	Params struct {
-		ExecutorAddress     string `json:"executorAddress"`
-		BaseGasPrice        string `json:"baseGasPrice"`
-		RewardRatio         string `json:"rewardRatio"`
-		ProposerEndorsement string `json:"proposerEndorsement"`
-	} `json:"params"`
-	LaunchTime int64 `json:"launchTime"`
-}
-
-// GenesisAccount represents an account in the genesis.json
-type GenesisAccount struct {
-	Address string            `json:"address"`
-	Balance string            `json:"balance"`
-	Energy  string            `json:"energy"`
-	Code    string            `json:"code,omitempty"`
-	Storage map[string]string `json:"storage,omitempty"`
-}
 type AddressKey struct {
 	Address string `json:"address"`
 	Key     string `json:"key"`
@@ -133,7 +90,7 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 }
 
 // loadHayabusaGenesis loads Hayabusa genesis configuration
-func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config, error) {
+func loadHayabusaGenesis(genesisURL string) (*genesisthor.CustomGenesis, *hayabusa.Config, error) {
 	resp, err := http.Get(genesisURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
@@ -145,7 +102,7 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 		return nil, nil, fmt.Errorf("failed to read genesis.json: %w", err)
 	}
 
-	var genesis HayabusaGenesis
+	var genesis genesisthor.CustomGenesis
 	if err := json.Unmarshal(body, &genesis); err != nil {
 		return nil, nil, fmt.Errorf("failed to parse genesis.json: %w", err)
 	}
@@ -162,7 +119,7 @@ func loadHayabusaGenesis(genesisURL string) (*HayabusaGenesis, *hayabusa.Config,
 }
 
 // Load validators from Hayabusa genesis.json
-func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabusa.NodePair, error) {
+func loadHayabusaValidators(genesis *genesisthor.CustomGenesis) (map[thor.Address]*hayabusa.NodePair, error) {
 	validators := make(map[thor.Address]*hayabusa.NodePair)
 
 	endorsorAddressKeys, err := parseAddressKeysFromEnvToMap("ENDORSOR_KEYS")
@@ -176,13 +133,13 @@ func loadHayabusaValidators(genesis *HayabusaGenesis) (map[thor.Address]*hayabus
 	}
 
 	for _, authority := range genesis.Authority {
-		endorserKey, err := crypto.HexToECDSA(endorsorAddressKeys[authority.EndorsorAddress])
+		endorserKey, err := crypto.HexToECDSA(endorsorAddressKeys[authority.EndorsorAddress.String()])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse endorser key for %s: %w", authority.EndorsorAddress, err)
 		}
 		endorserSigner := bind.NewSigner(endorserKey)
 
-		nodeKey, err := crypto.HexToECDSA(authorityAddressKeys[authority.MasterAddress])
+		nodeKey, err := crypto.HexToECDSA(authorityAddressKeys[authority.MasterAddress.String()])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse master key for %s: %w", authority.MasterAddress, err)
 		}
@@ -321,17 +278,17 @@ func parseAddressKeysFromEnvToMap(envVar string) (map[string]string, error) {
 	return addressKeyMap, nil
 }
 
-func extractConfigFromAccounts(accounts []GenesisAccount, genesis *HayabusaGenesis) (*hayabusa.Config, error) {
+func extractConfigFromAccounts(accounts []genesisthor.Account, genesis *genesisthor.CustomGenesis) (*hayabusa.Config, error) {
 	config := &hayabusa.Config{
 		Nodes:            1,
 		ForkBlock:        uint32(genesis.ForkConfig.HAYABUSA),
 		TransitionPeriod: uint32(genesis.ForkConfig.HAYABUSA_TP),
 	}
 
-	var stakerAccount, paramsAccount *GenesisAccount
+	var stakerAccount, paramsAccount *genesisthor.Account
 
 	for _, account := range accounts {
-		switch account.Address {
+		switch account.Address.String() {
 		case stakerAddress:
 			stakerAccount = &account
 		case paramsAddress:
@@ -354,7 +311,7 @@ func extractConfigFromAccounts(accounts []GenesisAccount, genesis *HayabusaGenes
 	return config, nil
 }
 
-func processStakerConfig(config *hayabusa.Config, storage map[string]string) error {
+func processStakerConfig(config *hayabusa.Config, storage map[string]thor.Bytes32) error {
 	paramMappings := map[string]*uint32{
 		"staker-low-staking-period":    &config.MinStakingPeriod,
 		"staker-medium-staking-period": &config.MidStakingPeriod,
@@ -366,7 +323,7 @@ func processStakerConfig(config *hayabusa.Config, storage map[string]string) err
 	return processStorageValues(storage, paramMappings)
 }
 
-func processParamsConfig(config *hayabusa.Config, storage map[string]string) error {
+func processParamsConfig(config *hayabusa.Config, storage map[string]thor.Bytes32) error {
 	paramMappings := map[string]*uint32{
 		"max-block-proposers": &config.MaxBlockProposers,
 	}
@@ -374,7 +331,7 @@ func processParamsConfig(config *hayabusa.Config, storage map[string]string) err
 	return processStorageValues(storage, paramMappings)
 }
 
-func processStorageValues(storage map[string]string, paramMappings map[string]*uint32) error {
+func processStorageValues(storage map[string]thor.Bytes32, paramMappings map[string]*uint32) error {
 	for storageKey, storageValue := range storage {
 		storageKeyBytes, err := hex.DecodeString(storageKey)
 		if err != nil {
@@ -395,8 +352,8 @@ func processStorageValues(storage map[string]string, paramMappings map[string]*u
 	return nil
 }
 
-func parseStorageValue(storageValue string) (uint32, error) {
-	valueStr := strings.TrimPrefix(storageValue, "0x")
+func parseStorageValue(storageValue thor.Bytes32) (uint32, error) {
+	valueStr := strings.TrimPrefix(storageValue.String(), "0x")
 
 	value, err := strconv.ParseUint(valueStr, 16, 32)
 	if err != nil {
@@ -474,7 +431,7 @@ func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) li
 }
 
 // Initialize realistic synthetic activity
-func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGenerator, genesis *HayabusaGenesis) error {
+func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGenerator, genesis *genesisthor.CustomGenesis) error {
 	validators, err := loadHayabusaValidators(genesis)
 	if err != nil {
 		slog.Error("failed to load validators for synthetic activity", "error", err)
@@ -509,7 +466,7 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 
 	delegatorsCount := 15
 	for i, account := range genesis.Accounts[0:delegatorsCount] {
-		accountKey, err := crypto.HexToECDSA(accountsAddressKeys[account.Address])
+		accountKey, err := crypto.HexToECDSA(accountsAddressKeys[account.Address.String()])
 		if err != nil {
 			return fmt.Errorf("failed to parse account key for %s: %w", account.Address, err)
 		}
