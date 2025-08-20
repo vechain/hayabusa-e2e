@@ -3,6 +3,7 @@ package delegations
 import (
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"strings"
 	"sync"
 
@@ -64,6 +65,23 @@ func (pm *PositionManager) Available() int {
 	return available
 }
 
+func (pm *PositionManager) Summary() string {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	builder := strings.Builder{}
+	builder.WriteString("PositionManager Summary:\n")
+	for positionID, position := range pm.positions {
+		builder.WriteString(fmt.Sprintf("  %s: active=%d, available=%d\n",
+			positionID,
+			pm.totalActive[positionID],
+			position.MainnetUsed-pm.totalActive[positionID],
+		))
+	}
+
+	return builder.String()
+}
+
 func (pm *PositionManager) RegisterValidator(validator thor.Address) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
@@ -83,9 +101,12 @@ func (pm *PositionManager) UnregisterDelegator(position *Position, validator tho
 		return
 	}
 
-	_, exists := pm.validatorAvailable[validator][position.Name]
+	count, exists := pm.validatorAvailable[validator][position.Name]
 	if !exists {
 		slog.Warn("attempted to unregister non-existent position for validator", "address", validator.String(), "position", position.Name)
+		return
+	}
+	if count <= 0 {
 		return
 	}
 	pm.validatorAvailable[validator][position.Name]++
@@ -116,14 +137,35 @@ func (pm *PositionManager) NewPosition() (*Position, thor.Address, bool) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	for address, available := range pm.validatorAvailable {
-		for positionID, count := range available {
-			if count > 0 && pm.totalActive[positionID] < pm.positions[positionID].MainnetUsed {
+	validators := make([]thor.Address, 0, len(pm.validatorAvailable))
+	for address := range pm.validatorAvailable {
+		validators = append(validators, address)
+	}
+	rand.Shuffle(len(validators), func(i, j int) {
+		validators[i], validators[j] = validators[j], validators[i]
+	})
+
+	positions := make([]string, 0, len(pm.positions))
+	for positionID := range pm.positions {
+		positions = append(positions, positionID)
+	}
+	rand.Shuffle(len(positions), func(i, j int) {
+		positions[i], positions[j] = positions[j], positions[i]
+	})
+
+	for _, validator := range validators {
+		for _, positionID := range positions {
+			count, exists := pm.validatorAvailable[validator][positionID]
+			if !exists || count <= 0 {
+				continue // No available positions for this validator
+			}
+
+			if pm.totalActive[positionID] < pm.positions[positionID].MainnetUsed {
 				// Found a position that can be assigned
-				pm.validatorAvailable[address][positionID]--
+				pm.validatorAvailable[validator][positionID]--
 				pm.totalActive[positionID]++
 				position := pm.positions[positionID]
-				return position, address, true
+				return position, validator, true
 			}
 		}
 	}
@@ -199,21 +241,4 @@ func (pm *PositionManager) addressToScore(validator thor.Address) float64 {
 	}
 	// Normalize to 0-1 range
 	return float64(score) / float64(^uint64(0))
-}
-
-func (pm *PositionManager) Summary() string {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
-	builder := strings.Builder{}
-	builder.WriteString("PositionManager Summary:\n")
-	for positionID, position := range pm.positions {
-		builder.WriteString(fmt.Sprintf("  %s: %d active positions, %d available\n",
-			positionID,
-			pm.totalActive[positionID],
-			position.MainnetUsed-pm.totalActive[positionID],
-		))
-	}
-
-	return builder.String()
 }
