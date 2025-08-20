@@ -250,6 +250,8 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 			return nil, fmt.Errorf("transaction to transfer energy to executor reverted: %s", receipt.Meta.TxID)
 		}
 		slog.Info("energy transferred to executor", "receipt", receipt)
+	} else {
+		slog.Info("energy already transferred to executor", "balance", balance)
 	}
 
 	initialBaseFee := new(big.Int).SetUint64(thor.InitialBaseFee)
