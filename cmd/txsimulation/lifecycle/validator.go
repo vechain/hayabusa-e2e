@@ -115,11 +115,11 @@ func (v *ValidatorLifecycle) Info() *Info {
 }
 
 func (v *ValidatorLifecycle) Process(block uint32) error {
-	status, ok := v.validations.LookupAddress(v.id)
-	if ok && status.Status == validation.StatusExit {
+	validator, ok := v.validations.LookupAddress(v.id)
+	if ok && validator.Status == validation.StatusExit {
 		v.delegations.UnregisterValidator(v.id)
 	}
-	if ok && status.Status == validation.StatusActive {
+	if ok && validator.Status == validation.StatusActive {
 		v.delegations.RegisterValidator(v.id)
 	}
 

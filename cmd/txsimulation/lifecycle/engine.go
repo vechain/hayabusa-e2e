@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"fmt"
 	"log/slog"
 	"math"
 	"sync"
@@ -157,7 +158,7 @@ func (e *Engine) Run() {
 				"withdrawn", delegationStatus[StatusWithdrawn],
 			)
 
-			slog.Info(e.delegations.Summary())
+			slog.Info(fmt.Sprintf("👨‍💼 %s", e.delegations.Summary()))
 		}
 	}
 }
