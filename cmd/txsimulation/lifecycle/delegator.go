@@ -4,48 +4,53 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
-	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
-type DelegatorLifecycle struct {
-	config      DelegatorConfig
-	validations *validations.State
-	delegations *delegations.PositionManager
-	stack       *stack.Stack
+type transaction struct {
+	id      thor.Bytes32
+	receipt *api.Receipt
+}
 
-	position            *delegations.Position
+type DelegatorLifecycle struct {
+	config       DelegatorConfig
+	delegations  *delegations.PositionManager
+	stack        *stack.Stack
+	position     *delegations.Position
+	validationID thor.Address
+
 	status              Status
-	queuedReceipt       *api.Receipt // the receipt of the queued transaction
-	activatedBlock      uint32       // the block at which this lifecycle was activated
+	queuedTx            transaction // the receipt of the queued transaction
+	exitTx              transaction // the receipt of the exit transaction
+	withdrawTw          transaction // the receipt of the withdraw transaction
+	activatedBlock      uint32      // the block at which this lifecycle was activated
 	stakingPeriodLength uint32
-	exitReceipt         *api.Receipt // the receipt of the exit transaction
-	withdrawReceipt     *api.Receipt // the receipt of the withdraw transaction
 	id                  *big.Int
-	validationID        thor.Address
 
 	mu sync.Mutex
 }
 
 func NewDelegatorLifecycle(
 	base DelegatorConfig,
-	validations *validations.State,
 	delegations *delegations.PositionManager,
 	stack *stack.Stack,
+	position *delegations.Position,
+	validationID thor.Address,
 ) *DelegatorLifecycle {
 	return &DelegatorLifecycle{
-		config:      base,
-		validations: validations,
-		delegations: delegations,
-		stack:       stack,
+		config:       base,
+		delegations:  delegations,
+		stack:        stack,
+		position:     position,
+		validationID: validationID,
 	}
 }
 
@@ -69,10 +74,10 @@ func (d *DelegatorLifecycle) Info() *Info {
 		Type:            d.Type(),
 		ID:              d.ID(),
 		Status:          d.status,
-		QueuedReceipt:   d.queuedReceipt,
+		QueuedReceipt:   d.queuedTx.receipt,
 		ActivatedBlock:  d.activatedBlock,
-		WithdrawReceipt: d.withdrawReceipt,
-		ExitReceipt:     d.exitReceipt,
+		WithdrawReceipt: d.withdrawTw.receipt,
+		ExitReceipt:     d.exitTx.receipt,
 		ValidationID:    d.validationID,
 	}
 }
@@ -86,7 +91,7 @@ func (d *DelegatorLifecycle) ID() string {
 
 func (d *DelegatorLifecycle) Process(block uint32) error {
 	defer func() {
-		if d.status == StatusWithdrawn {
+		if d.status == StatusWithdrawn && d.position != nil {
 			d.delegations.UnregisterDelegator(d.position, d.validationID)
 		}
 	}()
@@ -110,48 +115,51 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.queuedReceipt != nil {
+	if d.queuedTx.receipt != nil {
 		return nil
 	}
 	if block < d.config.QueueBlock(d.stack.Config()) {
 		return nil
 	}
 
-	var position *delegations.Position
-	var validatorID thor.Address
-
-	initParams := func() {
-		_, validatorID = d.validations.RandomActiveValidator()
-		if validatorID.IsZero() {
-			return
-		}
-		position, _ = d.delegations.NewPosition(validatorID)
-	}
-	for position == nil {
-		initParams()
-	}
-
-	stakingPeriodInfo, err := d.stack.Staker().GetValidatorPeriodDetails(validatorID)
+	stakingPeriodInfo, err := d.stack.Staker().GetValidatorPeriodDetails(d.validationID)
 	if err != nil {
-		slog.Error("failed to get staking period info for validation", "error", err, "id", validatorID)
+		slog.Error("failed to get staking period info for validation", "error", err, "id", d.validationID)
 		return err
 	}
 
-	eth := big.NewInt(1e18)
-	stake := big.NewInt(0).Mul(position.Stake, eth)
-	sender := d.stack.Staker().AddDelegation(validatorID, stake, position.Multiplier)
-	receipt, err := d.stack.SendTransaction(sender, d.config.Account)
-	if err != nil {
-		slog.Error("failed to queue delegator", "error", err)
-		return err
-	}
-
-	d.position = position
-	d.validationID = validatorID
-	d.id = big.NewInt(0).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
-	d.queuedReceipt = receipt
-	d.status = StatusQueued
 	d.stakingPeriodLength = stakingPeriodInfo.Period
+
+	if d.queuedTx.id.IsZero() { // send the transaction
+		eth := big.NewInt(1e18)
+		stake := big.NewInt(0).Mul(d.position.Stake, eth)
+		sender := d.stack.Staker().AddDelegation(d.validationID, stake, d.position.Multiplier)
+		tx, err := d.stack.SendTransaction(sender, d.config.Account)
+		if err != nil {
+			slog.Error("failed to queue delegator", "error", err)
+			return err
+		}
+		d.queuedTx.id = tx.ID()
+	} else { // poll for the receipt
+		receipt, err := d.stack.Client().TransactionReceipt(&d.queuedTx.id)
+		if err != nil {
+			if errors.Is(err, httpclient.ErrNotFound) {
+				return nil
+			}
+			slog.Error("failed to get queued delegator transaction", "error", err, "id", d.queuedTx.id)
+			return err
+		}
+		if receipt.Reverted {
+			d.queuedTx.id = thor.Bytes32{} // reset the ID if the transaction was reverted
+			d.position = nil
+			d.validationID = thor.Address{}
+			d.stakingPeriodLength = 0
+			return nil
+		}
+		d.queuedTx.receipt = receipt
+		d.id = big.NewInt(0).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
+		d.status = StatusQueued
+	}
 
 	slog.Debug("delegator queued", "id", d.ID())
 	return nil
@@ -191,7 +199,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.exitReceipt != nil {
+	if d.exitTx.receipt != nil {
 		return nil
 	}
 	if d.status == StatusExitSignalled {
@@ -210,16 +218,33 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 	slog.Debug("signalling exit for delegator", "id", d.ID())
 
 	sender := d.stack.Staker().SignalDelegationExit(d.id)
-	receipt, err := d.stack.SendTransaction(sender, d.config.Account)
-	if receipt != nil {
-		d.exitReceipt = receipt
+
+	if d.exitTx.id.IsZero() { // send the tx
+		tx, err := d.stack.SendTransaction(sender, d.config.Account)
+		if err != nil {
+
+			slog.Error("failed to signal exit for delegator", "error", err, "id", d.ID())
+			return err
+		}
+		d.exitTx.id = tx.ID()
+	} else { // poll for it
+		receipt, err := d.stack.Client().TransactionReceipt(&d.exitTx.id)
+		if err != nil {
+			if errors.Is(err, httpclient.ErrNotFound) {
+				return nil
+			}
+			slog.Error("failed to get exit transaction receipt for delegator", "error", err, "id", d.ID())
+			return err
+		}
+		if receipt.Reverted {
+			slog.Warn("exit transaction for delegator was reverted", "id", d.ID())
+			d.exitTx.id = thor.Bytes32{} // reset the ID if the transaction was reverted
+			return nil
+		}
+		d.exitTx.receipt = receipt
 		d.status = StatusExitSignalled
 	}
-	if err != nil && !strings.Contains(err.Error(), "delegation has ended, funds can be withdrawn") {
-		slog.Error("failed to signal exit for delegator", "error", err, "id", d.ID())
-		return err
-	}
-	slog.Debug("delegator exit signalled", "id", d.ID())
+
 	return nil
 }
 
@@ -227,31 +252,46 @@ func (d *DelegatorLifecycle) ProcessExited(block uint32) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.withdrawReceipt != nil {
+	if d.withdrawTw.receipt != nil {
 		return nil
 	}
-
+	if d.exitTx.receipt == nil {
+		return fmt.Errorf("cannot withdraw delegator that has not signalled exit: %s", d.ID())
+	}
 	if d.status != StatusExitSignalled {
 		return fmt.Errorf("cannot withdraw delegator that is not exit signalled: %s", d.ID())
 	}
-	if d.exitReceipt == nil {
-		return fmt.Errorf("cannot withdraw delegator that has not signalled exit: %s", d.ID())
-	}
-	minWithdrawBlock := d.config.MinWithdrawBlock(d.exitReceipt.Meta.BlockNumber, d.stack.Config())
+	minWithdrawBlock := d.config.MinWithdrawBlock(d.exitTx.receipt.Meta.BlockNumber, d.stack.Config())
 	if block < minWithdrawBlock {
 		return nil
 	}
-
 	slog.Debug("withdrawing delegator", "id", d.ID())
 
 	sender := d.stack.Staker().WithdrawDelegation(d.id)
-	receipt, err := d.stack.SendTransaction(sender, d.config.Account)
-	if err != nil {
-		slog.Error("failed to withdraw delegator", "error", err, "id", d.ID())
-		return err
+	if d.withdrawTw.id.IsZero() { // send the tx
+		tx, err := d.stack.SendTransaction(sender, d.config.Account)
+		if err != nil {
+			slog.Error("failed to withdraw delegator", "error", err, "id", d.ID())
+			return err
+		}
+		d.withdrawTw.id = tx.ID()
+	} else { // poll the receipt
+		receipt, err := d.stack.Client().TransactionReceipt(&d.withdrawTw.id)
+		if err != nil {
+			if errors.Is(err, httpclient.ErrNotFound) {
+				return nil
+			}
+			slog.Error("failed to get withdraw transaction receipt for delegator", "error", err, "id", d.ID())
+			return err
+		}
+		if receipt.Reverted {
+			slog.Warn("withdraw transaction for delegator was reverted", "id", d.ID())
+			d.withdrawTw.id = thor.Bytes32{} // reset the ID if the transaction was reverted
+			return nil
+		}
+		d.withdrawTw.receipt = receipt
+		d.status = StatusWithdrawn
 	}
-	slog.Debug("delegator withdrawn", "id", d.ID())
-	d.status = StatusWithdrawn
-	d.withdrawReceipt = receipt
+
 	return nil
 }

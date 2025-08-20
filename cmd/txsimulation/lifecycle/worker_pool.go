@@ -4,6 +4,8 @@ import (
 	"sync"
 )
 
+type Worker = func()
+
 type WorkerPool struct {
 	maxWorkers int
 	jobQueue   chan Worker
@@ -22,8 +24,6 @@ func NewWorkerPool(maxWorkers int) *WorkerPool {
 		jobQueue:   make(chan Worker, maxWorkers*2), // Buffer to prevent blocking
 	}
 }
-
-type Worker = func()
 
 // Start initializes the worker pool with the specified number of worker goroutines
 func (wp *WorkerPool) Start() {
@@ -44,6 +44,13 @@ func (wp *WorkerPool) worker() {
 		job() // Execute the job (ignoring error for now, could be enhanced)
 		wp.wg.Done()
 	}
+}
+
+// Len returns the number of jobs currently in the queue
+func (wp *WorkerPool) Len() int {
+	wp.mu.Lock()
+	defer wp.mu.Unlock()
+	return len(wp.jobQueue)
 }
 
 // Run submits a single worker job to the pool

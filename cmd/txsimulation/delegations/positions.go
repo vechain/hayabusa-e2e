@@ -7,10 +7,10 @@ import (
 )
 
 type Position struct {
-	Name       string
-	Stake      *big.Int
-	Used       int // the amount of used positions according to:https://vechainstats.com/vechain-nodes/#xnode-log
-	Multiplier uint8
+	Name        string
+	Stake       *big.Int
+	MainnetUsed int // the amount of used positions according to:https://vechainstats.com/vechain-nodes/#xnode-log
+	Multiplier  uint8
 }
 
 var Positions = []*Position{

@@ -141,7 +141,7 @@ func (s *State) poll() {
 
 func (s *State) Withdraw(acc *hayabusa.NodePair) (*api.Receipt, error) {
 	sender := s.stack.Staker().WithdrawStake(acc.Node.Address())
-	receipt, err := s.stack.SendTransaction(sender, acc.Endorser)
+	receipt, err := s.stack.SendTransactionAndWait(sender, acc.Endorser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to withdraw from validator %s: %w", acc.Node.Address().String(), err)
 	}
@@ -150,7 +150,7 @@ func (s *State) Withdraw(acc *hayabusa.NodePair) (*api.Receipt, error) {
 
 func (s *State) QueueValidator(acc *hayabusa.NodePair, stakingPeriodLength uint32) (thor.Address, *api.Receipt, error) {
 	sender := s.stack.Staker().AddValidation(acc.Node.Address(), RandomStake(), stakingPeriodLength)
-	receipt, err := s.stack.SendTransaction(sender, acc.Endorser)
+	receipt, err := s.stack.SendTransactionAndWait(sender, acc.Endorser)
 	id := acc.Node.Address()
 	if err != nil {
 		return thor.Address{}, nil, fmt.Errorf("failed to queue validator %s: %w", acc.Node.Address(), err)
@@ -174,7 +174,7 @@ func (s *State) QueueValidator(acc *hayabusa.NodePair, stakingPeriodLength uint3
 
 func (s *State) DisableAutoRenew(acc *hayabusa.NodePair) (*api.Receipt, error) {
 	sender := s.stack.Staker().SignalExit(acc.Node.Address())
-	receipt, err := s.stack.SendTransaction(sender, acc.Endorser)
+	receipt, err := s.stack.SendTransactionAndWait(sender, acc.Endorser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to disable auto-renew for validator %s: %w", acc.Node.Address().String(), err)
 	}

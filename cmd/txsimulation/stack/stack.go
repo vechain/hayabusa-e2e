@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
+	"github.com/vechain/thor/v2/tx"
 )
 
 type Stack struct {
@@ -113,10 +114,40 @@ func (s *Stack) bestBlock() (*api.JSONCollapsedBlock, error) {
 	return best, nil
 }
 
-func (s *Stack) SendTransaction(method *bind.MethodBuilder, signer bind.Signer) (*api.Receipt, error) {
-	txCtx, cancel := context.WithTimeout(s.Context(), time.Minute)
+func (s *Stack) SendTransaction(method *bind.MethodBuilder, signer bind.Signer) (*tx.Transaction, error) {
+	sender, err := s.makeTx(method, signer)
+	if err != nil {
+		slog.Error("failed to create transaction", "error", err)
+		return nil, err
+	}
+	return sender.Submit()
+}
+
+func (s *Stack) SendTransactionAndWait(
+	method *bind.MethodBuilder,
+	signer bind.Signer,
+) (*api.Receipt, error) {
+	txCtx, cancel := context.WithTimeout(s.ctx, time.Minute)
 	defer cancel()
 
+	sender, err := s.makeTx(method, signer)
+	if err != nil {
+		slog.Error("failed to create transaction", "error", err)
+		return nil, err
+	}
+
+	receipt, _, err := sender.SubmitAndConfirm(txCtx)
+	if err != nil {
+		slog.Error("failed to send transaction", "error", err)
+		return nil, err
+	}
+	if receipt.Reverted {
+		return nil, utils.DebugRevert(method, receipt)
+	}
+	return receipt, nil
+}
+
+func (s *Stack) makeTx(method *bind.MethodBuilder, signer bind.Signer) (*bind.SendBuilder, error) {
 	best, err := s.bestBlock()
 	if err != nil {
 		slog.Error("failed to get best block", "error", err)
@@ -124,20 +155,14 @@ func (s *Stack) SendTransaction(method *bind.MethodBuilder, signer bind.Signer) 
 	}
 
 	gas := uint64(1_000_000)
+	baseFee := (*big.Int)(best.BaseFeePerGas)
+	if baseFee == nil {
+		baseFee = big.NewInt(thor.InitialBaseFee)
+	}
 	options := &bind.TxOptions{
-		MaxFeePerGas: big.NewInt(0).Mul((*big.Int)(best.BaseFeePerGas), big.NewInt(2)),
+		MaxFeePerGas: big.NewInt(0).Mul(baseFee, big.NewInt(2)),
 		Gas:          &gas,
 	}
 
-	receipt, _, err := method.Send().
-		WithOptions(options).
-		WithSigner(signer).
-		SubmitAndConfirm(txCtx)
-	if err != nil {
-		return nil, err
-	}
-	if receipt.Reverted {
-		return receipt, utils.DebugRevert(method, receipt)
-	}
-	return receipt, nil
+	return method.Send().WithOptions(options).WithSigner(signer), nil
 }

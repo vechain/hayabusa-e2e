@@ -40,7 +40,7 @@ func NewEngine(
 	delegations *delegations.PositionManager,
 	generator Generator,
 ) *Engine {
-	pool := NewWorkerPool(500)
+	pool := NewWorkerPool(50)
 	pool.Start()
 	return &Engine{
 		validators:  validators,
@@ -111,7 +111,9 @@ func (e *Engine) Run() {
 				}
 				if lifecycle.Status() != StatusWithdrawn {
 					e.workerPool.Run(func() {
-						lifecycle.Process(best.Number)
+						if err := lifecycle.Process(best.Number); err != nil {
+							slog.Error("failed to process lifecycle", "type", lifecycle.Type(), "id", lifecycle.ID(), "error", err)
+						}
 					})
 				} else {
 					toRemove = append(toRemove, id)
@@ -165,9 +167,11 @@ func (e *Engine) Flush(status Status) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	ticker := utils.NewTicker(e.stack.Client())
+
 	processed := false
 	for !processed {
-		best, err := e.stack.Client().ExpandedBlock("best")
+		best, err := ticker.Wait(15 * time.Second)
 		if err != nil {
 			slog.Error("failed to wait for best block", "error", err)
 			return err
@@ -175,7 +179,9 @@ func (e *Engine) Flush(status Status) error {
 		for _, lifecycle := range e.lifecycles {
 			e.workerPool.Run(func(l Lifecycle, current *api.JSONExpandedBlock) Worker {
 				return func() {
-					lifecycle.Process(best.Number)
+					if err := lifecycle.Process(best.Number); err != nil {
+						slog.Error("failed to process lifecycle", "type", lifecycle.Type(), "id", lifecycle.ID(), "error", err)
+					}
 				}
 			}(lifecycle, best))
 		}
@@ -229,14 +235,19 @@ func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
 			lifecycles++
 		}
 	}
-	upperLimit := math.Sqrt(float64(e.delegations.TotalSupply()) - float64(lifecycles))
+	upperLimit := math.Sqrt(float64(e.delegations.Available()))
 	amount := utils2.RandomBetween(int(upperLimit)/2, int(upperLimit))
-	amount = min(amount, 80) // Limit to 50 to avoid full blocks
+	amount = min(amount, 80) // Limit to 80 to avoid full blocks
 
 	slog.Info("generating delegator cycles", "amount", amount, "lifecycles", lifecycles, "upperLimit", upperLimit)
 
 	for i := 0; i < amount; i++ {
-		cycle := NewDelegatorLifecycle(e.generator.CreateDelegator(e.stack.Stargate(), block.Number), e.validators, e.delegations, e.stack)
+		position, validationID, ok := e.delegations.NewPosition()
+		if !ok {
+			return
+		}
+		config := e.generator.CreateDelegator(e.stack.Stargate(), block.Number)
+		cycle := NewDelegatorLifecycle(config, e.delegations, e.stack, position, validationID)
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }

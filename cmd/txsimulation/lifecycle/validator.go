@@ -22,13 +22,14 @@ type ValidatorLifecycle struct {
 	delegations *delegations.PositionManager
 	stack       *stack.Stack
 
-	status          Status
+	status Status
+	id     thor.Address
+
 	queuedReceipt   *api.Receipt // the receipt of the queued transaction
-	activatedBlock  uint32       // the block at which this lifecycle was activated
 	exitReceipt     *api.Receipt // the receipt of the exit transaction
 	withdrawReceipt *api.Receipt // the receipt of the withdraw transaction
-	id              thor.Address
 
+	activatedBlock      uint32 // the block at which this lifecycle was activated
 	stakingPeriodLength uint32 // the length of the staking period in blocks
 	stakeIncreased      bool   // indicates if the stake as previously increased or decreased
 	lastStakeUpdate     uint32 // the last block at which the stake was updated
@@ -89,6 +90,9 @@ func (v *ValidatorLifecycle) Process(block uint32) error {
 	status, ok := v.validations.LookupAddress(v.id)
 	if ok && status.Status == builtin.StakerStatusExited {
 		v.delegations.UnregisterValidator(v.id)
+	}
+	if ok && status.Status == builtin.StakerStatusActive {
+		v.delegations.RegisterValidator(v.id)
 	}
 
 	switch v.status {
@@ -195,6 +199,7 @@ func (v *ValidatorLifecycle) ProcessQueued(block uint32) error {
 	validationStatus, err := v.stack.Staker().GetValidatorStatus(v.id)
 	if err != nil {
 		slog.Error("failed to get validator status", "error", err, "id", v.id)
+		return err
 	}
 	if validationStatus.Status == builtin.StakerStatusActive {
 		slog.Debug("validator activated", "account", v.Account.Node.Address(), "block", block)

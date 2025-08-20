@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -15,9 +14,9 @@ type PositionManager struct {
 	positions            map[string]*Position // the configured positions
 	distributionType     DistributionType
 
-	validatorActive map[thor.Address]map[string]int // active positions per validator
-	totalActive     map[string]int                  // total number of active positions
-	mu              sync.Mutex
+	validatorAvailable map[thor.Address]map[string]int // active positions per validator
+	totalActive        map[string]int                  // total number of active positions
+	mu                 sync.Mutex
 }
 
 type DistributionType uint8
@@ -38,8 +37,8 @@ func NewManager(maxLeaderGroupLength uint32, distributionType DistributionType) 
 		positions:            positions,
 		distributionType:     distributionType,
 
-		validatorActive: make(map[thor.Address]map[string]int), // active positions per validator
-		totalActive:     make(map[string]int),
+		validatorAvailable: make(map[thor.Address]map[string]int), // active positions per validator
+		totalActive:        make(map[string]int),
 	}
 }
 
@@ -49,9 +48,27 @@ func (pm *PositionManager) TotalSupply() int {
 
 	total := 0
 	for _, position := range pm.positions {
-		total += position.Used
+		total += position.MainnetUsed
 	}
 	return total
+}
+
+func (pm *PositionManager) Available() int {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	available := 0
+	for _, position := range pm.positions {
+		available += position.MainnetUsed - pm.totalActive[position.Name]
+	}
+	return available
+}
+
+func (pm *PositionManager) RegisterValidator(validator thor.Address) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	pm.validatorAvailable[validator] = pm.makeValidatorsAvailablePositions(validator)
 }
 
 func (pm *PositionManager) UnregisterDelegator(position *Position, validator thor.Address) {
@@ -62,81 +79,85 @@ func (pm *PositionManager) UnregisterDelegator(position *Position, validator tho
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	if pm.validatorActive[validator] == nil {
+	if pm.validatorAvailable[validator] == nil {
 		return
 	}
 
-	if count, exists := pm.validatorActive[validator][position.Name]; exists && count > 0 {
-		pm.validatorActive[validator][position.Name]--
-		pm.totalActive[position.Name]--
-		if pm.totalActive[position.Name] < 0 {
-			pm.totalActive[position.Name] = 0
-		}
+	_, exists := pm.validatorAvailable[validator][position.Name]
+	if !exists {
+		slog.Warn("attempted to unregister non-existent position for validator", "address", validator.String(), "position", position.Name)
+		return
 	}
+	pm.validatorAvailable[validator][position.Name]++
+	pm.totalActive[position.Name]--
 }
 
 func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	if pm.validatorActive[validator] == nil {
+	current, exists := pm.validatorAvailable[validator]
+	if !exists {
+		slog.Warn("attempted to unregister non-existent validator", "address", validator.String())
 		return
 	}
+	start := pm.makeValidatorsAvailablePositions(validator)
 
-	for positionID, count := range pm.validatorActive[validator] {
-		if count > 0 {
-			pm.totalActive[positionID] -= count
-			if pm.totalActive[positionID] < 0 {
-				pm.totalActive[positionID] = 0
-			}
-		}
+	for positionID, count := range current {
+		// reset the totals
+		used := start[positionID] - count
+		pm.totalActive[positionID] -= used
 	}
-	delete(pm.validatorActive, validator)
-	slog.Info("unregistered validator", "address", validator.String())
+
+	delete(pm.validatorAvailable, validator)
 }
 
-func (pm *PositionManager) NewPosition(validator thor.Address) (*Position, bool) {
+func (pm *PositionManager) NewPosition() (*Position, thor.Address, bool) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	if pm.validatorActive[validator] == nil {
-		pm.validatorActive[validator] = make(map[string]int)
-	}
-
-	// get all position keys
-	positionIDs := make([]string, 0)
-	for positionID := range pm.positions {
-		position := pm.positions[positionID]
-
-		var max int
-		switch pm.distributionType {
-		case DistributionTypeEven:
-			max = pm.calculateEvenMax(position, validator)
-		case DistributionTypeSkewed:
-			max = pm.calculateSkewedMax(position, validator)
-		default:
-			max = pm.calculateEvenMax(position, validator)
-		}
-
-		if pm.totalActive[positionID] < position.Used && pm.validatorActive[validator][positionID] <= max {
-			positionIDs = append(positionIDs, positionID)
+	for address, available := range pm.validatorAvailable {
+		for positionID, count := range available {
+			if count > 0 && pm.totalActive[positionID] < pm.positions[positionID].MainnetUsed {
+				// Found a position that can be assigned
+				pm.validatorAvailable[address][positionID]--
+				pm.totalActive[positionID]++
+				position := pm.positions[positionID]
+				return position, address, true
+			}
 		}
 	}
 
-	// select a random key
-	if len(positionIDs) == 0 {
-		slog.Warn("no available positions for validator", "address", validator.String())
-		return nil, false
+	slog.Debug("no available positions found")
+	return nil, thor.Address{}, false
+}
+
+func (pm *PositionManager) makeValidatorsAvailablePositions(addr thor.Address) map[string]int {
+	available := make(map[string]int)
+	for positionID, position := range pm.positions {
+		if position.MainnetUsed > 0 {
+			// Calculate the maximum number of positions this validator can take
+			var max int
+			if pm.distributionType == DistributionTypeEven {
+				max = pm.calculateEvenMax(position, addr)
+			} else if pm.distributionType == DistributionTypeSkewed {
+				max = pm.calculateSkewedMax(position, addr)
+			} else {
+				slog.Error("unknown distribution type", "type", pm.distributionType)
+				continue
+			}
+
+			if max > 0 {
+				available[positionID] = max
+			}
+		}
 	}
 
-	positionID := positionIDs[utils.RandomInt(0, len(positionIDs)-1)]
-	pm.totalActive[positionID]++
-	pm.validatorActive[validator][positionID]++
-	return pm.positions[positionID], true
+	return available
 }
 
 func (pm *PositionManager) calculateEvenMax(position *Position, validator thor.Address) int {
-	maxPerValidator := float64(position.Used) / float64(pm.maxLeaderGroupLength)
+	maxPerValidator := float64(position.MainnetUsed) / float64(pm.maxLeaderGroupLength)
 	max := int(maxPerValidator)
 
 	// if the last byte (as %) of the address is less than the remainder, increment max by 1,
@@ -161,7 +182,7 @@ func (pm *PositionManager) calculateSkewedMax(position *Position, validator thor
 	skewFactor := (1.0 - addressScore) * (1.0 - addressScore) * (1.0 - addressScore)
 
 	// Base allocation (minimum everyone can get)
-	baseMax := float64(position.Used) / float64(pm.maxLeaderGroupLength)
+	baseMax := float64(position.MainnetUsed) / float64(pm.maxLeaderGroupLength)
 
 	// Skewed allocation: validators with lower addresses can get up to 3x the base
 	skewedMax := baseMax * (1.0 + 2.0*skewFactor)
@@ -189,7 +210,7 @@ func (pm *PositionManager) Summary() string {
 		builder.WriteString(fmt.Sprintf("  %s: %d active positions, %d available\n",
 			positionID,
 			pm.totalActive[positionID],
-			position.Used-pm.totalActive[positionID],
+			position.MainnetUsed-pm.totalActive[positionID],
 		))
 	}
 

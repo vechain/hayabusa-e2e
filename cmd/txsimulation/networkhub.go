@@ -100,7 +100,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 		engine.AddLifecycle(cycle)
 	}
 
-	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
+	if err := engine.Flush(lifecycle.StatusActive); err != nil {
 		slog.Error("failed to flush validator lifecycles", "error", err)
 		os.Exit(1)
 	}
@@ -109,25 +109,6 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		slog.Error("failed to wait for POS", "error", err)
-		os.Exit(1)
-	}
-
-	best, err := client.Block("best")
-	if err != nil {
-		slog.Error("failed to get best block", "error", err)
-		os.Exit(1)
-	}
-
-	// initial seeding of delegator accounts
-	for i := range uint32(200) {
-		config := generator.CreateDelegator(stack.Stargate(), best.Number)
-		config.QueueDelay = lifecycle.Delay{Blocks: i % 3, Epochs: 0}
-		cycle := lifecycle.NewDelegatorLifecycle(config, validators, delegations, stack)
-		engine.AddLifecycle(cycle)
-	}
-
-	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
-		slog.Error("failed to flush validator lifecycles", "error", err)
 		os.Exit(1)
 	}
 
