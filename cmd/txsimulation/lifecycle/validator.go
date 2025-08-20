@@ -3,22 +3,25 @@ package lifecycle
 import (
 	"errors"
 	"log/slog"
+	"math/big"
+	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
-	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
 type ValidatorLifecycle struct {
 	ValidatorConfig
-	validations *validations.State
+	validations *validators.Service
 	delegations *delegations.PositionManager
 	stack       *stack.Stack
 
@@ -37,9 +40,34 @@ type ValidatorLifecycle struct {
 	mu sync.Mutex
 }
 
+var (
+	Eth     = big.NewInt(1e18) // 1 ETH in wei
+	Million = big.NewInt(1e6)  // 1 million VET
+)
+
+func RandomStake() *big.Int {
+	return RandomStakeBetween(25, 31) // average stake is currently 28m - https://vechainstats.com/vechain-nodes/#xnode-log
+}
+
+// RandomStakeBetween generates a random number between min and max.
+// It will be scaled to millions of VET.
+func RandomStakeBetween(min, max uint8) *big.Int {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	maxStake := big.NewInt(0).Mul(big.NewInt(int64(max)), Million)
+
+	minStake := big.NewInt(0).Mul(big.NewInt(int64(min)), Million)
+
+	rangeStake := new(big.Int).Sub(maxStake, minStake)
+	randomOffset := new(big.Int).Rand(rng, rangeStake)
+	stake := new(big.Int).Add(minStake, randomOffset)
+	stake = stake.Mul(stake, Eth) // Convert to wei
+	return stake
+}
+
 func NewValidatorLifecycle(
 	config ValidatorConfig,
-	validations *validations.State,
+	validations *validators.Service,
 	delegations *delegations.PositionManager,
 	stack *stack.Stack,
 ) *ValidatorLifecycle {
@@ -88,10 +116,10 @@ func (v *ValidatorLifecycle) Info() *Info {
 
 func (v *ValidatorLifecycle) Process(block uint32) error {
 	status, ok := v.validations.LookupAddress(v.id)
-	if ok && status.Status == builtin.StakerStatusExited {
+	if ok && status.Status == validation.StatusExit {
 		v.delegations.UnregisterValidator(v.id)
 	}
-	if ok && status.Status == builtin.StakerStatusActive {
+	if ok && status.Status == validation.StatusActive {
 		v.delegations.RegisterValidator(v.id)
 	}
 
@@ -125,7 +153,8 @@ func (v *ValidatorLifecycle) ProcessPending(block uint32) error {
 	slog.Debug("queuing validator", "account", v.Account.Node.Address(), "block", block)
 
 	period := v.stack.RandomStakingPeriod()
-	id, receipt, err := v.validations.QueueValidator(v.Account, period)
+	method := v.stack.Staker().AddValidation(v.Account.Node.Address(), RandomStake(), period)
+	receipt, err := v.stack.SendTransactionAndWait(method, v.Account.Endorser)
 	if err != nil {
 		if strings.Contains(err.Error(), " validator already exists") {
 			return v.setQueuedReceipt()
@@ -134,7 +163,7 @@ func (v *ValidatorLifecycle) ProcessPending(block uint32) error {
 		return err
 	}
 
-	v.id = id
+	v.id = v.Account.Node.Address()
 	v.queuedReceipt = receipt
 	v.status = StatusQueued
 	v.stakingPeriodLength = period
@@ -191,19 +220,13 @@ func (v *ValidatorLifecycle) ProcessQueued(block uint32) error {
 	if v.activatedBlock != 0 {
 		return nil
 	}
-	stakingPeriods, err := v.stack.Staker().GetValidatorPeriodDetails(v.id)
-	if err != nil {
-		slog.Error("failed to get validator", "error", err, "id", v.id)
-		return err
+	validator, ok := v.validations.LookupAddress(v.id)
+	if !ok {
+		return nil
 	}
-	validationStatus, err := v.stack.Staker().GetValidatorStatus(v.id)
-	if err != nil {
-		slog.Error("failed to get validator status", "error", err, "id", v.id)
-		return err
-	}
-	if validationStatus.Status == builtin.StakerStatusActive {
+	if validator.Status == validation.StatusActive {
 		slog.Debug("validator activated", "account", v.Account.Node.Address(), "block", block)
-		v.activatedBlock = stakingPeriods.StartBlock
+		v.activatedBlock = validator.StartBlock
 		v.status = StatusActive
 	}
 	return nil
@@ -223,7 +246,8 @@ func (v *ValidatorLifecycle) ProcessActive(block uint32) error {
 	if block < v.Config.MinExitBlock(v.activatedBlock, v.stakingPeriodLength) {
 		return v.stakeChange(block)
 	}
-	receipt, err := v.validations.DisableAutoRenew(v.Account)
+	method := v.stack.Staker().SignalExit(v.id)
+	receipt, err := v.stack.SendTransactionAndWait(method, v.Account.Endorser)
 	if receipt != nil {
 		v.status = StatusExitSignalled
 		v.exitReceipt = receipt
@@ -244,9 +268,9 @@ func (v *ValidatorLifecycle) stakeChange(block uint32) error {
 	}
 	var sender *bind.MethodBuilder
 	if v.stakeIncreased {
-		sender = v.stack.Staker().DecreaseStake(v.Account.Node.Address(), validations.RandomStakeBetween(3, 5))
+		sender = v.stack.Staker().DecreaseStake(v.Account.Node.Address(), RandomStakeBetween(3, 5))
 	} else {
-		sender = v.stack.Staker().IncreaseStake(v.Account.Node.Address(), validations.RandomStakeBetween(3, 5))
+		sender = v.stack.Staker().IncreaseStake(v.Account.Node.Address(), RandomStakeBetween(3, 5))
 	}
 	v.lastStakeUpdate = block
 	v.stakeIncreased = !v.stakeIncreased
@@ -268,7 +292,8 @@ func (v *ValidatorLifecycle) ProcessExited(block uint32) error {
 	if block < v.Config.MinWithdrawBlock(v.exitReceipt.Meta.BlockNumber, v.stack.Config()) {
 		return nil
 	}
-	receipt, err := v.validations.Withdraw(v.Account)
+	method := v.stack.Staker().WithdrawStake(v.id)
+	receipt, err := v.stack.SendTransactionAndWait(method, v.Account.Endorser)
 	if err != nil {
 		slog.Error("failed to withdraw validator", "error", err, "id", v.id)
 		return err

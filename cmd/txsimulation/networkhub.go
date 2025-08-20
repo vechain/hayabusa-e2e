@@ -13,7 +13,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/networkhub/thorbuilder"
@@ -33,6 +33,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 		MinStakingPeriod:  6,
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 24,
+		BlockInterval:     5,
 	}
 	network, err := hayabusa.NewNetwork(config, ctx)
 	if err != nil {
@@ -55,6 +56,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 		addr := net.JoinHostPort("localhost", strconv.Itoa(port))
 		port++
 		node.SetAPIAddr(addr)
+		node.AddAdditionalArg("txpool-limit-per-account", "10000")
 		slog.Info("node API address", "node", node.GetID(), "address", addr)
 	}
 	if err := network.Start(); err != nil {
@@ -79,7 +81,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
 	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven)
-	validators := validations.NewState(stack)
+	validators := validators.NewState(stack)
 	generator := &networkHubGenerator{config: config}
 	engine := lifecycle.NewEngine(stack, validators, delegations, generator)
 
