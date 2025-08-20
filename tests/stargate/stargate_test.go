@@ -603,7 +603,7 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 
 	params, err := builtin.NewParams(staker.Raw().Client())
 	require.NoError(t, err)
-	key := thor.BytesToBytes32([]byte("stargate-contract-address"))
+	key := thor.BytesToBytes32([]byte("delegator-contract-address"))
 	value := new(big.Int).SetBytes(contractAddr[:])
 	testutil.Send(t, hayabusa.Executor, params.Set(key, value))
 
