@@ -76,13 +76,35 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		os.Exit(1)
 	}
 
+	initialValidators := make(map[thor.Address]*hayabusa.NodePair)
+	extraValidators := make(map[thor.Address]*hayabusa.NodePair)
+
+	genesisValidatorCount := len(genesis.Authority)
+	totalValidators := len(hayabusaValidators)
+
+	validatorCount := 0
+	for addr, validator := range hayabusaValidators {
+		if validatorCount < genesisValidatorCount/2 {
+			initialValidators[addr] = validator
+		} else {
+			extraValidators[addr] = validator
+		}
+		validatorCount++
+	}
+
+	slog.Info("separated validators",
+		"genesisValidatorCount", genesisValidatorCount,
+		"totalValidators", totalValidators,
+		"initialValidators", len(initialValidators),
+		"extraValidators", len(extraValidators))
+
 	stargateSigner, err := setStargate(staker)
 	if err != nil {
 		slog.Error("failed to set stargate", "error", err)
 		os.Exit(1)
 	}
 
-	stack := stack.NewStack(ctx, staker, config, hayabusaValidators, stargateSigner)
+	stack := stack.NewStack(ctx, staker, config, extraValidators, stargateSigner)
 	validationsState := validators.NewState(stack)
 	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven)
 	generator := &devnetGenerator{
@@ -90,7 +112,7 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		stack:  stack,
 	}
 	engine := lifecycle.NewEngine(stack, validationsState, delegations, generator)
-	if err := initializeSyntheticActivity(stack, engine, generator, genesis, validationsState, hayabusaValidators, delegations); err != nil {
+	if err := initializeSyntheticActivity(stack, engine, generator, genesis, validationsState, initialValidators, delegations); err != nil {
 		slog.Error("failed to initialize synthetic activity", "error", err)
 		os.Exit(1)
 	}
@@ -194,7 +216,7 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		slog.Error("failed to get stargate address from params", "error", err)
 	}
 	if stargateAddress != nil && stargateAddress.Cmp(big.NewInt(0)) != 0 {
-		slog.Info("stargate address already set in params", "stargateAddress", stargateAddress)
+		slog.Info("stargate address already set in params", "stargateAddress", thor.BytesToAddress(stargateAddress.Bytes()))
 		return accountSigner, nil
 	}
 
@@ -453,12 +475,12 @@ func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) li
 }
 
 // Initialize realistic synthetic activity
-func initializeSyntheticActivity(stack *stack.Stack, engine *lifecycle.Engine, generator *devnetGenerator, genesis *genesisthor.CustomGenesis, validationsState *validators.Service, validators map[thor.Address]*hayabusa.NodePair, delegations *delegations.PositionManager) error {
+func initializeSyntheticActivity(stack *stack.Stack, engine *lifecycle.Engine, generator *devnetGenerator, genesis *genesisthor.CustomGenesis, validationsState *validators.Service, initialValidators map[thor.Address]*hayabusa.NodePair, delegations *delegations.PositionManager) error {
 	// Create initial validators with different strategies
 	validatorCount := 0
-	totalValidators := len(validators)
+	totalValidators := len(initialValidators)
 
-	for _, nodePair := range validators {
+	for _, nodePair := range initialValidators {
 		config := generator.CreateValidator(nodePair, 0)
 
 		// Distribute staking strategies based on available validators
@@ -476,7 +498,8 @@ func initializeSyntheticActivity(stack *stack.Stack, engine *lifecycle.Engine, g
 	}
 
 	slog.Info("initialized synthetic activity",
-		"validatorCount", validatorCount)
+		"validatorCount", validatorCount,
+		"totalValidators", totalValidators)
 
 	return nil
 }
