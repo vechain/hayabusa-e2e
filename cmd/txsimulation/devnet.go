@@ -212,8 +212,6 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	var receipt *api.Receipt
-
 	initialBaseFee := new(big.Int).SetUint64(thor.InitialBaseFee)
 	feesHistory, err := staker.Raw().Client().FeesHistory(1, "best", []float64{0.5})
 	if err != nil {
@@ -244,6 +242,7 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		return nil, err
 	}
 
+	var receipt *api.Receipt
 	for range 30 {
 		receipt, err = staker.Raw().Client().TransactionReceipt(res.ID)
 		if err == nil && receipt != nil {
