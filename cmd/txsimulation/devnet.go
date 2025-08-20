@@ -313,22 +313,11 @@ func extractConfigFromAccounts(accounts []genesisthor.Account, genesis *genesist
 		TransitionPeriod: uint32(genesis.ForkConfig.HAYABUSA_TP),
 	}
 
-	var stakerAccount, paramsAccount *genesisthor.Account
-
+	var paramsAccount *genesisthor.Account
 	for _, account := range accounts {
 		accountAddr := account.Address.String()
-
-		switch accountAddr {
-		case stakerAddress:
-			stakerAccount = &account
-		case paramsAddress:
+		if accountAddr == paramsAddress {
 			paramsAccount = &account
-		}
-	}
-
-	if stakerAccount != nil {
-		if err := processStakerConfig(config, stakerAccount.Storage); err != nil {
-			return nil, fmt.Errorf("failed to process staker config: %w", err)
 		}
 	}
 
@@ -338,19 +327,15 @@ func extractConfigFromAccounts(accounts []genesisthor.Account, genesis *genesist
 		}
 	}
 
+	// From the config field
+	config.BlockInterval = &genesis.Config.BlockInterval
+	config.EpochLength = genesis.Config.EpochLength
+	config.MinStakingPeriod = genesis.Config.LowStakingPeriod
+	config.MidStakingPeriod = genesis.Config.MediumStakingPeriod
+	config.HighStakingPeriod = genesis.Config.HighStakingPeriod
+	config.CooldownPeriod = genesis.Config.CooldownPeriod
+
 	return config, nil
-}
-
-func processStakerConfig(config *hayabusa.Config, storage map[string]thor.Bytes32) error {
-	paramMappings := map[string]*uint32{
-		"staker-low-staking-period":    &config.MinStakingPeriod,
-		"staker-medium-staking-period": &config.MidStakingPeriod,
-		"staker-high-staking-period":   &config.HighStakingPeriod,
-		"cooldown-period":              &config.CooldownPeriod,
-		"epoch-length":                 &config.EpochLength,
-	}
-
-	return processStorageValues(storage, paramMappings)
 }
 
 func processParamsConfig(config *hayabusa.Config, storage map[string]thor.Bytes32) error {

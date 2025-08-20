@@ -52,7 +52,7 @@ func runTestHayabusaAddNonPoAValidator(t *testing.T) error {
 
 	firstQueued, _, err := staker.FirstQueued()
 	assert.NoError(t, err)
-	assert.Equal(t, firstQueued.Endorsor, validator1PoA.Endorser.Address())
+	assert.Equal(t, firstQueued.Endorser, validator1PoA.Endorser.Address())
 	t.Log("✅ - Queued validator OK", "id", id1.String())
 
 	id2 := testutil.AddValidator(sequence, staker, validator2PoA, config.MinStakingPeriod)
@@ -171,13 +171,13 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	retrievedValidator2, retrievedValidator2Id, err := staker.Next(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, id2, retrievedValidator2Id)
-	assert.Equal(t, validator2.Endorser.Address().String(), retrievedValidator2.Endorsor.String())
+	assert.Equal(t, validator2.Endorser.Address().String(), retrievedValidator2.Endorser.String())
 	assert.Equal(t, validator2.Node.Address().String(), retrievedValidator2.Address.String())
 
 	retrievedValidator3, retrievedValidator3Id, err := staker.Next(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, id3, retrievedValidator3Id)
-	assert.Equal(t, validator3.Endorser.Address().String(), retrievedValidator3.Endorsor.String())
+	assert.Equal(t, validator3.Endorser.Address().String(), retrievedValidator3.Endorser.String())
 	assert.Equal(t, validator3.Node.Address().String(), retrievedValidator3.Address.String())
 
 	retrievedValidator4, retrievedValidator4Id, err := staker.Next(id3)

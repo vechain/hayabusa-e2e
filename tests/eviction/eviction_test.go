@@ -89,7 +89,7 @@ func TestHayabusaEviction(t *testing.T) {
 	})
 
 	offlineBlock := config.ForkBlock + config.TransitionPeriod
-	exitBlock := offlineBlock + (config.EpochLength + thor.OfflineValidatorEvictionThresholdEpochs) + 1
+	exitBlock := offlineBlock + (config.EpochLength + thor.ValidatorEvictionThreshold()) + 1
 	ticker := utils.NewTicker(staker.Raw().Client())
 	t.Log("✅ waiting for block", exitBlock)
 	require.NoError(t, ticker.WaitForBlock(exitBlock))

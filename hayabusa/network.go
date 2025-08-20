@@ -68,7 +68,7 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 		workingDir = builder.DownloadPath
 	}
 	filePath := workingDir + "/thor/params.go"
-	blockInterval := thor.BlockInterval
+	blockInterval := thor.BlockInterval()
 	if config.BlockInterval != nil {
 		blockInterval = *config.BlockInterval
 	}
