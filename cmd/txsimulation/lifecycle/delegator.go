@@ -151,8 +151,6 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 		}
 		if receipt.Reverted {
 			d.queuedTx.id = thor.Bytes32{} // reset the ID if the transaction was reverted
-			d.position = nil
-			d.validationID = thor.Address{}
 			d.stakingPeriodLength = 0
 			return nil
 		}

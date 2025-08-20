@@ -138,11 +138,12 @@ func (pm *PositionManager) makeValidatorsAvailablePositions(addr thor.Address) m
 		if position.MainnetUsed > 0 {
 			// Calculate the maximum number of positions this validator can take
 			var max int
-			if pm.distributionType == DistributionTypeEven {
+			switch pm.distributionType {
+			case DistributionTypeEven:
 				max = pm.calculateEvenMax(position, addr)
-			} else if pm.distributionType == DistributionTypeSkewed {
+			case DistributionTypeSkewed:
 				max = pm.calculateSkewedMax(position, addr)
-			} else {
+			default:
 				slog.Error("unknown distribution type", "type", pm.distributionType)
 				continue
 			}
