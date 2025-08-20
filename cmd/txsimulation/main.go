@@ -41,14 +41,10 @@ func main() {
 
 	defer stop()
 	defer printOutput(engine)
-
 	defer func() {
 		if err := recover(); err != nil {
 			slog.Warn("recovered from panic", "error", err)
 		}
-		ctx := handleExitSignal()
-		slog.Info("exit sinal received, trigger it again to stop the network")
-		<-ctx.Done()
 	}()
 
 	slog.Info("🚒 starting engine")
@@ -57,7 +53,7 @@ func main() {
 
 func printOutput(engine *lifecycle.Engine) {
 	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"ID", "Type", "Status", "Queued Block", "Activated Block", "Exit Block", "ProcessExited Block", "Validation ID"})
+	tw.AppendHeader(table.Row{"ID", "Type", "Status", "Queued Block", "Activated Block", "Exit Block", "Exited Block", "Validation ID"})
 	for _, info := range engine.Info() {
 		queued := -1
 		if info.QueuedReceipt != nil {
@@ -108,7 +104,6 @@ func printOutput(engine *lifecycle.Engine) {
 		slog.Error("failed to write to output file", "error", err)
 		return
 	}
-	println(tw.Render())
 }
 
 func handleExitSignal() context.Context {

@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"fmt"
 	"log/slog"
 	"math"
 	"sync"
@@ -9,7 +10,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
@@ -25,7 +26,7 @@ type Generator interface {
 
 type Engine struct {
 	stack       *stack.Stack
-	validators  *validations.State
+	validators  *validators.Service
 	delegations *delegations.PositionManager
 	lifecycles  map[thor.Bytes32]Lifecycle
 	withdrawn   map[thor.Bytes32]Lifecycle
@@ -36,11 +37,11 @@ type Engine struct {
 
 func NewEngine(
 	stack *stack.Stack,
-	validators *validations.State,
+	validators *validators.Service,
 	delegations *delegations.PositionManager,
 	generator Generator,
 ) *Engine {
-	pool := NewWorkerPool(500)
+	pool := NewWorkerPool(10)
 	pool.Start()
 	return &Engine{
 		validators:  validators,
@@ -111,7 +112,9 @@ func (e *Engine) Run() {
 				}
 				if lifecycle.Status() != StatusWithdrawn {
 					e.workerPool.Run(func() {
-						lifecycle.Process(best.Number)
+						if err := lifecycle.Process(best.Number); err != nil {
+							slog.Error("failed to process lifecycle", "type", lifecycle.Type(), "id", lifecycle.ID(), "error", err)
+						}
 					})
 				} else {
 					toRemove = append(toRemove, id)
@@ -155,7 +158,7 @@ func (e *Engine) Run() {
 				"withdrawn", delegationStatus[StatusWithdrawn],
 			)
 
-			slog.Info(e.delegations.Summary())
+			slog.Info(fmt.Sprintf("👨‍💼 %s", e.delegations.Summary()))
 		}
 	}
 }
@@ -165,9 +168,11 @@ func (e *Engine) Flush(status Status) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	ticker := utils.NewTicker(e.stack.Client())
+
 	processed := false
 	for !processed {
-		best, err := e.stack.Client().ExpandedBlock("best")
+		best, err := ticker.Wait(15 * time.Second)
 		if err != nil {
 			slog.Error("failed to wait for best block", "error", err)
 			return err
@@ -175,7 +180,9 @@ func (e *Engine) Flush(status Status) error {
 		for _, lifecycle := range e.lifecycles {
 			e.workerPool.Run(func(l Lifecycle, current *api.JSONExpandedBlock) Worker {
 				return func() {
-					lifecycle.Process(best.Number)
+					if err := lifecycle.Process(best.Number); err != nil {
+						slog.Error("failed to process lifecycle", "type", lifecycle.Type(), "id", lifecycle.ID(), "error", err)
+					}
 				}
 			}(lifecycle, best))
 		}
@@ -206,7 +213,7 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 	spaces := 101 + desiredQueued - lifecycles
 	amount := utils2.RandomBetween(0, spaces)
 
-	slog.Info("generating validator cycles", "amount", amount, "lifecycles", lifecycles, "spaces", spaces)
+	slog.Info("🌚 generating validator cycles", "amount", amount, "lifecycles", lifecycles, "spaces", spaces)
 
 	for range amount {
 		account, err := e.stack.NextValidator()
@@ -229,14 +236,19 @@ func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
 			lifecycles++
 		}
 	}
-	upperLimit := math.Sqrt(float64(e.delegations.TotalSupply()) - float64(lifecycles))
+	upperLimit := math.Sqrt(float64(e.delegations.Available()))
 	amount := utils2.RandomBetween(int(upperLimit)/2, int(upperLimit))
-	amount = min(amount, 80) // Limit to 50 to avoid full blocks
+	amount = min(amount, 80) // Limit to 80 to avoid full blocks
 
-	slog.Info("generating delegator cycles", "amount", amount, "lifecycles", lifecycles, "upperLimit", upperLimit)
+	slog.Info("🌚 generating delegator cycles", "amount", amount, "lifecycles", lifecycles, "upperLimit", upperLimit)
 
 	for i := 0; i < amount; i++ {
-		cycle := NewDelegatorLifecycle(e.generator.CreateDelegator(e.stack.Stargate(), block.Number), e.validators, e.delegations, e.stack)
+		position, validationID, ok := e.delegations.NewPosition()
+		if !ok {
+			return
+		}
+		config := e.generator.CreateDelegator(e.stack.Stargate(), block.Number)
+		cycle := NewDelegatorLifecycle(config, e.delegations, e.validators, e.stack, position, validationID)
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }
