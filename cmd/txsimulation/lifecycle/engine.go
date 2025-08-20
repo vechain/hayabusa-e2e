@@ -40,7 +40,7 @@ func NewEngine(
 	delegations *delegations.PositionManager,
 	generator Generator,
 ) *Engine {
-	pool := NewWorkerPool(50)
+	pool := NewWorkerPool(10)
 	pool.Start()
 	return &Engine{
 		validators:  validators,
