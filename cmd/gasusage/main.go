@@ -78,7 +78,7 @@ func run(ctx context.Context) error {
 	}
 
 	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"Name", "Gas MainnetUsed"})
+	tw.AppendHeader(table.Row{"Name", "Gas Used"})
 	defer func() {
 		tw.SortBy([]table.SortBy{{Name: "Name", Mode: table.Asc}})
 		fmt.Println(tw.Render())
