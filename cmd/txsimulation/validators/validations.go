@@ -64,6 +64,12 @@ func (s *Service) LookupAddress(id thor.Address) (*validation.Validation, bool) 
 	return v, ok
 }
 
+func (s *Service) GetActiveCount() uint32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return uint32(len(s.active))
+}
+
 func (s *Service) poll() {
 	ticker := utils.NewTicker(s.stack.Client())
 	for {
@@ -251,7 +257,7 @@ func (s *Service) unpackValidators(result *api.CallResult) (map[thor.Address]*va
 	if err != nil {
 		return nil, err
 	}
-	
+
 	validators := make(map[thor.Address]*validation.Validation)
 	masters := out[0].([]common.Address)
 	endorsors := out[1].([]common.Address)
