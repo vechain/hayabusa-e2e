@@ -197,12 +197,6 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	}
 
 	// If stargate address is not set in params, deploy stargate contract
-	executorAddressKeys, err := parseAddressKeysFromEnv("EXECUTOR_KEYS")
-	if err != nil {
-		slog.Error("failed to parse EXECUTOR_KEYS", "error", err)
-		os.Exit(1)
-	}
-
 	genesis, err := staker.Raw().Client().Block("0")
 	if err != nil {
 		slog.Error("failed to get genesis block to set stargate", "error", err)
@@ -215,44 +209,10 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	bytes, err := hexutil.Decode("0x" + bytecode)
 	clause := tx.NewClause(nil).WithData(bytes)
 
-	energy, err := builtin.NewEnergy(staker.Raw().Client())
-	if err != nil {
-		slog.Error("failed to create energy client", "error", err)
-		return nil, err
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	var receipt *api.Receipt
-
-	balance, err := energy.BalanceOf(thor.MustParseAddress(string(executorAddressKeys[0].Address)))
-	if err != nil {
-		slog.Error("failed to get energy balance of executor", "error", err)
-		return nil, err
-	}
-
-	if balance.Cmp(big.NewInt(0)) == 0 {
-		executorEnergyValue, _ := new(big.Int).SetString("10000000000000000000000000000", 10)
-		receipt, _, err = energy.Transfer(thor.MustParseAddress(string(executorAddressKeys[0].Address)), executorEnergyValue).
-			Send().
-			WithSigner(accountSigner).
-			WithOptions(testutil.TxOptions()).
-			SubmitAndConfirm(ctx)
-
-		slog.Info("energy transfer receipt", "receipt", receipt)
-
-		if err != nil || receipt == nil {
-			slog.Error("failed to transfer energy to executor", "error", err)
-			return nil, err
-		}
-		if receipt.Reverted {
-			return nil, fmt.Errorf("transaction to transfer energy to executor reverted: %s", receipt.Meta.TxID)
-		}
-		slog.Info("energy transferred to executor", "receipt", receipt)
-	} else {
-		slog.Info("energy already transferred to executor", "balance", balance)
-	}
 
 	initialBaseFee := new(big.Int).SetUint64(thor.InitialBaseFee)
 	feesHistory, err := staker.Raw().Client().FeesHistory(1, "best", []float64{0.5})
@@ -303,16 +263,9 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	// Set stargate address in params
 	stargateAddress = new(big.Int).SetBytes(contractAddr.Bytes())
 
-	executorKey, err := crypto.HexToECDSA(string(executorAddressKeys[0].Key))
-	if err != nil {
-		slog.Error("failed to parse executor key", "error", err)
-		os.Exit(1)
-	}
-	executorSigner := bind.NewSigner(executorKey)
-
 	receipt, _, err = params.Set(stargateKey, stargateAddress).
 		Send().
-		WithSigner(executorSigner).
+		WithSigner(accountSigner).
 		WithOptions(testutil.TxOptions()).
 		SubmitAndConfirm(ctx)
 
