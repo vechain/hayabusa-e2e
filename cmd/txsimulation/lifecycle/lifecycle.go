@@ -72,7 +72,7 @@ type Info struct {
 }
 
 type Lifecycle interface {
-	Process(engine *Engine, block uint32) error
+	Process(block uint32) error
 	Status() Status
 	Type() Type
 	Info() *Info
@@ -88,7 +88,8 @@ type Config struct {
 
 type ValidatorConfig struct {
 	Config
-	Account *hayabusa.NodePair
+	Account             *hayabusa.NodePair
+	StakeChangeInterval uint32 // interval in staking periods to change stake
 }
 
 type DelegatorConfig struct {
@@ -100,8 +101,8 @@ func (c Config) QueueBlock(config *hayabusa.Config) uint32 {
 	return c.StartBlock + c.QueueDelay.Blocks + (c.QueueDelay.Epochs * config.EpochLength)
 }
 
-func (c Config) MinExitBlock(activatedBlock uint32, config *hayabusa.Config) uint32 {
-	return activatedBlock + (c.StakingPeriods * config.MinStakingPeriod)
+func (c Config) MinExitBlock(activatedBlock, stakingPeriod uint32) uint32 {
+	return activatedBlock + (c.StakingPeriods * stakingPeriod)
 }
 
 func (c Config) MinWithdrawBlock(exitBlock uint32, config *hayabusa.Config) uint32 {

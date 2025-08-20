@@ -16,10 +16,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/hayabusa/stargate"
 	"github.com/vechain/hayabusa-e2e/testutil"
@@ -69,7 +70,7 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		os.Exit(1)
 	}
 
-	validators, err := loadHayabusaValidators(genesis)
+	hayabusaValidators, err := loadHayabusaValidators(genesis)
 	if err != nil {
 		slog.Error("failed to load Hayabusa validators", "error", err)
 		os.Exit(1)
@@ -81,14 +82,15 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		os.Exit(1)
 	}
 
-	stack := stack.NewStack(ctx, staker, config, validators, stargateSigner)
-	validationsState := validations.NewState(stack)
+	stack := stack.NewStack(ctx, staker, config, hayabusaValidators, stargateSigner)
+	validationsState := validators.NewState(stack)
+	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven)
 	generator := &devnetGenerator{
 		config: config,
 		stack:  stack,
 	}
-	engine := lifecycle.NewEngine(stack, validationsState, generator)
-	if err := initializeSyntheticActivity(engine, generator, genesis); err != nil {
+	engine := lifecycle.NewEngine(stack, validationsState, delegations, generator)
+	if err := initializeSyntheticActivity(stack, engine, generator, genesis, validationsState, hayabusaValidators, delegations); err != nil {
 		slog.Error("failed to initialize synthetic activity", "error", err)
 		os.Exit(1)
 	}
@@ -244,7 +246,10 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 
 	var receipt *api.Receipt
 	for range 30 {
+		slog.Info("waiting for transaction receipt to set stargate", "txID", res.ID)
 		receipt, err = staker.Raw().Client().TransactionReceipt(res.ID)
+		slog.Info("transaction receipt", "receipt", receipt)
+		slog.Info("error", "error", err)
 		if err == nil && receipt != nil {
 			break
 		}
@@ -328,7 +333,7 @@ func extractConfigFromAccounts(accounts []genesisthor.Account, genesis *genesist
 	}
 
 	// From the config field
-	config.BlockInterval = &genesis.Config.BlockInterval
+	config.BlockInterval = genesis.Config.BlockInterval
 	config.EpochLength = genesis.Config.EpochLength
 	config.MinStakingPeriod = genesis.Config.LowStakingPeriod
 	config.MidStakingPeriod = genesis.Config.MediumStakingPeriod
@@ -448,13 +453,7 @@ func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) li
 }
 
 // Initialize realistic synthetic activity
-func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGenerator, genesis *genesisthor.CustomGenesis) error {
-	validators, err := loadHayabusaValidators(genesis)
-	if err != nil {
-		slog.Error("failed to load validators for synthetic activity", "error", err)
-		return err
-	}
-
+func initializeSyntheticActivity(stack *stack.Stack, engine *lifecycle.Engine, generator *devnetGenerator, genesis *genesisthor.CustomGenesis, validationsState *validators.Service, validators map[thor.Address]*hayabusa.NodePair, delegations *delegations.PositionManager) error {
 	// Create initial validators with different strategies
 	validatorCount := 0
 	totalValidators := len(validators)
@@ -471,41 +470,13 @@ func initializeSyntheticActivity(engine *lifecycle.Engine, generator *devnetGene
 			config.StakingPeriods = uint32(utils.RandomBetween(10, 40))
 		}
 
-		cycle := lifecycle.NewValidatorLifecycle(config)
+		cycle := lifecycle.NewValidatorLifecycle(config, validationsState, delegations, stack)
 		engine.AddLifecycle(cycle)
 		validatorCount++
 	}
 
-	accountsAddressKeys, err := parseAddressKeysFromEnvToMap("ACCOUNTS_KEYS")
-	if err != nil {
-		return fmt.Errorf("failed to parse ACCOUNTS_KEYS: %w", err)
-	}
-
-	delegatorsCount := 15
-	for i, account := range genesis.Accounts[0:delegatorsCount] {
-		accountKey, err := crypto.HexToECDSA(accountsAddressKeys[account.Address.String()])
-		if err != nil {
-			return fmt.Errorf("failed to parse account key for %s: %w", account.Address, err)
-		}
-		delegatorSigner := bind.NewSigner(accountKey)
-		config := generator.CreateDelegator(delegatorSigner, 0)
-
-		// Distribute delegation strategies
-		if i < delegatorsCount/3 { // Long-term delegators
-			config.StakingPeriods = uint32(utils.RandomBetween(100, 300))
-		} else if i < (delegatorsCount*2)/3 { // Medium-term delegators
-			config.StakingPeriods = uint32(utils.RandomBetween(30, 80))
-		} else { // Short-term delegators
-			config.StakingPeriods = uint32(utils.RandomBetween(10, 30))
-		}
-
-		cycle := lifecycle.NewDelegatorLifecycle(config)
-		engine.AddLifecycle(cycle)
-	}
-
 	slog.Info("initialized synthetic activity",
-		"validatorCount", validatorCount,
-		"delegatorCount", delegatorsCount)
+		"validatorCount", validatorCount)
 
 	return nil
 }

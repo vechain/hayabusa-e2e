@@ -19,7 +19,7 @@ import (
 var (
 	ValidatorAccounts  = mustCreateNodePairs()
 	Stargate           = mustParseKey("274c9caa1b72003d86eab9ea817f9b4c172246e75a9e20d1baaf44bbf5c89762")
-	ParamsStargateKey  = nameToBytes32("stargate-contract-address")
+	ParamsStargateKey  = nameToBytes32("delegator-contract-address")
 	Executor           = (*bind.PrivateKeySigner)(thorgenesis.DevAccounts()[0].PrivateKey)
 	AdditionalAccounts = mustParseKeys(additionalKeys)
 

@@ -9,10 +9,11 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validations"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/networkhub/thorbuilder"
@@ -30,8 +31,9 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 		EpochLength:       6,
 		CooldownPeriod:    6,
 		MinStakingPeriod:  6,
-		MidStakingPeriod:  48,
-		HighStakingPeriod: 259200,
+		MidStakingPeriod:  12,
+		HighStakingPeriod: 24,
+		BlockInterval:     5,
 	}
 	network, err := hayabusa.NewNetwork(config, ctx)
 	if err != nil {
@@ -54,6 +56,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 		addr := net.JoinHostPort("localhost", strconv.Itoa(port))
 		port++
 		node.SetAPIAddr(addr)
+		node.AddAdditionalArg("txpool-limit-per-account", "10000")
 		slog.Info("node API address", "node", node.GetID(), "address", addr)
 	}
 	if err := network.Start(); err != nil {
@@ -77,9 +80,10 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 
 	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
-	validators := validations.NewState(stack)
+	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven)
+	validators := validators.NewState(stack)
 	generator := &networkHubGenerator{config: config}
-	engine := lifecycle.NewEngine(stack, validators, generator)
+	engine := lifecycle.NewEngine(stack, validators, delegations, generator)
 
 	utils.WaitForFork(staker, config.ForkBlock)
 
@@ -94,11 +98,11 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 			config.StakingPeriods = uint32(utils2.RandomBetween(6, 12)) // create 20 short term validators
 		}
 		config.QueueDelay = lifecycle.Delay{Blocks: 0, Epochs: 0}
-		cycle := lifecycle.NewValidatorLifecycle(config)
+		cycle := lifecycle.NewValidatorLifecycle(config, validators, delegations, stack)
 		engine.AddLifecycle(cycle)
 	}
 
-	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
+	if err := engine.Flush(lifecycle.StatusActive); err != nil {
 		slog.Error("failed to flush validator lifecycles", "error", err)
 		os.Exit(1)
 	}
@@ -107,25 +111,6 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		slog.Error("failed to wait for POS", "error", err)
-		os.Exit(1)
-	}
-
-	best, err := client.Block("best")
-	if err != nil {
-		slog.Error("failed to get best block", "error", err)
-		os.Exit(1)
-	}
-
-	// initial seeding of delegator accounts
-	for i := range uint32(200) {
-		config := generator.CreateDelegator(stack.Stargate(), best.Number)
-		config.QueueDelay = lifecycle.Delay{Blocks: i % 3, Epochs: 0}
-		cycle := lifecycle.NewDelegatorLifecycle(config)
-		engine.AddLifecycle(cycle)
-	}
-
-	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
-		slog.Error("failed to flush validator lifecycles", "error", err)
 		os.Exit(1)
 	}
 
@@ -158,7 +143,8 @@ func (n *networkHubGenerator) CreateValidator(node *hayabusa.NodePair, startBloc
 			},
 			StartBlock: startBlock,
 		},
-		Account: node,
+		Account:             node,
+		StakeChangeInterval: uint32(utils2.RandomBetween(5, 20)),
 	}
 }
 
@@ -172,7 +158,7 @@ func (n *networkHubGenerator) CreateDelegator(acc bind.Signer, startBlock uint32
 			StakingPeriods: uint32(utils2.RandomBetween(3, 120)),
 			WithdrawDelay: lifecycle.Delay{
 				Blocks: uint32(utils2.RandomBetween(0, int(n.config.EpochLength))),
-				Epochs: uint32(utils2.RandomBetween(1, 3)),
+				Epochs: uint32(utils2.RandomBetween(5, 10)),
 			},
 			StartBlock: startBlock,
 		},

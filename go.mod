@@ -19,9 +19,10 @@ require (
 )
 
 require (
+	github.com/hashicorp/golang-lru v1.0.2
 	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/pkg/errors v0.9.1
-	github.com/vechain/networkhub v0.0.5-0.20250814152147-d91cba45a860
+	github.com/vechain/networkhub v0.0.5-0.20250819120439-71315d6e4883
 )
 
 require (
@@ -44,7 +45,6 @@ require (
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect

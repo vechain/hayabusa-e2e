@@ -4,17 +4,19 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
-	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
+	"github.com/vechain/thor/v2/tx"
 )
 
 type Stack struct {
@@ -24,6 +26,7 @@ type Stack struct {
 	validatorAccs map[thor.Address]*hayabusa.NodePair
 	stargateAcc   bind.Signer
 	mu            sync.Mutex // protects the stack from concurrent access
+	best          atomic.Pointer[api.JSONCollapsedBlock]
 }
 
 func NewStack(
@@ -63,6 +66,17 @@ func (s *Stack) Stargate() bind.Signer {
 	return s.stargateAcc
 }
 
+func (s *Stack) RandomStakingPeriod() uint32 {
+	switch utils.RandomInt(0, 3) {
+	case 0:
+		return s.config.MinStakingPeriod
+	case 1:
+		return s.config.MidStakingPeriod
+	default:
+		return s.config.HighStakingPeriod
+	}
+}
+
 func (s *Stack) NextValidator() (*hayabusa.NodePair, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -81,18 +95,74 @@ func (s *Stack) NextValidator() (*hayabusa.NodePair, error) {
 	panic("stack: no validators available")
 }
 
-func (s *Stack) SendTransaction(method *bind.MethodBuilder, signer bind.Signer) (*api.Receipt, error) {
-	txCtx, cancel := context.WithTimeout(s.Context(), 2*time.Minute)
-	defer cancel()
-	receipt, _, err := method.Send().
-		WithOptions(testutil.TxOptions()).
-		WithSigner(signer).
-		SubmitAndConfirm(txCtx)
+func (s *Stack) bestBlock() (*api.JSONCollapsedBlock, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var best *api.JSONCollapsedBlock
+	cached := s.best.Load()
+	if cached == nil || time.Since(time.Unix(int64(cached.Timestamp), 0)) > 6*time.Second {
+		block, err := s.Client().Block("best")
+		if err != nil {
+			return nil, err
+		}
+		best = block
+		s.best.Store(best)
+	} else {
+		best = cached
+	}
+	return best, nil
+}
+
+func (s *Stack) SendTransaction(method *bind.MethodBuilder, signer bind.Signer) (*tx.Transaction, error) {
+	sender, err := s.makeTx(method, signer)
 	if err != nil {
+		slog.Error("failed to create transaction", "error", err)
+		return nil, err
+	}
+	return sender.Submit()
+}
+
+func (s *Stack) SendTransactionAndWait(
+	method *bind.MethodBuilder,
+	signer bind.Signer,
+) (*api.Receipt, error) {
+	txCtx, cancel := context.WithTimeout(s.ctx, time.Minute)
+	defer cancel()
+
+	sender, err := s.makeTx(method, signer)
+	if err != nil {
+		slog.Error("failed to create transaction", "error", err)
+		return nil, err
+	}
+
+	receipt, _, err := sender.SubmitAndConfirm(txCtx)
+	if err != nil {
+		slog.Error("failed to send transaction", "error", err)
 		return nil, err
 	}
 	if receipt.Reverted {
-		return receipt, utils.DebugRevert(method, receipt)
+		return nil, utils.DebugRevert(method, receipt)
 	}
 	return receipt, nil
+}
+
+func (s *Stack) makeTx(method *bind.MethodBuilder, signer bind.Signer) (*bind.SendBuilder, error) {
+	best, err := s.bestBlock()
+	if err != nil {
+		slog.Error("failed to get best block", "error", err)
+		return nil, err
+	}
+
+	gas := uint64(1_000_000)
+	baseFee := (*big.Int)(best.BaseFeePerGas)
+	if baseFee == nil {
+		baseFee = big.NewInt(thor.InitialBaseFee)
+	}
+	options := &bind.TxOptions{
+		MaxFeePerGas: big.NewInt(0).Mul(baseFee, big.NewInt(2)),
+		Gas:          &gas,
+	}
+
+	return method.Send().WithOptions(options).WithSigner(signer), nil
 }
