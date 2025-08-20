@@ -222,7 +222,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 	slog.Debug("signalling exit for delegator", "id", d.ID())
 
 	sender := d.stack.Staker().SignalDelegationExit(d.id)
-	receipt, err := d.sendOrPoll(sender, &d.exitTx.id, "delegation has ended")
+	receipt, err := d.sendOrPoll(sender, &d.exitTx.id, "delegation has ended", "delegation has not started yet")
 	if err != nil {
 		slog.Error("failed to signal exit for delegator", "error", err, "id", d.ID())
 		return err
