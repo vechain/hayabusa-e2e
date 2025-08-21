@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
@@ -22,15 +21,11 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
-	"github.com/vechain/hayabusa-e2e/hayabusa/stargate"
-	"github.com/vechain/thor/v2/api"
 	genesisthor "github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
-	"github.com/vechain/thor/v2/tx"
 )
 
 const (
@@ -235,73 +230,8 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		return accountSigner, nil
 	}
 
-	// If stargate address is not set in params, deploy stargate contract
-	genesis, err := staker.Raw().Client().Block("0")
-	if err != nil {
-		slog.Error("failed to get genesis block to set stargate", "error", err)
-		return nil, err
-	}
-	chainTag := genesis.ID[31]
-
-	bytecode := stargate.Bin
-	bytecode = strings.TrimSpace(bytecode)
-	bytes, err := hexutil.Decode("0x" + bytecode)
-	clause := tx.NewClause(nil).WithData(bytes)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
+	// If stargate address is not set in params, set it
 	gas, maxFeePerGas, maxPriorityFeePerGas, err := getGasFees(staker)
-	if err != nil {
-		slog.Error("failed to get gas fees", "error", err)
-		return nil, err
-	}
-
-	trx := tx.NewBuilder(tx.TypeDynamicFee).
-		Clause(clause).
-		Gas(gas).
-		Nonce(datagen.RandUint64()).
-		ChainTag(chainTag).
-		Expiration(100000).
-		MaxFeePerGas(maxFeePerGas).
-		MaxPriorityFeePerGas(maxPriorityFeePerGas).
-		Build()
-
-	trx, err = accountSigner.SignTransaction(trx)
-	if err != nil {
-		slog.Error("failed to sign transaction to set stargate", "error", err)
-		return nil, err
-	}
-	res, err := staker.Raw().Client().SendTransaction(trx)
-	if err != nil {
-		slog.Error("failed to send transaction to set stargate", "error", err)
-		return nil, err
-	}
-
-	var receipt *api.Receipt
-	for range 60 {
-		slog.Info("waiting for transaction receipt to set stargate", "txID", res.ID)
-		receipt, err = staker.Raw().Client().TransactionReceipt(res.ID)
-		if err == nil && receipt != nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
-	if receipt == nil {
-		return nil, fmt.Errorf("failed to get transaction receipt to set stargate")
-	}
-
-	slog.Info("transaction receipt", "receipt", *receipt)
-
-	// The stargate contract should be deployed by now
-	contractAddr := receipt.Outputs[0].ContractAddress
-
-	slog.Info("stargate contract deployed", "contractAddr", contractAddr)
-
-	// Set stargate address in params
-	stargateAddress = new(big.Int).SetBytes(contractAddr.Bytes())
-
-	gas, maxFeePerGas, maxPriorityFeePerGas, err = getGasFees(staker)
 	if err != nil {
 		slog.Error("failed to get gas fees for setting stargate address in params", "error", err)
 		return nil, err
@@ -312,7 +242,9 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		MaxFeePerGas:         maxFeePerGas,
 		MaxPriorityFeePerGas: maxPriorityFeePerGas,
 	}
-	receipt, _, err = params.Set(stargateKey, stargateAddress).
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	receipt, _, err := params.Set(stargateKey, new(big.Int).SetBytes(accountSigner.Address().Bytes())).
 		Send().
 		WithSigner(accountSigner).
 		WithOptions(txOptions).

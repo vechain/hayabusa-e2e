@@ -131,7 +131,7 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 	}
 
 	validator, ok := d.validations.LookupAddress(d.validationID)
-	if !ok {
+	if !ok || validator == nil {
 		slog.Error("failed to get staking period info for validation", "id", d.validationID)
 		return errors.New("failed to get staking period info for validation")
 	}
