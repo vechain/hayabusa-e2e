@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"maps"
 	"bytes"
 	"errors"
 	"fmt"
@@ -126,11 +127,7 @@ func (s *Service) poll() {
 				s.idLookup[id] = validator
 			}
 
-			for id, val := range validators {
-				s.idLookup[id] = val
-			}
-
-			//s.idLookup = idLookup
+			maps.Copy(s.idLookup, validators)
 
 			slog.Info(" 🎖️ updated staker state",
 				"active", len(s.active),
@@ -217,7 +214,6 @@ func (s *Service) FetchAll(blockID thor.Bytes32) (map[thor.Address]*validation.V
 func (s *Service) fetchStakerInfo(blockID thor.Bytes32) ([]*api.CallResult, error) {
 	to := thor.MustParseAddress("0x841a6556c524d47030762eb14dc4af897e605d9b")
 	selector := hexutil.Encode(getValidatorsABI.Id())
-	slog.Info("getValidators", "selector", selector, "blockID", blockID)
 
 	res, err := s.stack.Client().InspectClauses(&api.BatchCallData{
 		Clauses: api.Clauses{
