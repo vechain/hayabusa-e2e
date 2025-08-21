@@ -27,15 +27,15 @@ const (
 	DistributionTypeSkewed
 )
 
-func NewManager(maxLeaderGroupLength uint32, distributionType DistributionType) *PositionManager {
-	positions := make(map[string]*Position)
-	for _, pos := range Positions {
-		positions[pos.Name] = pos
+func NewManager(maxLeaderGroupLength uint32, distributionType DistributionType, positions []*Position) *PositionManager {
+	positionMap := make(map[string]*Position)
+	for _, pos := range positions {
+		positionMap[pos.Name] = pos
 	}
 
 	return &PositionManager{
 		maxLeaderGroupLength: maxLeaderGroupLength,
-		positions:            positions,
+		positions:            positionMap,
 		distributionType:     distributionType,
 
 		validatorAvailable: make(map[thor.Address]map[string]int), // active positions per validator
@@ -46,6 +46,10 @@ func NewManager(maxLeaderGroupLength uint32, distributionType DistributionType) 
 func (pm *PositionManager) TotalSupply() int {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
+
+	if len(pm.positions) == 0 {
+		return 0
+	}
 
 	total := 0
 	for _, position := range pm.positions {
@@ -58,6 +62,10 @@ func (pm *PositionManager) Available() int {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
+	if len(pm.positions) == 0 {
+		return 0
+	}
+
 	available := 0
 	for _, position := range pm.positions {
 		available += position.MainnetUsed - pm.totalActive[position.Name]
@@ -68,6 +76,10 @@ func (pm *PositionManager) Available() int {
 func (pm *PositionManager) Summary() string {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
+
+	if len(pm.positions) == 0 {
+		return "PositionManager is empty"
+	}
 
 	builder := strings.Builder{}
 	builder.WriteString("PositionManager Summary:\n")
@@ -86,6 +98,14 @@ func (pm *PositionManager) RegisterValidator(validator thor.Address) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
+	if len(pm.positions) == 0 {
+		return
+	}
+
+	if _, exists := pm.validatorAvailable[validator]; exists {
+		return
+	}
+
 	pm.validatorAvailable[validator] = pm.makeValidatorsAvailablePositions(validator)
 }
 
@@ -96,6 +116,10 @@ func (pm *PositionManager) UnregisterDelegator(position *Position, validator tho
 	}
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
+
+	if len(pm.positions) == 0 {
+		return
+	}
 
 	if pm.validatorAvailable[validator] == nil {
 		return
@@ -117,6 +141,10 @@ func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
+	if len(pm.positions) == 0 {
+		return
+	}
+
 	current, exists := pm.validatorAvailable[validator]
 	if !exists {
 		slog.Warn("attempted to unregister non-existent validator", "address", validator.String())
@@ -124,9 +152,9 @@ func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
 	}
 	start := pm.makeValidatorsAvailablePositions(validator)
 
-	for positionID, count := range current {
+	for positionID, available := range current {
 		// reset the totals
-		used := start[positionID] - count
+		used := start[positionID] - available
 		pm.totalActive[positionID] -= used
 	}
 
@@ -136,6 +164,10 @@ func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
 func (pm *PositionManager) NewPosition() (*Position, thor.Address, bool) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
+
+	if len(pm.positions) == 0 {
+		return nil, thor.Address{}, false
+	}
 
 	validators := make([]thor.Address, 0, len(pm.validatorAvailable))
 	for address := range pm.validatorAvailable {
@@ -147,6 +179,9 @@ func (pm *PositionManager) NewPosition() (*Position, thor.Address, bool) {
 
 	positions := make([]string, 0, len(pm.positions))
 	for positionID := range pm.positions {
+		if pm.totalActive[positionID] >= pm.positions[positionID].MainnetUsed {
+			continue
+		}
 		positions = append(positions, positionID)
 	}
 	rand.Shuffle(len(positions), func(i, j int) {

@@ -2,8 +2,6 @@ package delegations
 
 import (
 	"math/big"
-	"math/rand"
-	rand2 "math/rand/v2"
 )
 
 type Position struct {
@@ -13,7 +11,9 @@ type Position struct {
 	Multiplier  uint8
 }
 
-var Positions = []*Position{
+var NoPositions []*Position
+
+var MainnetPositions = []*Position{
 	{"Mjolnir X", big.NewInt(15600000), 158, 150},
 	{"Thunder X", big.NewInt(5600000), 188, 150},
 	{"Strength X", big.NewInt(1600000), 836, 150},
@@ -24,10 +24,4 @@ var Positions = []*Position{
 	{"Flash", big.NewInt(200000), 1941, 100},
 	{"Lightning", big.NewInt(50000), 2688, 100},
 	{"Dawn", big.NewInt(10000), 4614, 100},
-}
-
-func RandomPosition() *Position {
-	source := rand.New(rand.NewSource(rand2.Int64()))
-	index := int(big.NewInt(0).Rand(source, big.NewInt(int64(len(Positions)))).Int64())
-	return Positions[index]
 }
