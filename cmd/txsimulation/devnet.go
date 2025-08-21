@@ -23,7 +23,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/hayabusa/stargate"
-	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/thor/v2/api"
 	genesisthor "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -236,18 +235,18 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	initialBaseFee := new(big.Int).SetUint64(thor.InitialBaseFee)
-	feesHistory, err := staker.Raw().Client().FeesHistory(1, "best", []float64{0.5})
+	gas := uint64(40_000_000)
+	feesHistory, err := staker.Raw().Client().FeesHistory(1, "next", []float64{})
 	if err != nil {
 		slog.Error("failed to get fees history", "error", err)
 		return nil, err
 	}
 	baseFee := (*big.Int)(feesHistory.BaseFeePerGas[0])
 	maxPriorityFeePerGas := new(big.Int).Div(new(big.Int).Mul(baseFee, big.NewInt(5)), big.NewInt(100))
-	maxFeePerGas := new(big.Int).Add(initialBaseFee, maxPriorityFeePerGas)
+	maxFeePerGas := new(big.Int).Add(baseFee, maxPriorityFeePerGas)
 	trx := tx.NewBuilder(tx.TypeDynamicFee).
 		Clause(clause).
-		Gas(40_000_000).
+		Gas(gas).
 		Nonce(datagen.RandUint64()).
 		ChainTag(chainTag).
 		Expiration(100000).
@@ -270,8 +269,6 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	for range 30 {
 		slog.Info("waiting for transaction receipt to set stargate", "txID", res.ID)
 		receipt, err = staker.Raw().Client().TransactionReceipt(res.ID)
-		slog.Info("transaction receipt", "receipt", receipt)
-		slog.Info("error", "error", err)
 		if err == nil && receipt != nil {
 			break
 		}
@@ -281,6 +278,8 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		return nil, fmt.Errorf("failed to get transaction receipt to set stargate")
 	}
 
+	slog.Info("transaction receipt", "receipt", receipt)
+
 	// The stargate contract should be deployed by now
 	contractAddr := receipt.Outputs[0].ContractAddress
 
@@ -289,10 +288,15 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	// Set stargate address in params
 	stargateAddress = new(big.Int).SetBytes(contractAddr.Bytes())
 
+	txOptions := &bind.TxOptions{
+		Gas:                  &gas,
+		MaxFeePerGas:         maxFeePerGas,
+		MaxPriorityFeePerGas: maxPriorityFeePerGas,
+	}
 	receipt, _, err = params.Set(stargateKey, stargateAddress).
 		Send().
 		WithSigner(accountSigner).
-		WithOptions(testutil.TxOptions()).
+		WithOptions(txOptions).
 		SubmitAndConfirm(ctx)
 
 	if err != nil || receipt == nil {
