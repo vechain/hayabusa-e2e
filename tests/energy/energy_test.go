@@ -66,7 +66,7 @@ func runEnergyTest(t *testing.T) error {
 	}
 	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10))
 	err = utils.WaitForCondition(staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod, func() (bool, error) {
-		valStake, err := staker.GetValidatorStake(hayabusa.ValidatorAccounts[0].Node.Address())
+		valStake, err := staker.GetValidation(hayabusa.ValidatorAccounts[0].Node.Address())
 		if err != nil {
 			return false, err
 		}

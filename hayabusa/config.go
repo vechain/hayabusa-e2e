@@ -81,10 +81,10 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 	genesis.Accounts[paramsIndex].Storage[ParamsStargateKey] = thor.BytesToBytes32(addr.Bytes())
 
 	if c.BlockInterval == 0 {
-		c.BlockInterval = thor.BlockInterval
+		c.BlockInterval = thor.BlockInterval()
 	}
 	if c.EpochLength == 0 {
-		c.EpochLength = thor.EpochLength
+		c.EpochLength = thor.EpochLength()
 	}
 	genesis.Config = &thor.Config{
 		BlockInterval:              c.BlockInterval,
@@ -107,7 +107,7 @@ func (c *Config) Validate() error {
 
 	epochLength := c.EpochLength
 	if epochLength == 0 {
-		epochLength = thor.EpochLength
+		epochLength = thor.EpochLength()
 	}
 	if c.MinStakingPeriod%epochLength != 0 {
 		return errors.New("staker-low-staking-period must be a multiple of epoch-length")
