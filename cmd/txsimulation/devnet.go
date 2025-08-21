@@ -111,7 +111,7 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 		stack:  stack,
 	}
 	engine := lifecycle.NewEngine(stack, validationsState, delegations, generator)
-	if err := initializeSyntheticActivity(stack, engine, generator, genesis, validationsState, initialValidators, delegations); err != nil {
+	if err := initializeSyntheticActivity(stack, engine, generator, validationsState, initialValidators, delegations); err != nil {
 		slog.Error("failed to initialize synthetic activity", "error", err)
 		os.Exit(1)
 	}
@@ -498,7 +498,7 @@ func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) li
 }
 
 // Initialize realistic synthetic activity
-func initializeSyntheticActivity(stack *stack.Stack, engine *lifecycle.Engine, generator *devnetGenerator, genesis *genesisthor.CustomGenesis, validationsState *validators.Service, initialValidators map[thor.Address]*hayabusa.NodePair, delegations *delegations.PositionManager) error {
+func initializeSyntheticActivity(stack *stack.Stack, engine *lifecycle.Engine, generator *devnetGenerator, validationsState *validators.Service, initialValidators map[thor.Address]*hayabusa.NodePair, delegations *delegations.PositionManager) error {
 	// Create initial validators with different strategies
 	validatorCount := 0
 	totalValidators := len(initialValidators)
