@@ -1,11 +1,11 @@
 package validators
 
 import (
-	"maps"
 	"bytes"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/big"
 	"sync"
 	"time"
@@ -212,7 +212,8 @@ func (s *Service) FetchAll(blockID thor.Bytes32) (map[thor.Address]*validation.V
 }
 
 func (s *Service) fetchStakerInfo(blockID thor.Bytes32) ([]*api.CallResult, error) {
-	to := thor.MustParseAddress("0x841a6556c524d47030762eb14dc4af897e605d9b")
+	getValidatorsAddress := "0x841a6556c524d47030762eb14dc4af897e605d9b"
+	to := thor.MustParseAddress(getValidatorsAddress)
 	selector := hexutil.Encode(getValidatorsABI.Id())
 
 	res, err := s.stack.Client().InspectClauses(&api.BatchCallData{
