@@ -147,7 +147,7 @@ func loadHayabusaGenesis(genesisURL string) (*genesisthor.CustomGenesis, *hayabu
 	}
 
 	slog.Info("loaded Hayabusa genesis configuration",
-		"config", config)
+		"config", *config)
 
 	return &genesis, config, nil
 }
@@ -186,6 +186,22 @@ func loadHayabusaValidators(genesis *genesisthor.CustomGenesis) (map[thor.Addres
 	slog.Info("loaded Hayabusa validators from genesis", "validatorCount", len(validators))
 
 	return validators, nil
+}
+
+func getGasFees(staker *builtin.Staker) (gas uint64, maxFeePerGas *big.Int, maxPriorityFeePerGas *big.Int, err error) {
+	gas = uint64(40_000_000)
+	feesHistory, err := staker.Raw().Client().FeesHistory(1, "next", []float64{})
+	if err != nil {
+		slog.Error("failed to get fees history", "error", err)
+		return 0, nil, nil, err
+	}
+	baseFee := (*big.Int)(feesHistory.BaseFeePerGas[0])
+	maxPriorityFeePerGas = new(big.Int).Div(new(big.Int).Mul(baseFee, big.NewInt(5)), big.NewInt(100))
+	maxFeePerGas = new(big.Int).Add(baseFee, maxPriorityFeePerGas)
+
+	slog.Info("gas fees", "gas", gas, "maxFeePerGas", maxFeePerGas, "maxPriorityFeePerGas", maxPriorityFeePerGas)
+
+	return gas, maxFeePerGas, maxPriorityFeePerGas, nil
 }
 
 func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
@@ -232,18 +248,15 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	bytes, err := hexutil.Decode("0x" + bytecode)
 	clause := tx.NewClause(nil).WithData(bytes)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	gas := uint64(40_000_000)
-	feesHistory, err := staker.Raw().Client().FeesHistory(1, "next", []float64{})
+	gas, maxFeePerGas, maxPriorityFeePerGas, err := getGasFees(staker)
 	if err != nil {
-		slog.Error("failed to get fees history", "error", err)
+		slog.Error("failed to get gas fees", "error", err)
 		return nil, err
 	}
-	baseFee := (*big.Int)(feesHistory.BaseFeePerGas[0])
-	maxPriorityFeePerGas := new(big.Int).Div(new(big.Int).Mul(baseFee, big.NewInt(5)), big.NewInt(100))
-	maxFeePerGas := new(big.Int).Add(baseFee, maxPriorityFeePerGas)
+
 	trx := tx.NewBuilder(tx.TypeDynamicFee).
 		Clause(clause).
 		Gas(gas).
@@ -266,7 +279,7 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 	}
 
 	var receipt *api.Receipt
-	for range 30 {
+	for range 60 {
 		slog.Info("waiting for transaction receipt to set stargate", "txID", res.ID)
 		receipt, err = staker.Raw().Client().TransactionReceipt(res.ID)
 		if err == nil && receipt != nil {
@@ -278,7 +291,7 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 		return nil, fmt.Errorf("failed to get transaction receipt to set stargate")
 	}
 
-	slog.Info("transaction receipt", "receipt", receipt)
+	slog.Info("transaction receipt", "receipt", *receipt)
 
 	// The stargate contract should be deployed by now
 	contractAddr := receipt.Outputs[0].ContractAddress
@@ -287,6 +300,12 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 
 	// Set stargate address in params
 	stargateAddress = new(big.Int).SetBytes(contractAddr.Bytes())
+
+	gas, maxFeePerGas, maxPriorityFeePerGas, err = getGasFees(staker)
+	if err != nil {
+		slog.Error("failed to get gas fees for setting stargate address in params", "error", err)
+		return nil, err
+	}
 
 	txOptions := &bind.TxOptions{
 		Gas:                  &gas,
