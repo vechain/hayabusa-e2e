@@ -91,27 +91,27 @@ func runTestMissedSlot(t *testing.T) error {
 	require.True(t, missedSlot, "missed slot not detected")
 	t.Log("✅ - missed slot detected")
 
-	validation, err := staker.GetValidatorStatus(validationID)
+	validation, err := staker.GetValidation(validationID)
 	require.NoError(t, err)
-	require.False(t, validation.Online)
+	require.False(t, validation.IsOnline())
 
 	// start the validator again
 	require.NoError(t, network.NodeLifecycles()[node1Config.GetID()].Start())
 
 	// wait for the validator to be back online
 	err = ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
-		validation, err := staker.GetValidatorStatus(validationID)
+		validation, err := staker.GetValidation(validationID)
 		require.NoError(t, err)
 		t.Logf("⚠️ - waiting for validator %s to be online, status: %v", validationID.String(), validation.Status)
-		return validation.Online, nil
+		return validation.IsOnline(), nil
 	})
 	if err != nil {
 		return testutil.StakerStatusUnknownError{ValidationID: validationID.String()}
 	}
 
-	validation, err = staker.GetValidatorStatus(validationID)
+	validation, err = staker.GetValidation(validationID)
 	require.NoError(t, err)
-	require.True(t, validation.Online)
+	require.True(t, validation.IsOnline())
 	t.Log("✅ - validator back online")
 
 	return nil

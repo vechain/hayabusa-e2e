@@ -143,15 +143,11 @@ func (s *Service) poll() {
 }
 
 func (s *Service) checkExited(id thor.Address) (*validation.Validation, error) {
-	stake, err := s.stack.Staker().GetValidatorStake(id)
+	stake, err := s.stack.Staker().GetValidation(id)
 	if err != nil {
 		return nil, err
 	}
-	periodDetails, err := s.stack.Staker().GetValidatorPeriodDetails(id)
-	if err != nil {
-		return nil, err
-	}
-	status, err := s.stack.Staker().GetValidatorStatus(id)
+	periodDetails, err := s.stack.Staker().GetValidationPeriodDetails(id)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +160,7 @@ func (s *Service) checkExited(id thor.Address) (*validation.Validation, error) {
 		Endorser:           stake.Endorser,
 		Period:             periodDetails.Period,
 		CompleteIterations: periodDetails.CompletedPeriods,
-		Status:             validation.Status(status.Status),
+		Status:             validation.Status(stake.Status),
 		StartBlock:         periodDetails.StartBlock,
 		LockedVET:          stake.Stake,
 		PendingUnlockVET:   big.NewInt(0),
@@ -177,8 +173,8 @@ func (s *Service) checkExited(id thor.Address) (*validation.Validation, error) {
 	if periodDetails.ExitBlock != math.MaxUint32 {
 		v.ExitBlock = &periodDetails.ExitBlock
 	}
-	if status.OfflineBlock != math.MaxUint32 {
-		v.OfflineBlock = &status.OfflineBlock
+	if stake.OfflineBlock != math.MaxUint32 {
+		v.OfflineBlock = &stake.OfflineBlock
 	}
 
 	return v, nil

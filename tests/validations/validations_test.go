@@ -237,7 +237,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	staker := testutil.SetupStakerAndWaitForFork(t, client, config)
 
-	active, queued, err := staker.GetValidatorsNum()
+	active, queued, err := staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), active.String())
 	assert.Equal(t, big.NewInt(0).String(), queued.String())
@@ -246,7 +246,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	stake = new(big.Int).Mul(stake, big.NewInt(1e6))
 	stake = new(big.Int).Mul(stake, big.NewInt(26))
 	id1 := testutil.AddValidator(sequence, staker, validator1, config.MinStakingPeriod)
-	active, queued, err = staker.GetValidatorsNum()
+	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), active.String())
 	assert.Equal(t, big.NewInt(1).String(), queued.String())
@@ -260,7 +260,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assert.Equal(t, validator3.Node.Address(), id3)
 	assert.Equal(t, validator4.Node.Address(), id4)
 
-	active, queued, err = staker.GetValidatorsNum()
+	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), active.String())
 	assert.Equal(t, big.NewInt(4).String(), queued.String())
@@ -283,7 +283,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusQueued, block)
 
-	active, queued, err = staker.GetValidatorsNum()
+	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(3).String(), active.String())
 	assert.Equal(t, big.NewInt(1).String(), queued.String())
@@ -299,7 +299,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusQueued, block)
 	assertValidatorStatus(t, staker, id5, builtin.StakerStatusQueued, block)
 
-	active, queued, err = staker.GetValidatorsNum()
+	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(3).String(), active.String())
 	assert.Equal(t, big.NewInt(2).String(), queued.String())
@@ -333,7 +333,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id5, builtin.StakerStatusQueued, block)
 
-	active, queued, err = staker.GetValidatorsNum()
+	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(3).String(), active.String())
 	assert.Equal(t, big.NewInt(1).String(), queued.String())
@@ -351,7 +351,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id5, builtin.StakerStatusQueued, block)
 
-	active, queued, err = staker.GetValidatorsNum()
+	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(3).String(), active.String())
 	assert.Equal(t, big.NewInt(1).String(), queued.String())
@@ -662,7 +662,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 
 	// Remove delegator
 	_ = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
-	delegation, err := staker.GetDelegationStake(delegationID)
+	delegation, err := staker.GetDelegation(delegationID)
 	assert.NoError(t, err)
 	assert.True(t, delegation.Stake.Sign() == 0)
 	t.Log("✅ - Delegator removed from queued validator")
@@ -778,24 +778,24 @@ func validatorWithdraw(t *testing.T, staker *builtin.Staker, signer bind.Signer,
 }
 
 func assertMatchingValidators(t *testing.T, staker *builtin.Staker, id1 thor.Address, masterAddress thor.Address) {
-	val1, err := staker.GetValidatorStake(id1)
+	val1, err := staker.GetValidation(id1)
 	assert.NoError(t, err)
 
-	val2, err := staker.GetValidatorStake(masterAddress)
+	val2, err := staker.GetValidation(masterAddress)
 	assert.NoError(t, err)
 	assert.Equal(t, val1, val2)
 }
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
-	validator, err := staker.GetValidatorStatus(validatorID)
+	validator, err := staker.GetValidation(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
 func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) error {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
-	validator, err := staker.GetValidatorStatus(validatorID)
+	validator, err := staker.GetValidation(validatorID)
 	assert.NoError(t, err)
 	if validator.Status == builtin.StakerStatusUnknown {
 		return testutil.StakerStatusUnknownError{ValidationID: validatorID.String()}
@@ -805,7 +805,7 @@ func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validato
 }
 
 func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedPeriod uint32) {
-	validator, err := staker.GetValidatorPeriodDetails(validatorID)
+	validator, err := staker.GetValidationPeriodDetails(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedPeriod, validator.Period)
 }

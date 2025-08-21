@@ -27,7 +27,7 @@ func TestHayabusaEviction(t *testing.T) {
 
 	staker := testutil.SetupStakerAndWaitForFork(t, client, config)
 
-	active, queued, err := staker.GetValidatorsNum()
+	active, queued, err := staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), active.String())
 	assert.Equal(t, big.NewInt(0).String(), queued.String())
@@ -36,7 +36,7 @@ func TestHayabusaEviction(t *testing.T) {
 	stake = new(big.Int).Mul(stake, big.NewInt(1e6))
 	stake = new(big.Int).Mul(stake, big.NewInt(26))
 	id1 := testutil.AddValidator(sequence, staker, validator1, config.MinStakingPeriod)
-	active, queued, err = staker.GetValidatorsNum()
+	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), active.String())
 	assert.Equal(t, big.NewInt(1).String(), queued.String())
@@ -50,7 +50,7 @@ func TestHayabusaEviction(t *testing.T) {
 	assert.Equal(t, validator3.Node.Address(), id3)
 	assert.Equal(t, validator4.Node.Address(), id4)
 
-	active, queued, err = staker.GetValidatorsNum()
+	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).String(), active.String())
 	assert.Equal(t, big.NewInt(4).String(), queued.String())
@@ -73,7 +73,7 @@ func TestHayabusaEviction(t *testing.T) {
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id4, builtin.StakerStatusQueued, block)
 
-	active, queued, err = staker.GetValidatorsNum()
+	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(3).String(), active.String())
 	assert.Equal(t, big.NewInt(1).String(), queued.String())
@@ -82,11 +82,11 @@ func TestHayabusaEviction(t *testing.T) {
 	require.NoError(t, network.NodeLifecycles()[validator2Node.GetID()].Stop())
 
 	err = utils.WaitForCondition(staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod+config.MinStakingPeriod, func() (bool, error) {
-		valStatus, err := staker.GetValidatorStatus(id2)
+		valStatus, err := staker.GetValidation(id2)
 		if err != nil {
 			return false, err
 		}
-		return !valStatus.Online, nil
+		return !valStatus.IsOnline(), nil
 	})
 
 	offlineBlock := config.ForkBlock + config.TransitionPeriod
@@ -106,7 +106,7 @@ func TestHayabusaEviction(t *testing.T) {
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
-	validator, err := staker.GetValidatorStatus(validatorID)
+	validator, err := staker.GetValidation(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
 }
