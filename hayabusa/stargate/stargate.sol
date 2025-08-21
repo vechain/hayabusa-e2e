@@ -8,16 +8,16 @@ interface IERC20 {
 interface IStaker {
     // validator functions
     function getDelegatorsRewards(address validationID, uint32 stakingPeriod) external view returns (uint256);
-    function getValidatorPeriodDetails(address validationID) external view returns (uint32, uint32, uint32, uint32);
+    function getValidationPeriodDetails(address validationID) external view returns (uint32, uint32, uint32, uint32);
 
     // delegator functions
     function addDelegation(address validationID, uint8 multiplier) external payable returns (uint256);
     function signalDelegationExit(uint256 delegationID) external;
     function withdrawDelegation(uint256 delegationID) external;
     // startPeriod, endPeriod, isLocked
-    function getDelegationPeriodDetails(uint256 delegationID) external view returns (uint32, uint32, bool);
+    function getDelegationPeriodDetails(uint256 delegationID) external view returns (uint32, uint32);
     // validator, stake, multiplier
-    function getDelegationStake(uint256 delegationID) external view returns (address, uint256, uint8);
+    function getDelegation(uint256 delegationID) external view returns (address, uint256, uint8, bool);
 }
 
 contract Stargate {
@@ -60,7 +60,7 @@ contract Stargate {
 
         uint256 weight = (msg.value * multiplier) / 100;
 
-        (uint32 startPeriod, , ) = staker.getDelegationPeriodDetails(delegationID);
+        (uint32 startPeriod, ) = staker.getDelegationPeriodDetails(delegationID);
 
         // so we can calculate the delegators % of total
         weights[validationID][startPeriod] += weight;
@@ -72,10 +72,10 @@ contract Stargate {
         uint256 delegationID = delegationIDs[msg.sender];
         require(delegationID != uint256(0), "not a delegator");
 
-        (address validationID, uint256 stake, uint8 multiplier) = staker.getDelegationStake(delegationID);
+        (address validationID, uint256 stake, uint8 multiplier, ) = staker.getDelegation(delegationID);
         require(stake > 0, "delegation is not active");
 
-        (, , , uint32 validatorCompleted) = staker.getValidatorPeriodDetails(validationID);
+        (, , , uint32 validatorCompleted) = staker.getValidationPeriodDetails(validationID);
 
         uint256 weight = (stake * multiplier) / 100;
 
@@ -130,7 +130,7 @@ contract Stargate {
         }
 
         // max claimable period = minOf (validation completed periods, delegation end period)
-        (, , , uint32 maxClaimablePeriod) = staker.getValidatorPeriodDetails(validationID);
+        (, , , uint32 maxClaimablePeriod) = staker.getValidationPeriodDetails(validationID);
         if (endPeriod < maxClaimablePeriod) {
             maxClaimablePeriod = endPeriod;
         }
@@ -185,8 +185,8 @@ contract Stargate {
     ) {
         bool active;
         // validator, stake, multiplier
-        (validationID, stake, multiplier) = staker.getDelegationStake(delegationID);
-        (startPeriod, endPeriod, active) = staker.getDelegationPeriodDetails(delegationID);
+        (validationID, stake, multiplier, active) = staker.getDelegation(delegationID);
+        (startPeriod, endPeriod) = staker.getDelegationPeriodDetails(delegationID);
         return (validationID, stake, startPeriod, endPeriod, multiplier);
     }
 
