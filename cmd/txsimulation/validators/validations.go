@@ -137,15 +137,11 @@ func (s *Service) poll() {
 }
 
 func (s *Service) checkExited(id thor.Address) (*validation.Validation, error) {
-	stake, err := s.stack.Staker().GetValidatorStake(id)
+	val, err := s.stack.Staker().GetValidation(id)
 	if err != nil {
 		return nil, err
 	}
-	periodDetails, err := s.stack.Staker().GetValidatorPeriodDetails(id)
-	if err != nil {
-		return nil, err
-	}
-	status, err := s.stack.Staker().GetValidatorStatus(id)
+	periodDetails, err := s.stack.Staker().GetValidationPeriodDetails(id)
 	if err != nil {
 		return nil, err
 	}
@@ -155,24 +151,24 @@ func (s *Service) checkExited(id thor.Address) (*validation.Validation, error) {
 	}
 
 	v := &validation.Validation{
-		Endorser:           stake.Endorser,
+		Endorser:           val.Endorser,
 		Period:             periodDetails.Period,
 		CompleteIterations: periodDetails.CompletedPeriods,
-		Status:             validation.Status(status.Status),
+		Status:             validation.Status(val.Status),
 		StartBlock:         periodDetails.StartBlock,
-		LockedVET:          stake.Stake,
+		LockedVET:          val.Stake,
 		PendingUnlockVET:   big.NewInt(0),
-		QueuedVET:          stake.QueuedStake,
+		QueuedVET:          val.QueuedStake,
 		CooldownVET:        big.NewInt(0),
 		WithdrawableVET:    withdrawable,
-		Weight:             stake.Weight,
+		Weight:             val.Weight,
 	}
 
 	if periodDetails.ExitBlock != math.MaxUint32 {
 		v.ExitBlock = &periodDetails.ExitBlock
 	}
-	if status.OfflineBlock != math.MaxUint32 {
-		v.OfflineBlock = &status.OfflineBlock
+	if val.OfflineBlock != math.MaxUint32 {
+		v.OfflineBlock = &val.OfflineBlock
 	}
 
 	return v, nil
@@ -251,7 +247,7 @@ func (s *Service) unpackValidators(result *api.CallResult) (map[thor.Address]*va
 	if err != nil {
 		return nil, err
 	}
-	
+
 	validators := make(map[thor.Address]*validation.Validation)
 	masters := out[0].([]common.Address)
 	endorsors := out[1].([]common.Address)
