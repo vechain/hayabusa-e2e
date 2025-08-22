@@ -100,7 +100,7 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 
 	stack := stack.NewStack(ctx, staker, config, extraValidators, stargateSigner)
 	validationsState := validators.NewState(stack)
-	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven)
+	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven, delegations.MainnetPositions)
 	generator := &devnetGenerator{
 		config: config,
 		stack:  stack,
