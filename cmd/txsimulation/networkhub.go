@@ -80,7 +80,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 
 	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
-	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven)
+	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven, delegations.MainnetPositions)
 	validators := validators.NewState(stack)
 	generator := &networkHubGenerator{config: config}
 	engine := lifecycle.NewEngine(stack, validators, delegations, generator)

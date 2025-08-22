@@ -126,16 +126,6 @@ func (e *Engine) Run() {
 				}
 			}
 
-			// process withdraw lifecycles for logging
-			for _, lifecycle := range e.withdrawn {
-				if lifecycle.Type() == TypeDelegator {
-					delegationStatus[lifecycle.Status()]++
-				}
-				if lifecycle.Type() == TypeValidator {
-					validationStatus[lifecycle.Status()]++
-				}
-			}
-
 			for _, id := range toRemove {
 				slog.Debug("removing lifecycle", "id", id)
 				existing, ok := e.lifecycles[id]
@@ -152,7 +142,6 @@ func (e *Engine) Run() {
 				"queued", validationStatus[StatusQueued],
 				"active", validationStatus[StatusActive],
 				"exit signalled", validationStatus[StatusExitSignalled],
-				"withdrawn", validationStatus[StatusWithdrawn],
 			)
 
 			slog.Info("🚒  delegations status",
@@ -160,7 +149,6 @@ func (e *Engine) Run() {
 				"queued", delegationStatus[StatusQueued],
 				"active", delegationStatus[StatusActive],
 				"exit signalled", delegationStatus[StatusExitSignalled],
-				"withdrawn", delegationStatus[StatusWithdrawn],
 			)
 
 			slog.Info(fmt.Sprintf("👨‍💼 %s", e.delegations.Summary()))
@@ -214,8 +202,10 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 			lifecycles++
 		}
 	}
-	desiredQueued := utils2.RandomBetween(0, 15)
-	spaces := 101 + desiredQueued - lifecycles
+	mbp := int(e.stack.Config().MaxBlockProposers)
+	maxQueued := mbp / 8
+	desiredQueued := utils2.RandomBetween(0, maxQueued)
+	spaces := int(e.stack.Config().MaxBlockProposers) + desiredQueued - lifecycles
 	amount := utils2.RandomBetween(0, spaces)
 
 	slog.Info("🌚 generating validator cycles", "amount", amount, "lifecycles", lifecycles, "spaces", spaces)
@@ -235,17 +225,14 @@ func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	lifecycles := 0
-	for _, lifecycle := range e.lifecycles {
-		if lifecycle.Type() == TypeDelegator && lifecycle.Status() < StatusExitSignalled {
-			lifecycles++
-		}
-	}
-	upperLimit := math.Sqrt(float64(e.delegations.Available()))
+	available := e.delegations.Available()
+	totalSupply := e.delegations.TotalSupply()
+
+	upperLimit := math.Sqrt(float64(available))
 	amount := utils2.RandomBetween(int(upperLimit)/2, int(upperLimit))
 	amount = min(amount, 80) // Limit to 80 to avoid full blocks
 
-	slog.Info("🌚 generating delegator cycles", "amount", amount, "lifecycles", lifecycles, "upperLimit", upperLimit)
+	slog.Info("🌚 generating delegator cycles", "amount", amount, "available", available, "totalSupply", totalSupply)
 
 	for i := 0; i < amount; i++ {
 		position, validationID, ok := e.delegations.NewPosition()
