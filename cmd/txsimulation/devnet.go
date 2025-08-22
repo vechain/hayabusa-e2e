@@ -224,6 +224,7 @@ func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
 
 	if err != nil {
 		slog.Error("failed to get stargate address from params", "error", err)
+		return nil, err
 	}
 	if stargateAddress != nil && stargateAddress.Cmp(big.NewInt(0)) != 0 {
 		slog.Info("stargate address already set in params", "stargateAddress", thor.BytesToAddress(stargateAddress.Bytes()))
