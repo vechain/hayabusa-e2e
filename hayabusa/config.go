@@ -40,7 +40,6 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 	genesis.LaunchTime = uint64(time.Now().Unix())
 
 	genesis.ForkConfig.HAYABUSA = c.ForkBlock
-	genesis.ForkConfig.HAYABUSA_TP = c.TransitionPeriod
 	genesis.ExtraData = datagen.RandomHash().String()
 
 	// staker config - set all values
@@ -94,6 +93,7 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 		MediumStakingPeriod:        c.MidStakingPeriod,
 		HighStakingPeriod:          c.HighStakingPeriod,
 		ValidatorEvictionThreshold: c.ValidatorEvictionThreshold,
+		HayabusaTP:                 c.TransitionPeriod,
 	}
 }
 
