@@ -98,11 +98,6 @@ func (d *DelegatorLifecycle) ID() string {
 }
 
 func (d *DelegatorLifecycle) Process(block uint32) error {
-	defer func() {
-		if d.status == StatusWithdrawn && d.position != nil {
-			d.delegations.UnregisterDelegator(d.position, d.validationID)
-		}
-	}()
 	switch d.status {
 	case StatusPending:
 		return d.ProcessPending(block)
@@ -230,6 +225,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 	if receipt != nil {
 		d.status = StatusExitSignalled
 		d.exitTx.receipt = receipt
+		d.delegations.UnregisterDelegator(d.position, d.validationID)
 	}
 
 	return nil
