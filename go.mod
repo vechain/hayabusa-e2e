@@ -9,13 +9,13 @@ replace github.com/ethereum/go-ethereum => github.com/vechain/go-ethereum v1.8.1
 // uncomment to test local versions
 //replace github.com/vechain/networkhub => ../networkhub
 
-// replace github.com/vechain/thor/v2 => ../thor
+//replace github.com/vechain/thor/v2 => ../thor
 
 require (
 	github.com/cqroot/prompt v0.9.4
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/stretchr/testify v1.10.0
-	github.com/vechain/thor/v2 v2.3.2-0.20250825054907-ff8945d724e4
+	github.com/vechain/thor/v2 v2.3.2-0.20250825134844-2c307aa256be
 )
 
 require (

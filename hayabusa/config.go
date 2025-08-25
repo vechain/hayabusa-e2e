@@ -93,7 +93,7 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 		MediumStakingPeriod:        c.MidStakingPeriod,
 		HighStakingPeriod:          c.HighStakingPeriod,
 		ValidatorEvictionThreshold: c.ValidatorEvictionThreshold,
-		HayabusaTP:                 c.TransitionPeriod,
+		HayabusaTP:                 &c.TransitionPeriod,
 	}
 }
 
