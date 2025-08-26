@@ -125,12 +125,9 @@ func (pm *PositionManager) UnregisterDelegator(position *Position, validator tho
 		return
 	}
 
-	count, exists := pm.validatorAvailable[validator][position.Name]
+	_, exists := pm.validatorAvailable[validator][position.Name]
 	if !exists {
 		slog.Warn("attempted to unregister non-existent position for validator", "address", validator.String(), "position", position.Name)
-		return
-	}
-	if count <= 0 {
 		return
 	}
 	pm.validatorAvailable[validator][position.Name]++
