@@ -13,6 +13,17 @@ type Position struct {
 
 var NoPositions []*Position
 
+// DevnetPositions scales down the MainnetPositions according to the mbp (max block proposers) for devnet testing.
+func DevnetPositions(mbp uint32) []*Position {
+	positions := make([]*Position, len(MainnetPositions))
+
+	for i, pos := range MainnetPositions {
+		pos.MainnetUsed = int(float64(pos.MainnetUsed) * float64(mbp) / 101)
+		positions[i] = pos
+	}
+	return positions
+}
+
 var MainnetPositions = []*Position{
 	{"Mjolnir X", big.NewInt(15600000), 158, 150},
 	{"Thunder X", big.NewInt(5600000), 188, 150},

@@ -11,17 +11,15 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
-	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
 type Generator interface {
-	CreateValidator(acc *hayabusa.NodePair, startBlock uint32) ValidatorConfig
-	CreateDelegator(acc bind.Signer, startBlock uint32) DelegatorConfig
+	CreateValidator(startBlock uint32) (ValidatorConfig, bool)
+	CreateDelegator(startBlock uint32) (DelegatorConfig, bool)
 }
 
 type Engine struct {
@@ -211,12 +209,12 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 	slog.Info("🌚 generating validator cycles", "amount", amount, "lifecycles", lifecycles, "spaces", spaces)
 
 	for range amount {
-		account, err := e.stack.NextValidator()
-		if err != nil {
-			slog.Error("not generating any more validator cycles, no more validator keys")
+		lifecycle, ok := e.generator.CreateValidator(block.Number)
+		if !ok {
+			slog.Info("no more validator accounts available")
 			return
 		}
-		cycle := NewValidatorLifecycle(e.generator.CreateValidator(account, block.Number), e.validators, e.delegations, e.stack)
+		cycle := NewValidatorLifecycle(lifecycle, e.validators, e.delegations, e.stack)
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }
@@ -235,12 +233,12 @@ func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
 	slog.Info("🌚 generating delegator cycles", "amount", amount, "available", available, "totalSupply", totalSupply)
 
 	for i := 0; i < amount; i++ {
-		position, validationID, ok := e.delegations.NewPosition()
+		config, ok := e.generator.CreateDelegator(block.Number)
 		if !ok {
+			slog.Info("no more delegator accounts available")
 			return
 		}
-		config := e.generator.CreateDelegator(e.stack.Stargate(), block.Number)
-		cycle := NewDelegatorLifecycle(config, e.delegations, e.validators, e.stack, position, validationID)
+		cycle := NewDelegatorLifecycle(config, e.delegations, e.validators, e.stack)
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }

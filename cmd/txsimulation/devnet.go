@@ -100,10 +100,11 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 
 	stack := stack.NewStack(ctx, staker, config, extraValidators, stargateSigner)
 	validationsState := validators.NewState(stack)
-	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven, delegations.MainnetPositions)
+	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven, delegations.DevnetPositions(config.MaxBlockProposers))
 	generator := &devnetGenerator{
-		config: config,
-		stack:  stack,
+		config:      config,
+		stack:       stack,
+		delegations: delegations,
 	}
 	engine := lifecycle.NewEngine(stack, validationsState, delegations, generator)
 	if err := initializeSyntheticActivity(stack, engine, generator, validationsState, initialValidators, delegations); err != nil {
@@ -365,11 +366,12 @@ func parseStorageValue(storageValue thor.Bytes32) (uint32, error) {
 
 // Devnet generator with realistic synthetic activity
 type devnetGenerator struct {
-	config *hayabusa.Config
-	stack  *stack.Stack
+	config      *hayabusa.Config
+	stack       *stack.Stack
+	delegations *delegations.PositionManager
 }
 
-func (g *devnetGenerator) CreateValidator(acc *hayabusa.NodePair, startBlock uint32) lifecycle.ValidatorConfig {
+func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.ValidatorConfig, bool) {
 	// Create validators with different staking strategies
 	stakingStrategy := utils.RandomBetween(1, 4)
 	var stakingPeriods uint32
@@ -398,10 +400,14 @@ func (g *devnetGenerator) CreateValidator(acc *hayabusa.NodePair, startBlock uin
 			WithdrawDelay:  lifecycle.Delay{Blocks: uint32(utils.RandomBetween(1, 10)), Epochs: 0},
 		},
 		Account: acc,
-	}
+	}, true
 }
 
-func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) lifecycle.DelegatorConfig {
+func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.DelegatorConfig, bool) {
+	position, validator, ok := g.delegations.NewPosition()
+	if !ok {
+		return lifecycle.DelegatorConfig{}, false
+	}
 	// Create delegators with different strategies
 	delegationStrategy := utils.RandomBetween(1, 3)
 	var stakingPeriods uint32
@@ -426,8 +432,11 @@ func (g *devnetGenerator) CreateDelegator(acc bind.Signer, startBlock uint32) li
 			StakingPeriods: stakingPeriods,
 			WithdrawDelay:  lifecycle.Delay{Blocks: uint32(utils.RandomBetween(1, 15)), Epochs: 0},
 		},
-		Account: acc,
-	}
+		Account:      g.stack.Stargate(),
+		ValidationID: validator,
+		Position:     position,
+		PositionID:   thor.Bytes32{},
+	}, true
 }
 
 // Initialize realistic synthetic activity
@@ -436,8 +445,8 @@ func initializeSyntheticActivity(stack *stack.Stack, engine *lifecycle.Engine, g
 	validatorCount := 0
 	totalValidators := len(initialValidators)
 
-	for _, nodePair := range initialValidators {
-		config := generator.CreateValidator(nodePair, 0)
+	for range initialValidators {
+		config, _ := generator.CreateValidator(0)
 
 		// Distribute staking strategies based on available validators
 		if validatorCount < totalValidators/3 { // First third: long-term validators

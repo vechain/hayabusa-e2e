@@ -25,12 +25,10 @@ type transaction struct {
 }
 
 type DelegatorLifecycle struct {
-	config       DelegatorConfig
-	delegations  *delegations.PositionManager
-	stack        *stack.Stack
-	position     *delegations.Position
-	validationID thor.Address
-	validations  *validators.Service
+	config      DelegatorConfig
+	delegations *delegations.PositionManager
+	stack       *stack.Stack
+	validations *validators.Service
 
 	status              Status
 	queuedTx            transaction // the receipt of the queued transaction
@@ -49,16 +47,12 @@ func NewDelegatorLifecycle(
 	delegations *delegations.PositionManager,
 	validations *validators.Service,
 	stack *stack.Stack,
-	position *delegations.Position,
-	validationID thor.Address,
 ) *DelegatorLifecycle {
 	return &DelegatorLifecycle{
-		config:       config,
-		delegations:  delegations,
-		validations:  validations,
-		stack:        stack,
-		position:     position,
-		validationID: validationID,
+		config:      config,
+		delegations: delegations,
+		validations: validations,
+		stack:       stack,
 	}
 }
 
@@ -86,7 +80,7 @@ func (d *DelegatorLifecycle) Info() *Info {
 		ActivatedBlock:  d.activatedBlock,
 		WithdrawReceipt: d.withdrawTw.receipt,
 		ExitReceipt:     d.exitTx.receipt,
-		ValidationID:    d.validationID,
+		ValidationID:    d.config.ValidationID,
 	}
 }
 
@@ -125,9 +119,9 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 		return nil
 	}
 
-	validator, ok := d.validations.LookupAddress(d.validationID)
+	validator, ok := d.validations.LookupAddress(d.config.ValidationID)
 	if !ok || validator == nil {
-		slog.Error("failed to get staking period info for validation", "id", d.validationID)
+		slog.Error("failed to get staking period info for validation", "id", d.config.ValidationID)
 		return errors.New("failed to get staking period info for validation")
 	}
 	if validator.Status == validation.StatusExit || validator.ExitBlock != nil {
@@ -138,8 +132,8 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 	d.stakingPeriodLength = validator.Period
 
 	eth := big.NewInt(1e18)
-	stake := big.NewInt(0).Mul(d.position.Stake, eth)
-	sender := d.stack.Staker().AddDelegation(d.validationID, stake, d.position.Multiplier)
+	stake := big.NewInt(0).Mul(d.config.Position.Stake, eth)
+	sender := d.stack.Staker().AddDelegation(d.config.ValidationID, stake, d.config.Position.Multiplier)
 
 	receipt, err := d.sendOrPoll(sender, &d.queuedTx.id, "validation is not queued or active")
 	if err != nil {
@@ -179,7 +173,7 @@ func (d *DelegatorLifecycle) ProcessQueued(block uint32) error {
 	if d.activatedBlock != 0 {
 		return nil // already activated
 	}
-	validator, ok := d.validations.LookupAddress(d.validationID)
+	validator, ok := d.validations.LookupAddress(d.config.ValidationID)
 	if !ok {
 		slog.Error("failed to get validator for delegation", "id", d.ID())
 		return fmt.Errorf("failed to get validator for delegation %s", d.ID())
@@ -205,7 +199,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 		slog.Warn("delegator already exit signalled", "id", d.ID())
 		return nil
 	}
-	validator, ok := d.validations.LookupAddress(d.validationID)
+	validator, ok := d.validations.LookupAddress(d.config.ValidationID)
 	if !ok {
 		slog.Error("failed to get validator for delegation", "id", d.ID())
 		return fmt.Errorf("failed to get validator for delegation %s", d.ID())
@@ -225,7 +219,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 	if receipt != nil {
 		d.status = StatusExitSignalled
 		d.exitTx.receipt = receipt
-		d.delegations.UnregisterDelegator(d.position, d.validationID)
+		d.delegations.UnregisterDelegator(d.config.Position, d.config.ValidationID)
 	}
 
 	return nil

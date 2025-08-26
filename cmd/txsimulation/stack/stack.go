@@ -2,7 +2,6 @@ package stack
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"math/big"
 	"sync"
@@ -77,19 +76,19 @@ func (s *Stack) RandomStakingPeriod() uint32 {
 	}
 }
 
-func (s *Stack) NextValidator() (*hayabusa.NodePair, error) {
+func (s *Stack) NextValidator() (*hayabusa.NodePair, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// get any element from the map, delete it and return it
 	if len(s.validatorAccs) == 0 {
 		slog.Error("no validators available in the stack")
-		return nil, errors.New("no validators available in the stack")
+		return nil, false
 	}
 
 	for addr, signer := range s.validatorAccs {
 		delete(s.validatorAccs, addr)
-		return signer, nil
+		return signer, true
 	}
 
 	panic("stack: no validators available")
