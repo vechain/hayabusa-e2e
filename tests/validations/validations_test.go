@@ -654,7 +654,7 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	assert.NoError(t, err)
 	expectedFinalQueued := new(big.Int).Add(expectedInitialQueued, delegatorStake)
 	// The multiplier formula divides by 100 so the weight is just the stake
-	expectedFinalQueuedWeight := new(big.Int).Add(big.NewInt(0).Mul(initialQueuedWeight, big.NewInt(2)), delegatorStake)
+	expectedFinalQueuedWeight := new(big.Int).Add(initialQueuedWeight, delegatorStake)
 	assert.Equal(t, expectedFinalQueued, finalQueued)
 	t.Log("✅ - Queued stake is increased for the staked amount")
 	assert.Equal(t, expectedFinalQueuedWeight, finalQueuedWeight)
