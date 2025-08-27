@@ -151,6 +151,12 @@ func (v *ValidatorLifecycle) ProcessPending(block uint32) error {
 	}
 	slog.Debug("queuing validator", "account", v.Account.Node.Address(), "block", block)
 
+	existing, ok := v.validations.LookupAddress(v.Account.Node.Address())
+	if ok {
+		slog.Info("validator already exists", "status", existing.Status, "account", v.Account.Node.Address())
+		return v.setQueuedReceipt()
+	}
+
 	period := v.stack.RandomStakingPeriod()
 	method := v.stack.Staker().AddValidation(v.Account.Node.Address(), RandomStake(), period)
 	receipt, err := v.stack.SendTransactionAndWait(method, v.Account.Endorser)
@@ -182,16 +188,20 @@ func (v *ValidatorLifecycle) setQueuedReceipt() error {
 
 	switch validator.Status {
 	case validation.StatusActive:
-		slog.Info("validator already active", "id", v.id, "account", v.Account.Node.Address())
+		slog.Debug("validator already active", "id", v.id, "account", v.Account.Node.Address())
 		v.status = StatusActive
 		v.activatedBlock = validator.StartBlock
 		v.stakingPeriodLength = validator.Period
 	case validation.StatusQueued:
-		slog.Info("validator already queued", "id", v.id, "account", v.Account.Node.Address())
+		slog.Debug("validator already queued", "id", v.id, "account", v.Account.Node.Address())
 		v.status = StatusQueued
 		v.stakingPeriodLength = validator.Period
+	case validation.StatusExit:
+		slog.Debug("validator already exited", "id", v.id, "account", v.Account.Node.Address())
+		v.status = StatusWithdrawn
+		v.stakingPeriodLength = validator.Period
 	default:
-		slog.Info("validator exists with unknown status", "id", v.id, "status", validator.Status, "account", v.Account.Node.Address())
+		slog.Debug("validator exists with unknown status", "id", v.id, "status", validator.Status, "account", v.Account.Node.Address())
 		v.status = StatusQueued
 		v.stakingPeriodLength = validator.Period
 	}
