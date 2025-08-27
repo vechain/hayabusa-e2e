@@ -308,7 +308,11 @@ func (v *ValidatorLifecycle) ProcessExited(block uint32) error {
 	if v.status != StatusExitSignalled || v.exitReceipt == nil {
 		return errors.New("cannot withdraw validator that has not signalled exit")
 	}
-	if block < v.Config.MinWithdrawBlock(v.exitReceipt.Meta.BlockNumber, v.stack.Config()) {
+	minWithdrawBlock := v.Config.MinWithdrawBlock(v.exitReceipt.Meta.BlockNumber, v.stack.Config())
+	if v.activatedBlock != 0 {
+		minWithdrawBlock += v.stack.Config().CooldownPeriod
+	}
+	if block < minWithdrawBlock {
 		return nil
 	}
 	method := v.stack.Staker().WithdrawStake(v.id)

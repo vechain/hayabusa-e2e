@@ -386,7 +386,8 @@ func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.Delegato
 	}
 	withdrawDelay := lifecycle.Delay{
 		Blocks: uint32(utils.RandomBetween(5, 15)),
-		Epochs: uint32(utils.RandomBetween(1, 3))}
+		Epochs: uint32(utils.RandomBetween(1, 3)),
+	}
 
 	return lifecycle.DelegatorConfig{
 		Config: lifecycle.Config{
