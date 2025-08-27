@@ -198,6 +198,7 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 	mbp := int(e.stack.Config().MaxBlockProposers)
 	maxQueued := mbp / 8
 	desiredQueued := utils2.RandomBetween(0, maxQueued)
+	desiredQueued = max(desiredQueued, 3) // Ensure at least 3 queued
 	spaces := int(e.stack.Config().MaxBlockProposers) + desiredQueued - lifecycles
 	amount := utils2.RandomBetween(0, spaces)
 
