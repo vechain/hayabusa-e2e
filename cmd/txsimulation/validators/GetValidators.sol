@@ -22,7 +22,7 @@ contract GetValidators {
         return STAKER.totalStake();
     }
 
-    function queuedStake() public view returns (uint256, uint256) {
+    function queuedStake() public view returns (uint256) {
         return STAKER.queuedStake();
     }
 
