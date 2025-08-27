@@ -99,6 +99,7 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 		slog.Error("failed to wait for PoS", "error", err)
 		os.Exit(1)
 	}
+	slog.Info("✅  dPoS is now active, starting devnet simulation")
 
 	stop := func() {
 		slog.Info("stopping Hayabusa devnet simulation")
@@ -417,13 +418,8 @@ type KeyEntry struct {
 }
 
 func loadDevnetKeys(dir string) (*DevnetKeys, error) {
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current working directory: %w", err)
-	}
-
 	loadFile := func(fileName string) ([]*bind.PrivateKeySigner, error) {
-		filePath := path.Join(currentDir, dir, fileName)
+		filePath := path.Join(dir, fileName)
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s file (path=%s): %w", fileName, filePath, err)
