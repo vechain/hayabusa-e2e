@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/networkhub/thorbuilder"
@@ -75,8 +76,9 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 	network, err := hayabusa.NewNetwork(config, t.Context())
 	require.NoError(t, err)
 	t.Cleanup(network.Stop)
-	client := network.ThorClient()
 	require.NoError(t, network.Start())
+
+	client := network.ThorClient()
 	nodeConfig := &thorbuilder.Config{
 		DownloadConfig: &thorbuilder.DownloadConfig{
 			Branch:  "hayabusa/doublesigning-node",
@@ -96,6 +98,7 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 	doubleSignedBlocksChan := make(chan PropagatedDoubleSignedBlock, 100)
 
 	go func() {
+		time.Sleep(10 * time.Second)
 		// connect to the double signing node and recieve blocks
 		tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:45367")
 		if err != nil {
