@@ -23,8 +23,8 @@ import (
 
 func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 	config := &hayabusa.Config{
-		Nodes:             2,
-		MaxBlockProposers: 101,
+		Nodes:             *networkHubNodes,
+		MaxBlockProposers: uint32(*networkHubNodes),
 		ForkBlock:         0,
 		TransitionPeriod:  6,
 		EpochLength:       6,
@@ -34,6 +34,9 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 		HighStakingPeriod: 24,
 		BlockInterval:     5,
 	}
+	if *networkHubManyKeyNode {
+		config.MaxBlockProposers = 101
+	}
 	network, err := hayabusa.NewNetwork(config, ctx)
 	if err != nil {
 		slog.Error("failed to create hayabusa network", "error", err)
@@ -42,9 +45,11 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	slog.SetLogLoggerLevel(slog.LevelInfo)
 
-	if err := addManyKeyNode(network); err != nil {
-		slog.Error("failed to add many key node", "error", err)
-		os.Exit(1)
+	if *networkHubManyKeyNode {
+		if err := addManyKeyNode(network); err != nil {
+			slog.Error("failed to add many key node", "error", err)
+			os.Exit(1)
+		}
 	}
 
 	port := 8569
@@ -81,7 +86,11 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 
 	stack := stack.NewStack(ctx, staker, config)
-	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven, delegations.MainnetPositions)
+	positions := delegations.NoPositions
+	if *delegationsEnabled {
+		positions = delegations.MainnetPositions
+	}
+	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven, positions)
 	validators := validators.NewState(stack)
 	generator := &networkHubGenerator{config: config, delegations: delegations, stargate: hayabusa.Stargate, validators: extraValidators}
 	engine := lifecycle.NewEngine(stack, validators, delegations, generator)
@@ -122,13 +131,6 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		slog.Error("failed to wait for POS", "error", err)
-		os.Exit(1)
-	}
-
-	//shut down node 1 to have 1 node offline
-	nodeConfig := network.NodeConfigs()[1]
-	if err := network.NodeLifecycles()[nodeConfig.GetID()].Stop(); err != nil {
-		slog.Error("failed to stop node", "node", nodeConfig.GetID(), "error", err)
 		os.Exit(1)
 	}
 

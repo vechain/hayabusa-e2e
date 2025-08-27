@@ -94,8 +94,9 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 		slog.Error("failed to get best block", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("🕰️  waiting for dPoS to become active")
-	if err := utils2.WaitForPOS(staker, best.Number+config.TransitionPeriod*2); err != nil {
+	block := best.Number + config.TransitionPeriod*4
+	slog.Info("🕰️  waiting for dPoS to become active", "expected-by", block)
+	if err := utils2.WaitForPOS(staker, block); err != nil {
 		slog.Error("failed to wait for PoS", "error", err)
 		os.Exit(1)
 	}
@@ -120,6 +121,7 @@ func leadNetworkConfig(genesisURL string) (*hayabusa.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read genesis.json: %w", err)
 	}
+	println(string(body))
 
 	var genesis genesisthor.CustomGenesis
 	if err := json.Unmarshal(body, &genesis); err != nil {
@@ -243,7 +245,7 @@ func extractConfigFromAccounts(accounts []genesisthor.Account, genesis *genesist
 	config := &hayabusa.Config{
 		Nodes:            1,
 		ForkBlock:        genesis.ForkConfig.HAYABUSA,
-		TransitionPeriod: genesis.ForkConfig.HAYABUSA_TP,
+		TransitionPeriod: *genesis.Config.HayabusaTP,
 	}
 
 	var paramsAccount *genesisthor.Account

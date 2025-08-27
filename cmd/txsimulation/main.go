@@ -15,10 +15,13 @@ import (
 )
 
 var (
-	networkHubFlag    = flag.Bool("networkhub", false, "Run against NetworkHub")
-	devnetFlag        = flag.String("devnet", "", "Run against Devnet")
-	devnetGenesisFlag = flag.String("devnet-genesis-url", "https://vechain.github.io/thor-hayabusa/genesis.json", "Genesis JSON URL (only used with --devnet)")
-	devnetKeysDir     = flag.String("keys-dir", "/path/to/your/devnet-keys", "Directory to store generated keys (only used with --devnet)")
+	networkHubFlag        = flag.Bool("networkhub", false, "Run against NetworkHub")
+	networkHubNodes       = flag.Int("networkhub-nodes", 2, "Number of nodes to create on NetworkHub (only used with --networkhub)")
+	networkHubManyKeyNode = flag.Bool("networkhub-manykeynode", true, "Create a many-key node on NetworkHub (only used with --networkhub)")
+	delegationsEnabled    = flag.Bool("delegations-enabled", true, "add and exit delegations")
+	devnetFlag            = flag.String("devnet", "", "Run against Devnet")
+	devnetGenesisFlag     = flag.String("devnet-genesis-url", "https://vechain.github.io/thor-hayabusa/genesis.json", "Genesis JSON URL (only used with --devnet)")
+	devnetKeysDir         = flag.String("keys-dir", "/path/to/your/devnet-keys", "Directory to store generated keys (only used with --devnet)")
 )
 
 func main() {
