@@ -3,9 +3,10 @@ package utils
 import (
 	"context"
 	"errors"
-	"github.com/vechain/thor/v2/tx"
 	"log/slog"
 	"time"
+
+	"github.com/vechain/thor/v2/tx"
 
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/thor/v2/thorclient"

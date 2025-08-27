@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/networkhub/thorbuilder"
-	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
@@ -70,25 +70,37 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 
 	initialValidators := hayabusa.ValidatorAccounts[0:90]
-	extraValidators := make(map[thor.Address]*hayabusa.NodePair)
-	for _, acc := range hayabusa.ValidatorAccounts[90:100] {
-		extraValidators[acc.Node.Address()] = acc
-	}
+	extraValidators := make([]*hayabusa.NodePair, 0)
+	extraValidators = append(extraValidators, hayabusa.ValidatorAccounts[90:100]...)
 	for _, acc := range hayabusa.AdditionalAccounts {
-		extraValidators[acc.Address()] = hayabusa.MustCreateNodePair(acc)
+		signer := hayabusa.NodePair{
+			Endorser: acc,
+			Node:     acc,
+		}
+		extraValidators = append(extraValidators, &signer)
 	}
 
-	stack := stack.NewStack(ctx, staker, config, extraValidators, hayabusa.Stargate)
+	stack := stack.NewStack(ctx, staker, config)
 	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven, delegations.MainnetPositions)
 	validators := validators.NewState(stack)
-	generator := &networkHubGenerator{config: config, stack: stack, delegations: delegations}
+	generator := &networkHubGenerator{config: config, delegations: delegations, stargate: hayabusa.Stargate, validators: extraValidators}
 	engine := lifecycle.NewEngine(stack, validators, delegations, generator)
 
 	utils.WaitForFork(staker, config.ForkBlock)
 
 	// initial seeding of validator accounts
-	for i, _ := range initialValidators {
-		config, _ := generator.CreateValidator(0)
+	for i, acc := range initialValidators {
+		config := lifecycle.ValidatorConfig{
+			Config: lifecycle.Config{
+				WithdrawDelay: lifecycle.Delay{
+					Blocks: uint32(utils2.RandomBetween(0, int(config.EpochLength))),
+					Epochs: uint32(utils2.RandomBetween(1, 3)),
+				},
+				StartBlock: 0,
+			},
+			Account:             acc,
+			StakeChangeInterval: uint32(utils2.RandomBetween(5, 20)),
+		}
 		if i < 50 { // create 50 long term validators
 			config.StakingPeriods = 5000
 		} else if i < 70 { // create 20 mid-term validators
@@ -124,16 +136,19 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 }
 
 type networkHubGenerator struct {
-	config      *hayabusa.Config
-	stack       *stack.Stack
-	delegations *delegations.PositionManager
+	config         *hayabusa.Config
+	delegations    *delegations.PositionManager
+	stargate       *bind.PrivateKeySigner
+	validators     []*hayabusa.NodePair
+	validatorIndex int
 }
 
 func (n *networkHubGenerator) CreateValidator(startBlock uint32) (lifecycle.ValidatorConfig, bool) {
-	acc, ok := n.stack.NextValidator()
-	if !ok {
+	if n.validatorIndex >= len(n.validators) {
 		return lifecycle.ValidatorConfig{}, false
 	}
+	acc := n.validators[n.validatorIndex]
+	n.validatorIndex++
 
 	return lifecycle.ValidatorConfig{
 		Config: lifecycle.Config{
@@ -155,7 +170,7 @@ func (n *networkHubGenerator) CreateValidator(startBlock uint32) (lifecycle.Vali
 }
 
 func (n *networkHubGenerator) CreateDelegator(startBlock uint32) (lifecycle.DelegatorConfig, bool) {
-	position, validator, ok := n.delegations.NewPosition()
+	id, pos, ok := n.delegations.NewPosition()
 	if !ok {
 		return lifecycle.DelegatorConfig{}, false
 	}
@@ -173,10 +188,10 @@ func (n *networkHubGenerator) CreateDelegator(startBlock uint32) (lifecycle.Dele
 			},
 			StartBlock: startBlock,
 		},
-		Account:      n.stack.Stargate(),
-		Position:     position,
-		ValidationID: validator,
-		PositionID:   thor.Bytes32{},
+		Account:      n.stargate,
+		Position:     pos.Position,
+		ValidationID: pos.Validator,
+		PositionID:   id,
 	}, true
 }
 

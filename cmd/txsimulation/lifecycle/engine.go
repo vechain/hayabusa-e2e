@@ -79,11 +79,6 @@ func (e *Engine) AddLifecycle(lifecycle Lifecycle) {
 	e.lifecycles[datagen.RandomHash()] = lifecycle
 }
 
-// Stack returns the stack instance
-func (e *Engine) Stack() *stack.Stack {
-	return e.stack
-}
-
 func (e *Engine) Run() {
 	ticker := utils.NewTicker(e.stack.Client())
 	for {

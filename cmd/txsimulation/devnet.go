@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"math/big"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -21,94 +24,79 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
+	utils2 "github.com/vechain/hayabusa-e2e/utils"
+	protocolbuiltin "github.com/vechain/thor/v2/builtin"
 	genesisthor "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
 	"github.com/vechain/thor/v2/thorclient/builtin"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
 )
 
-const (
-	stakerAddress = "0x00000000000000000000000000005374616b6572"
-	paramsAddress = "0x0000000000000000000000000000506172616d73"
-)
-
-type LowercaseString string
-
-func (s *LowercaseString) UnmarshalJSON(data []byte) error {
-	var str string
-	if err := json.Unmarshal(data, &str); err != nil {
-		return err
-	}
-	*s = LowercaseString(strings.ToLower(str))
-	return nil
-}
-
-type AddressKey struct {
-	Address LowercaseString `json:"address"`
-	Key     LowercaseString `json:"key"`
-}
-
-func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (*lifecycle.Engine, func()) {
-	client := thorclient.New(devnet)
+func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
+	client := thorclient.New(*devnetFlag)
 
 	staker, err := builtin.NewStaker(client)
 	if err != nil {
 		slog.Error("failed to create staker client", "error", err)
 		os.Exit(1)
 	}
-
-	genesis, config, err := loadHayabusaGenesis(genesisURL)
+	config, err := leadNetworkConfig(*devnetGenesisFlag)
 	if err != nil {
 		slog.Error("failed to load Hayabusa genesis config", "error", err)
 		os.Exit(1)
 	}
-
-	hayabusaValidators, err := loadHayabusaValidators(genesis)
+	keys, err := loadDevnetKeys(*devnetKeysDir)
 	if err != nil {
-		slog.Error("failed to load Hayabusa validators", "error", err)
+		slog.Error("failed to load devnet keys", "error", err)
 		os.Exit(1)
 	}
+	slog.Info("🔑 created devnet keys",
+		"executors", len(keys.Executors),
+		"authorities", len(keys.Authorities),
+		"endorsors", len(keys.Endorsors),
+		"rotatingValidators", len(keys.RotatingValidators))
 
-	initialValidators := make(map[thor.Address]*hayabusa.NodePair)
-	extraValidators := make(map[thor.Address]*hayabusa.NodePair)
-
-	genesisValidatorCount := len(genesis.Authority)
-	totalValidators := len(hayabusaValidators)
-
-	validatorCount := 0
-	for addr, validator := range hayabusaValidators {
-		if validatorCount < genesisValidatorCount/2 {
-			initialValidators[addr] = validator
-		} else {
-			extraValidators[addr] = validator
-		}
-		validatorCount++
-	}
-
-	slog.Info("separated validators",
-		"genesisValidatorCount", genesisValidatorCount,
-		"totalValidators", totalValidators,
-		"initialValidators", len(initialValidators),
-		"extraValidators", len(extraValidators))
-
-	stargateSigner, err := setStargate(staker)
-	if err != nil {
+	stargate := keys.FaucetKeys[len(keys.FaucetKeys)-1]
+	if err = setStargate(client, keys.Executors, stargate.Address()); err != nil {
 		slog.Error("failed to set stargate", "error", err)
 		os.Exit(1)
 	}
+	slog.Info("✅  stargate set to", "address", stargate.Address())
 
-	stack := stack.NewStack(ctx, staker, config, extraValidators, stargateSigner)
+	stack := stack.NewStack(ctx, staker, config)
 	validationsState := validators.NewState(stack)
-	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven, delegations.DevnetPositions(config.MaxBlockProposers))
+	delegations := delegations.NewManager(
+		config.MaxBlockProposers,
+		delegations.DistributionTypeEven,
+		delegations.DevnetPositions(config.MaxBlockProposers),
+	)
 	generator := &devnetGenerator{
 		config:      config,
-		stack:       stack,
+		stargate:    stargate,
+		validators:  keys.RotatingValidators,
 		delegations: delegations,
 	}
 	engine := lifecycle.NewEngine(stack, validationsState, delegations, generator)
-	if err := initializeSyntheticActivity(stack, engine, generator, validationsState, initialValidators, delegations); err != nil {
-		slog.Error("failed to initialize synthetic activity", "error", err)
+
+	// initial seeding of authority accounts
+	authorityConfigs := createAuthorityConfigs(keys, config)
+	for _, cfg := range authorityConfigs {
+		engine.AddLifecycle(lifecycle.NewValidatorLifecycle(cfg, validationsState, delegations, stack))
+	}
+	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
+		slog.Error("failed to flush initial authority validators", "error", err)
+		os.Exit(1)
+	}
+	best, err := client.Block("best")
+	if err != nil {
+		slog.Error("failed to get best block", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("🕰️  waiting for dPoS to become active")
+	if err := utils2.WaitForPOS(staker, best.Number+config.TransitionPeriod*2); err != nil {
+		slog.Error("failed to wait for PoS", "error", err)
 		os.Exit(1)
 	}
 
@@ -120,187 +108,147 @@ func startAgainstDevnet(ctx context.Context, devnet string, genesisURL string) (
 }
 
 // loadHayabusaGenesis loads Hayabusa genesis configuration
-func loadHayabusaGenesis(genesisURL string) (*genesisthor.CustomGenesis, *hayabusa.Config, error) {
+func leadNetworkConfig(genesisURL string) (*hayabusa.Config, error) {
 	resp, err := http.Get(genesisURL)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
+		return nil, fmt.Errorf("failed to fetch genesis.json: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read genesis.json: %w", err)
+		return nil, fmt.Errorf("failed to read genesis.json: %w", err)
 	}
 
 	var genesis genesisthor.CustomGenesis
 	if err := json.Unmarshal(body, &genesis); err != nil {
-		return nil, nil, fmt.Errorf("failed to parse genesis.json: %w", err)
+		return nil, fmt.Errorf("failed to parse genesis.json: %w", err)
 	}
 
 	config, err := extractConfigFromAccounts(genesis.Accounts, &genesis)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to extract config from accounts: %w", err)
+		return nil, fmt.Errorf("failed to extract config from accounts: %w", err)
 	}
 
 	slog.Info("loaded Hayabusa genesis configuration",
 		"config", *config)
 
-	return &genesis, config, nil
+	return config, nil
 }
 
-// Load validators from Hayabusa genesis.json
-func loadHayabusaValidators(genesis *genesisthor.CustomGenesis) (map[thor.Address]*hayabusa.NodePair, error) {
-	validators := make(map[thor.Address]*hayabusa.NodePair)
-
-	endorsorAddressKeys, err := parseAddressKeysFromEnvToMap("ENDORSOR_KEYS")
+func setStargate(client *thorclient.Client, executors []*bind.PrivateKeySigner, stargate thor.Address) error {
+	// init contracts
+	params, err := builtin.NewParams(client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse ENDORSOR_KEYS: %w", err)
+		return fmt.Errorf("failed to create params client: %w", err)
 	}
-
-	authorityAddressKeys, err := parseAddressKeysFromEnvToMap("AUTHORITY_KEYS")
+	executor, err := builtin.NewExecutor(client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse AUTHORITY_KEYS: %w", err)
+		return fmt.Errorf("failed to create executor client: %w", err)
 	}
 
-	for _, authority := range genesis.Authority {
-		endorserKey, err := crypto.HexToECDSA(endorsorAddressKeys[authority.EndorsorAddress.String()])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse endorser key %s: %w", endorsorAddressKeys[authority.EndorsorAddress.String()], err)
-		}
-		endorserSigner := bind.NewSigner(endorserKey)
-
-		nodeKey, err := crypto.HexToECDSA(authorityAddressKeys[authority.MasterAddress.String()])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse master key %s: %w", authorityAddressKeys[authority.MasterAddress.String()], err)
-		}
-		nodeSigner := bind.NewSigner(nodeKey)
-
-		nodePair := hayabusa.NewNodePairWithNode(endorserSigner, nodeSigner)
-		validators[nodeSigner.Address()] = nodePair
-	}
-
-	slog.Info("loaded Hayabusa validators from genesis", "validatorCount", len(validators))
-
-	return validators, nil
-}
-
-func getGasFees(staker *builtin.Staker) (gas uint64, maxFeePerGas *big.Int, maxPriorityFeePerGas *big.Int, err error) {
-	gas = uint64(40_000_000)
-	feesHistory, err := staker.Raw().Client().FeesHistory(1, "next", []float64{})
-	if err != nil {
-		slog.Error("failed to get fees history", "error", err)
-		return 0, nil, nil, err
-	}
-	baseFee := (*big.Int)(feesHistory.BaseFeePerGas[0])
-	maxPriorityFeePerGas = new(big.Int).Div(new(big.Int).Mul(baseFee, big.NewInt(5)), big.NewInt(100))
-	maxFeePerGas = new(big.Int).Add(baseFee, maxPriorityFeePerGas)
-
-	slog.Info("gas fees", "gas", gas, "maxFeePerGas", maxFeePerGas, "maxPriorityFeePerGas", maxPriorityFeePerGas)
-
-	return gas, maxFeePerGas, maxPriorityFeePerGas, nil
-}
-
-func setStargate(staker *builtin.Staker) (*bind.PrivateKeySigner, error) {
-	accountsKeys, err := parseAddressKeysFromEnv("ACCOUNTS_KEYS")
-	if err != nil {
-		slog.Error("failed to parse ACCOUNTS_KEYS", "error", err)
-		os.Exit(1)
-	}
-
-	accountKey, err := crypto.HexToECDSA(string(accountsKeys[0].Key))
-	if err != nil {
-		slog.Error("failed to parse account key", "error", err)
-		return nil, err
-	}
-	accountSigner := bind.NewSigner(accountKey)
-
-	// Check if stargate address is already set in params
-	params, err := builtin.NewParams(staker.Raw().Client())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create params: %w", err)
-	}
-
-	stargateKey := thor.MustParseBytes32(hayabusa.ParamsStargateKey)
-	stargateAddress, err := params.Get(stargateKey)
-
+	// check existing
+	stargateKey := thor.BytesToBytes32(thor.KeyDelegatorContractAddress.Bytes())
+	stargateBigInt, err := params.Get(stargateKey)
 	if err != nil {
 		slog.Error("failed to get stargate address from params", "error", err)
-		return nil, err
+		return err
 	}
-	if stargateAddress != nil && stargateAddress.Cmp(big.NewInt(0)) != 0 {
-		slog.Info("stargate address already set in params", "stargateAddress", thor.BytesToAddress(stargateAddress.Bytes()))
-		return accountSigner, nil
+	currentAddress := thor.BytesToAddress(stargateBigInt.Bytes())
+	if currentAddress == stargate {
+		slog.Info("✅  stargate address already set in params", "address", stargate)
+		return nil
 	}
 
-	// If stargate address is not set in params, set it
-	gas, maxFeePerGas, maxPriorityFeePerGas, err := getGasFees(staker)
+	// create executor proposal
+	stargateBigInt = new(big.Int).SetBytes(stargate.Bytes())
+	setClause, err := params.Set(stargateKey, stargateBigInt).Clause()
 	if err != nil {
-		slog.Error("failed to get gas fees for setting stargate address in params", "error", err)
-		return nil, err
+		return fmt.Errorf("failed to create set stargate clause: %w", err)
 	}
-
-	txOptions := &bind.TxOptions{
-		Gas:                  &gas,
-		MaxFeePerGas:         maxFeePerGas,
-		MaxPriorityFeePerGas: maxPriorityFeePerGas,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	receipt, _, err := params.Set(stargateKey, new(big.Int).SetBytes(accountSigner.Address().Bytes())).
-		Send().
-		WithSigner(accountSigner).
-		WithOptions(txOptions).
-		SubmitAndConfirm(ctx)
 
-	if err != nil || receipt == nil {
-		return nil, fmt.Errorf("failed to set stargate address in params: %w", err)
+	slog.Info("🧑‍💻 proposing set stargate address in params", "address", stargate)
+	receipt, _, err := executor.Propose(*params.Raw().Address(), setClause.Data()).
+		Send().
+		WithSigner(executors[0]).
+		SubmitAndConfirm(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to propose set stargate transaction: %w", err)
 	}
 	if receipt.Reverted {
-		return nil, fmt.Errorf("transaction to set stargate address in params reverted: %s", receipt.Meta.TxID)
+		return fmt.Errorf("set stargate transaction reverted: %s", receipt.Meta.TxID)
+	}
+	proposalID := receipt.Outputs[0].Events[0].Topics[1]
+
+	// approve by other executors
+	slog.Info("🕵️‍♀️ approving set stargate address in params", "address", stargate)
+	txIDs := make([]thor.Bytes32, 0, len(executors))
+	for _, executorKey := range executors {
+		tx, err := executor.Approve(proposalID).Send().WithSigner(executorKey).Submit()
+		if err != nil {
+			return fmt.Errorf("failed to approve set stargate transaction: %w", err)
+		}
+		txIDs = append(txIDs, tx.ID())
 	}
 
-	return accountSigner, nil
-}
-
-func parseAddressKeysFromEnv(envVar string) ([]AddressKey, error) {
-	keysStr := os.Getenv(envVar)
-	if keysStr == "" {
-		return nil, fmt.Errorf("%s environment variable is required", envVar)
+	// wait for the receipts
+	ticker := utils2.NewTicker(client)
+	approved := make(map[thor.Address]bool)
+	for range 6 {
+		if len(approved) >= len(executors) {
+			break
+		}
+		ticker.Wait(20 * time.Second)
+		for i, txID := range txIDs {
+			if _, ok := approved[executors[i].Address()]; ok {
+				continue
+			}
+			receipt, err := client.TransactionReceipt(&txID)
+			if err != nil {
+				if errors.Is(err, httpclient.ErrNotFound) {
+					continue
+				}
+				return fmt.Errorf("failed to get receipt for approve tx %s: %w", txID, err)
+			}
+			if receipt.Reverted {
+				return fmt.Errorf("approve tx %s reverted", txID)
+			}
+			approved[executors[i].Address()] = true
+		}
 	}
 
-	var addressKeys []AddressKey
-	if err := json.Unmarshal([]byte(keysStr), &addressKeys); err != nil {
-		return nil, fmt.Errorf("failed to parse %s JSON: %w", envVar, err)
+	if len(approved) < len(executors) {
+		return fmt.Errorf("not all executors approved the proposal, approved: %d, total: %d", len(approved), len(executors))
 	}
 
-	return addressKeys, nil
-}
-
-func parseAddressKeysFromEnvToMap(envVar string) (map[string]string, error) {
-	addressKeys, err := parseAddressKeysFromEnv(envVar)
+	// execute the proposal
+	slog.Info("🧑‍⚖️ executing set stargate address in params", "address", stargate)
+	executeCtx, executeCancel := context.WithTimeout(context.Background(), time.Minute)
+	defer executeCancel()
+	receipt, _, err = executor.Execute(proposalID).Send().WithSigner(executors[0]).SubmitAndConfirm(executeCtx)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to execute set stargate transaction: %w", err)
 	}
-
-	addressKeyMap := make(map[string]string)
-	for _, key := range addressKeys {
-		addressKeyMap[string(key.Address)] = string(key.Key)
+	if receipt.Reverted {
+		return fmt.Errorf("execute set stargate transaction reverted: %s", receipt.Meta.TxID)
 	}
-
-	return addressKeyMap, nil
+	slog.Info("set stargate address in params", "address", stargate, "tx", receipt.Meta.TxID)
+	return nil
 }
 
 func extractConfigFromAccounts(accounts []genesisthor.Account, genesis *genesisthor.CustomGenesis) (*hayabusa.Config, error) {
 	config := &hayabusa.Config{
 		Nodes:            1,
-		ForkBlock:        uint32(genesis.ForkConfig.HAYABUSA),
-		TransitionPeriod: uint32(genesis.ForkConfig.HAYABUSA_TP),
+		ForkBlock:        genesis.ForkConfig.HAYABUSA,
+		TransitionPeriod: genesis.ForkConfig.HAYABUSA_TP,
 	}
 
 	var paramsAccount *genesisthor.Account
 	for _, account := range accounts {
-		accountAddr := account.Address.String()
-		if accountAddr == paramsAddress {
+		accountAddr := account.Address
+		if accountAddr == protocolbuiltin.Params.Address {
 			paramsAccount = &account
 		}
 	}
@@ -366,9 +314,11 @@ func parseStorageValue(storageValue thor.Bytes32) (uint32, error) {
 
 // Devnet generator with realistic synthetic activity
 type devnetGenerator struct {
-	config      *hayabusa.Config
-	stack       *stack.Stack
-	delegations *delegations.PositionManager
+	config         *hayabusa.Config
+	stargate       *bind.PrivateKeySigner
+	validators     []*bind.PrivateKeySigner
+	validatorIndex int
+	delegations    *delegations.PositionManager
 }
 
 func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.ValidatorConfig, bool) {
@@ -376,6 +326,15 @@ func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.Validato
 	stakingStrategy := utils.RandomBetween(1, 4)
 	var stakingPeriods uint32
 	var queueDelay lifecycle.Delay
+
+	if g.validatorIndex >= len(g.validators) {
+		return lifecycle.ValidatorConfig{}, false
+	}
+	acc := &hayabusa.NodePair{
+		Node:     g.validators[g.validatorIndex],
+		Endorser: g.validators[g.validatorIndex],
+	}
+	g.validatorIndex++
 
 	switch stakingStrategy {
 	case 1: // Long-term validators
@@ -399,12 +358,13 @@ func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.Validato
 			StakingPeriods: stakingPeriods,
 			WithdrawDelay:  lifecycle.Delay{Blocks: uint32(utils.RandomBetween(1, 10)), Epochs: 0},
 		},
-		Account: acc,
+		Account:             acc,
+		StakeChangeInterval: uint32(utils.RandomBetween(10, 30)),
 	}, true
 }
 
 func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.DelegatorConfig, bool) {
-	position, validator, ok := g.delegations.NewPosition()
+	id, pos, ok := g.delegations.NewPosition()
 	if !ok {
 		return lifecycle.DelegatorConfig{}, false
 	}
@@ -424,47 +384,117 @@ func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.Delegato
 		stakingPeriods = uint32(utils.RandomBetween(6, 20))
 		queueDelay = lifecycle.Delay{Blocks: uint32(utils.RandomBetween(5, 25)), Epochs: 0}
 	}
+	withdrawDelay := lifecycle.Delay{
+		Blocks: uint32(utils.RandomBetween(5, 15)),
+		Epochs: uint32(utils.RandomBetween(1, 3))}
 
 	return lifecycle.DelegatorConfig{
 		Config: lifecycle.Config{
 			QueueDelay:     queueDelay,
 			StartBlock:     startBlock,
 			StakingPeriods: stakingPeriods,
-			WithdrawDelay:  lifecycle.Delay{Blocks: uint32(utils.RandomBetween(1, 15)), Epochs: 0},
+			WithdrawDelay:  withdrawDelay,
 		},
-		Account:      g.stack.Stargate(),
-		ValidationID: validator,
-		Position:     position,
-		PositionID:   thor.Bytes32{},
+		Account:      g.stargate,
+		ValidationID: pos.Validator,
+		Position:     pos.Position,
+		PositionID:   id,
 	}, true
 }
 
-// Initialize realistic synthetic activity
-func initializeSyntheticActivity(stack *stack.Stack, engine *lifecycle.Engine, generator *devnetGenerator, validationsState *validators.Service, initialValidators map[thor.Address]*hayabusa.NodePair, delegations *delegations.PositionManager) error {
-	// Create initial validators with different strategies
-	validatorCount := 0
-	totalValidators := len(initialValidators)
+type DevnetKeys struct {
+	Executors          []*bind.PrivateKeySigner
+	Authorities        []*bind.PrivateKeySigner
+	Endorsors          []*bind.PrivateKeySigner
+	RotatingValidators []*bind.PrivateKeySigner
+	FaucetKeys         []*bind.PrivateKeySigner
+}
 
-	for range initialValidators {
-		config, _ := generator.CreateValidator(0)
+type KeyEntry struct {
+	Key     string `json:"key"`
+	Address string `json:"address"`
+}
 
-		// Distribute staking strategies based on available validators
-		if validatorCount < totalValidators/3 { // First third: long-term validators
-			config.StakingPeriods = uint32(utils.RandomBetween(200, 500))
-		} else if validatorCount < (totalValidators*2)/3 { // Second third: medium-term validators
-			config.StakingPeriods = uint32(utils.RandomBetween(50, 150))
-		} else { // Last third: short-term validators
-			config.StakingPeriods = uint32(utils.RandomBetween(10, 40))
-		}
-
-		cycle := lifecycle.NewValidatorLifecycle(config, validationsState, delegations, stack)
-		engine.AddLifecycle(cycle)
-		validatorCount++
+func loadDevnetKeys(dir string) (*DevnetKeys, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	slog.Info("initialized synthetic activity",
-		"validatorCount", validatorCount,
-		"totalValidators", totalValidators)
+	loadFile := func(fileName string) ([]*bind.PrivateKeySigner, error) {
+		filePath := path.Join(currentDir, dir, fileName)
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read %s file (path=%s): %w", fileName, filePath, err)
+		}
+		var entries []KeyEntry
+		if err := json.Unmarshal(data, &entries); err != nil {
+			return nil, fmt.Errorf("failed to parse %s JSON: %w", fileName, err)
+		}
+		var signers []*bind.PrivateKeySigner
+		for _, entry := range entries {
+			key, err := crypto.HexToECDSA(strings.TrimPrefix(entry.Key, "0x"))
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse key %s in %s: %w", entry.Key, fileName, err)
+			}
+			signer := bind.NewSigner(key)
+			signers = append(signers, signer)
+		}
+		return signers, nil
+	}
+	authorities, err := loadFile("authority-keys.json")
+	if err != nil {
+		return nil, err
+	}
+	endorsors, err := loadFile("endorsor-keys.json")
+	if err != nil {
+		return nil, err
+	}
+	if len(authorities) != len(endorsors) {
+		return nil, fmt.Errorf("mismatched authorities and endorsors count: %d vs %d", len(authorities), len(endorsors))
+	}
+	executors, err := loadFile("executor-keys.json")
+	if err != nil {
+		return nil, err
+	}
+	rotatingValidators, err := loadFile("rotating-validators-keys.json")
+	if err != nil {
+		return nil, err
+	}
+	faucetKeys, err := loadFile("faucet-keys.json")
+	if err != nil {
+		return nil, err
+	}
 
-	return nil
+	return &DevnetKeys{
+		Executors:          executors,
+		Authorities:        authorities,
+		Endorsors:          endorsors,
+		RotatingValidators: rotatingValidators,
+		FaucetKeys:         faucetKeys,
+	}, nil
+}
+
+func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []lifecycle.ValidatorConfig {
+	configs := make([]lifecycle.ValidatorConfig, len(keys.Authorities))
+	for i, key := range keys.Authorities {
+		cfg := lifecycle.ValidatorConfig{
+			Config: lifecycle.Config{
+				WithdrawDelay: lifecycle.Delay{
+					Blocks: config.CooldownPeriod,
+					Epochs: 5,
+				},
+				StartBlock:     0,
+				StakingPeriods: 1,
+				QueueDelay:     lifecycle.Delay{},
+			},
+			Account:             &hayabusa.NodePair{Endorser: keys.Endorsors[i], Node: key},
+			StakeChangeInterval: 8,
+		}
+		if i == 0 { // we keep 1 long term PoA candidate, the rest are just there for dPoS transitions.
+			cfg.StakingPeriods = math.MaxUint32
+		}
+		configs[i] = cfg
+	}
+	return configs
 }

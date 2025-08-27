@@ -155,7 +155,7 @@ func (v *ValidatorLifecycle) ProcessPending(block uint32) error {
 	method := v.stack.Staker().AddValidation(v.Account.Node.Address(), RandomStake(), period)
 	receipt, err := v.stack.SendTransactionAndWait(method, v.Account.Endorser)
 	if err != nil {
-		if strings.Contains(err.Error(), " validator already exists") {
+		if strings.Contains(err.Error(), "validator already exists") {
 			return v.setQueuedReceipt()
 		}
 		slog.Error("failed to queue validator", "error", err, "account", v.Account.Node.Address())
@@ -215,10 +215,10 @@ func (v *ValidatorLifecycle) ProcessQueued(block uint32) error {
 		return nil
 	}
 
-	slog.Info("checking validator status", "id", v.id, "status", validator.Status, "account", v.Account.Node.Address())
+	slog.Debug("checking validator status", "id", v.id, "status", validator.Status, "account", v.Account.Node.Address())
 
 	if validator.Status == validation.StatusActive {
-		slog.Info("validator activated", "account", v.Account.Node.Address(), "block", block, "startBlock", validator.StartBlock)
+		slog.Debug("validator activated", "account", v.Account.Node.Address(), "block", block, "startBlock", validator.StartBlock)
 		v.activatedBlock = validator.StartBlock
 		v.status = StatusActive
 	} else {

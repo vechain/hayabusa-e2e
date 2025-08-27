@@ -129,7 +129,8 @@ func (s *Service) poll() {
 
 			maps.Copy(s.idLookup, validators)
 
-			slog.Info(" 🎖️ updated staker state",
+			slog.Info("🎖️ updated staker state",
+				"best", block.Number,
 				"active", len(s.active),
 				"queued", len(s.queued),
 				"exiting", len(s.exiting),

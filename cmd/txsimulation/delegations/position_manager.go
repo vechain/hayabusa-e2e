@@ -47,6 +47,7 @@ func NewManager(maxLeaderGroupLength uint32, distributionType DistributionType, 
 
 		validatorAvailable: make(map[thor.Address]map[string]int), // active positions per validator
 		totalActive:        make(map[string]int),
+		delegations:        make(map[thor.Bytes32]*ActivePosition),
 	}
 }
 
@@ -128,7 +129,7 @@ func (pm *PositionManager) UnregisterDelegator(id thor.Bytes32) {
 	positionID := active.Position.Name
 	current, exists := pm.validatorAvailable[validator]
 	if !exists {
-		slog.Warn("attempted to unregister delegator for non-existent validator", "address", validator.String())
+		delete(pm.delegations, id)
 		return
 	}
 
@@ -147,7 +148,6 @@ func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
 
 	current, exists := pm.validatorAvailable[validator]
 	if !exists {
-		slog.Warn("attempted to unregister non-existent validator", "address", validator.String())
 		return
 	}
 	start := pm.makeValidatorsAvailablePositions(validator)

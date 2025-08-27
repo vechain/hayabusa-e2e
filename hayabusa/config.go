@@ -78,7 +78,7 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 	if !c.StargateAddress.IsZero() {
 		addr = c.StargateAddress
 	}
-	genesis.Accounts[paramsIndex].Storage[ParamsStargateKey] = thor.BytesToBytes32(addr.Bytes())
+	genesis.Accounts[paramsIndex].Storage[ParamsStargateKey.String()] = thor.BytesToBytes32(addr.Bytes())
 
 	if c.BlockInterval == 0 {
 		c.BlockInterval = thor.BlockInterval()
