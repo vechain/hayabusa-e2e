@@ -39,7 +39,7 @@ func SetupTestNetworkWithEpochAndBlockInterval(t *testing.T, maxBlockProposers u
 func SetupStakerAndWaitForFork(t *testing.T, client *thorclient.Client, config *hayabusa.Config) *builtin.Staker {
 	staker, err := builtin.NewStaker(client)
 	require.NoError(t, err)
-	require.NoError(t, utils.WaitForFork(staker, config.ForkBlock))
+	require.NoError(t, utils.WaitForFork(t.Context(), staker, config.ForkBlock))
 	return staker
 }
 

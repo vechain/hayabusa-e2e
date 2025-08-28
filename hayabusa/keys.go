@@ -10,16 +10,20 @@ type NodePair struct {
 	Node     *bind.PrivateKeySigner
 }
 
+func NewNodePairWithNode(endorser *bind.PrivateKeySigner, node *bind.PrivateKeySigner) *NodePair {
+	return &NodePair{
+		Endorser: endorser,
+		Node:     node,
+	}
+}
+
 func NewNodePair(endorser *bind.PrivateKeySigner) (*NodePair, error) {
 	node, err := crypto.GenerateKey()
 	if err != nil {
 		return nil, err
 	}
 
-	return &NodePair{
-		Endorser: endorser,
-		Node:     bind.NewSigner(node),
-	}, nil
+	return NewNodePairWithNode(endorser, bind.NewSigner(node)), nil
 }
 
 func MustCreateNodePair(endorser *bind.PrivateKeySigner) *NodePair {

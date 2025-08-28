@@ -51,7 +51,7 @@ func run(ctx context.Context) error {
 	validator2 := hayabusa.ValidatorAccounts[1]
 	validator3 := hayabusa.ValidatorAccounts[2]
 
-	if err := utils.WaitForFork(staker, config.ForkBlock); err != nil {
+	if err := utils.WaitForFork(ctx, staker, config.ForkBlock); err != nil {
 		return fmt.Errorf("failed to wait for fork: %w", err)
 	}
 
@@ -73,7 +73,7 @@ func run(ctx context.Context) error {
 	addr2 := validator2.Node.Address()
 	addr3 := validator3.Node.Address()
 
-	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
+	if err := utils.WaitForPOS(ctx, staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		return fmt.Errorf("failed to wait for POS: %w", err)
 	}
 

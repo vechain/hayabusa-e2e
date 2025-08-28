@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/big"
 	"sync"
 	"time"
@@ -64,6 +65,12 @@ func (s *Service) LookupAddress(id thor.Address) (*validation.Validation, bool) 
 	return v, ok
 }
 
+func (s *Service) GetActiveCount() uint32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return uint32(len(s.active))
+}
+
 func (s *Service) poll() {
 	ticker := utils.NewTicker(s.stack.Client())
 	for {
@@ -120,13 +127,10 @@ func (s *Service) poll() {
 				s.idLookup[id] = validator
 			}
 
-			for id, val := range validators {
-				s.idLookup[id] = val
-			}
+			maps.Copy(s.idLookup, validators)
 
-			//s.idLookup = idLookup
-
-			slog.Info(" 🎖️ updated staker state",
+			slog.Info("🎖️ updated staker state",
+				"best", block.Number,
 				"active", len(s.active),
 				"queued", len(s.queued),
 				"exiting", len(s.exiting),
@@ -156,12 +160,12 @@ func (s *Service) checkExited(id thor.Address) (*validation.Validation, error) {
 		CompleteIterations: periodDetails.CompletedPeriods,
 		Status:             validation.Status(val.Status),
 		StartBlock:         periodDetails.StartBlock,
-		LockedVET:          val.Stake,
-		PendingUnlockVET:   big.NewInt(0),
-		QueuedVET:          val.QueuedStake,
-		CooldownVET:        big.NewInt(0),
-		WithdrawableVET:    withdrawable,
-		Weight:             val.Weight,
+		LockedVET:          weiToVET(val.Stake),
+		PendingUnlockVET:   0,
+		QueuedVET:          weiToVET(val.QueuedStake),
+		CooldownVET:        0,
+		WithdrawableVET:    weiToVET(withdrawable),
+		Weight:             weiToVET(val.Weight),
 	}
 
 	if periodDetails.ExitBlock != math.MaxUint32 {
@@ -209,7 +213,10 @@ func (s *Service) FetchAll(blockID thor.Bytes32) (map[thor.Address]*validation.V
 }
 
 func (s *Service) fetchStakerInfo(blockID thor.Bytes32) ([]*api.CallResult, error) {
-	to := thor.MustParseAddress("0x841a6556c524d47030762eb14dc4af897e605d9b")
+	getValidatorsAddress := "0x841a6556c524d47030762eb14dc4af897e605d9b"
+	to := thor.MustParseAddress(getValidatorsAddress)
+	selector := hexutil.Encode(getValidatorsABI.Id())
+
 	res, err := s.stack.Client().InspectClauses(&api.BatchCallData{
 		Clauses: api.Clauses{
 			{
@@ -217,7 +224,7 @@ func (s *Service) fetchStakerInfo(blockID thor.Bytes32) ([]*api.CallResult, erro
 			},
 			{
 				To:   &to,
-				Data: hexutil.Encode(getValidatorsABI.Id()),
+				Data: selector,
 			},
 		},
 	}, thorclient.Revision(blockID.String()))
@@ -236,6 +243,10 @@ func (s *Service) fetchStakerInfo(blockID thor.Bytes32) ([]*api.CallResult, erro
 		}
 	}
 	return res, nil
+}
+
+func weiToVET(wei *big.Int) uint64 {
+	return new(big.Int).Div(wei, big.NewInt(1e18)).Uint64()
 }
 
 func (s *Service) unpackValidators(result *api.CallResult) (map[thor.Address]*validation.Validation, error) {
@@ -269,12 +280,12 @@ func (s *Service) unpackValidators(result *api.CallResult) (map[thor.Address]*va
 			CompleteIterations: completedPeriods[i],
 			Status:             statuses[i],
 			StartBlock:         startBlocks[i],
-			LockedVET:          validatorLockedVETs[i],
-			PendingUnlockVET:   big.NewInt(0),
-			CooldownVET:        big.NewInt(0),
-			WithdrawableVET:    big.NewInt(0),
-			QueuedVET:          validatorQueuedStakes[i],
-			Weight:             validatorLockedWeights[i],
+			LockedVET:          weiToVET(validatorLockedVETs[i]),
+			PendingUnlockVET:   weiToVET(big.NewInt(0)),
+			CooldownVET:        weiToVET(big.NewInt(0)),
+			WithdrawableVET:    weiToVET(big.NewInt(0)),
+			QueuedVET:          weiToVET(validatorQueuedStakes[i]),
+			Weight:             weiToVET(validatorLockedWeights[i]),
 		}
 		if exitBlocks[i] != uint32(math.MaxUint32) {
 			v.ExitBlock = &exitBlocks[i]

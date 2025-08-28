@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
@@ -94,7 +95,10 @@ type ValidatorConfig struct {
 
 type DelegatorConfig struct {
 	Config
-	Account bind.Signer
+	Account      bind.Signer
+	Position     *delegations.Position
+	PositionID   thor.Bytes32
+	ValidationID thor.Address
 }
 
 func (c Config) QueueBlock(config *hayabusa.Config) uint32 {

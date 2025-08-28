@@ -20,17 +20,22 @@ import (
 )
 
 type transaction struct {
-	id      thor.Bytes32
-	receipt *api.Receipt
+	id           thor.Bytes32
+	receipt      *api.Receipt
+	pollAttempts uint32
+}
+
+func (t *transaction) reset() {
+	t.id = thor.Bytes32{}
+	t.receipt = nil
+	t.pollAttempts = 0
 }
 
 type DelegatorLifecycle struct {
-	config       DelegatorConfig
-	delegations  *delegations.PositionManager
-	stack        *stack.Stack
-	position     *delegations.Position
-	validationID thor.Address
-	validations  *validators.Service
+	config      DelegatorConfig
+	delegations *delegations.PositionManager
+	stack       *stack.Stack
+	validations *validators.Service
 
 	status              Status
 	queuedTx            transaction // the receipt of the queued transaction
@@ -49,16 +54,12 @@ func NewDelegatorLifecycle(
 	delegations *delegations.PositionManager,
 	validations *validators.Service,
 	stack *stack.Stack,
-	position *delegations.Position,
-	validationID thor.Address,
 ) *DelegatorLifecycle {
 	return &DelegatorLifecycle{
-		config:       config,
-		delegations:  delegations,
-		validations:  validations,
-		stack:        stack,
-		position:     position,
-		validationID: validationID,
+		config:      config,
+		delegations: delegations,
+		validations: validations,
+		stack:       stack,
 	}
 }
 
@@ -86,7 +87,7 @@ func (d *DelegatorLifecycle) Info() *Info {
 		ActivatedBlock:  d.activatedBlock,
 		WithdrawReceipt: d.withdrawTw.receipt,
 		ExitReceipt:     d.exitTx.receipt,
-		ValidationID:    d.validationID,
+		ValidationID:    d.config.ValidationID,
 	}
 }
 
@@ -98,6 +99,11 @@ func (d *DelegatorLifecycle) ID() string {
 }
 
 func (d *DelegatorLifecycle) Process(block uint32) error {
+	defer func() {
+		if d.status == StatusExitSignalled || d.status == StatusWithdrawn {
+			d.delegations.UnregisterDelegator(d.config.PositionID)
+		}
+	}()
 	switch d.status {
 	case StatusPending:
 		return d.ProcessPending(block)
@@ -125,9 +131,9 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 		return nil
 	}
 
-	validator, ok := d.validations.LookupAddress(d.validationID)
-	if !ok {
-		slog.Error("failed to get staking period info for validation", "id", d.validationID)
+	validator, ok := d.validations.LookupAddress(d.config.ValidationID)
+	if !ok || validator == nil {
+		slog.Error("failed to get staking period info for validation", "id", d.config.ValidationID)
 		return errors.New("failed to get staking period info for validation")
 	}
 	if validator.Status == validation.StatusExit || validator.ExitBlock != nil {
@@ -138,10 +144,10 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 	d.stakingPeriodLength = validator.Period
 
 	eth := big.NewInt(1e18)
-	stake := big.NewInt(0).Mul(d.position.Stake, eth)
-	sender := d.stack.Staker().AddDelegation(d.validationID, stake, d.position.Multiplier)
+	stake := big.NewInt(0).Mul(d.config.Position.Stake, eth)
+	sender := d.stack.Staker().AddDelegation(d.config.ValidationID, stake, d.config.Position.Multiplier)
 
-	receipt, err := d.sendOrPoll(sender, &d.queuedTx.id, "validation is not queued or active")
+	receipt, err := d.sendOrPoll(sender, &d.queuedTx, "validation is not queued or active")
 	if err != nil {
 		slog.Error("failed to queue delegator", "error", err, "id", d.ID())
 		return err
@@ -179,7 +185,7 @@ func (d *DelegatorLifecycle) ProcessQueued(block uint32) error {
 	if d.activatedBlock != 0 {
 		return nil // already activated
 	}
-	validator, ok := d.validations.LookupAddress(d.validationID)
+	validator, ok := d.validations.LookupAddress(d.config.ValidationID)
 	if !ok {
 		slog.Error("failed to get validator for delegation", "id", d.ID())
 		return fmt.Errorf("failed to get validator for delegation %s", d.ID())
@@ -205,7 +211,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 		slog.Warn("delegator already exit signalled", "id", d.ID())
 		return nil
 	}
-	validator, ok := d.validations.LookupAddress(d.validationID)
+	validator, ok := d.validations.LookupAddress(d.config.ValidationID)
 	if !ok {
 		slog.Error("failed to get validator for delegation", "id", d.ID())
 		return fmt.Errorf("failed to get validator for delegation %s", d.ID())
@@ -217,7 +223,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 	slog.Debug("signalling exit for delegator", "id", d.ID())
 
 	sender := d.stack.Staker().SignalDelegationExit(d.id)
-	receipt, err := d.sendOrPoll(sender, &d.exitTx.id, "delegation has ended", "delegation has not started yet")
+	receipt, err := d.sendOrPoll(sender, &d.exitTx, "delegation has ended", "delegation has not started yet")
 	if err != nil {
 		slog.Error("failed to signal exit for delegator", "error", err, "id", d.ID())
 		return err
@@ -225,7 +231,6 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 	if receipt != nil {
 		d.status = StatusExitSignalled
 		d.exitTx.receipt = receipt
-		d.delegations.UnregisterDelegator(d.position, d.validationID)
 	}
 
 	return nil
@@ -248,7 +253,7 @@ func (d *DelegatorLifecycle) ProcessExited(block uint32) error {
 	slog.Debug("withdrawing delegator", "id", d.ID())
 
 	sender := d.stack.Staker().WithdrawDelegation(d.id)
-	receipt, err := d.sendOrPoll(sender, &d.withdrawTw.id)
+	receipt, err := d.sendOrPoll(sender, &d.withdrawTw)
 	if err != nil {
 		slog.Error("failed to withdraw delegator", "error", err, "id", d.ID())
 		return err
@@ -263,24 +268,30 @@ func (d *DelegatorLifecycle) ProcessExited(block uint32) error {
 
 func (d *DelegatorLifecycle) sendOrPoll(
 	sender *bind.MethodBuilder,
-	txID *thor.Bytes32,
+	tx *transaction,
 	allowedReverts ...string,
 ) (*api.Receipt, error) {
-	if txID.IsZero() {
+	if tx.id.IsZero() {
 		trx, err := d.stack.SendTransaction(sender, d.config.Account)
 		if err != nil {
 			return nil, err
 		}
-		*txID = trx.ID()
+		tx.id = trx.ID()
 		return nil, nil
 	}
 
-	receipt, err := d.stack.Client().TransactionReceipt(txID)
+	receipt, err := d.stack.Client().TransactionReceipt(&tx.id)
 	if err != nil {
+		if tx.pollAttempts > *d.stack.DefaultExpiration() {
+			slog.Warn("exceeded max polling attempts for transaction", "id", tx.id)
+			tx.reset()
+			return nil, nil
+		}
+		tx.pollAttempts++
 		if errors.Is(err, httpclient.ErrNotFound) {
 			return nil, nil
 		}
-		slog.Error("failed to get transaction receipt", "error", err, "id", txID)
+		slog.Error("failed to get transaction receipt", "error", err, "id", tx.id)
 		return nil, err
 	}
 
@@ -293,8 +304,8 @@ func (d *DelegatorLifecycle) sendOrPoll(
 				}
 			}
 		}
-		slog.Warn("transaction was reverted", "id", txID, "err", revertErr)
-		*txID = thor.Bytes32{} // reset txID to indicate that the transaction was reverted
+		slog.Warn("transaction was reverted", "id", tx.id, "err", revertErr)
+		tx.reset()
 		return nil, nil
 	}
 

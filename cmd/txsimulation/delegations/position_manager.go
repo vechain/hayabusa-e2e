@@ -7,14 +7,21 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 )
+
+type ActivePosition struct {
+	Position  *Position
+	Validator thor.Address
+}
 
 type PositionManager struct {
 	maxLeaderGroupLength uint32
 	positions            map[string]*Position // the configured positions
 	distributionType     DistributionType
 
+	delegations        map[thor.Bytes32]*ActivePosition
 	validatorAvailable map[thor.Address]map[string]int // active positions per validator
 	totalActive        map[string]int                  // total number of active positions
 	mu                 sync.Mutex
@@ -40,6 +47,7 @@ func NewManager(maxLeaderGroupLength uint32, distributionType DistributionType, 
 
 		validatorAvailable: make(map[thor.Address]map[string]int), // active positions per validator
 		totalActive:        make(map[string]int),
+		delegations:        make(map[thor.Bytes32]*ActivePosition),
 	}
 }
 
@@ -109,29 +117,25 @@ func (pm *PositionManager) RegisterValidator(validator thor.Address) {
 	pm.validatorAvailable[validator] = pm.makeValidatorsAvailablePositions(validator)
 }
 
-func (pm *PositionManager) UnregisterDelegator(position *Position, validator thor.Address) {
-	if position == nil {
-		slog.Warn("attempted to unregister nil position for validator", "address", validator.String())
-		return
-	}
+func (pm *PositionManager) UnregisterDelegator(id thor.Bytes32) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	if len(pm.positions) == 0 {
-		return
-	}
-
-	if pm.validatorAvailable[validator] == nil {
-		return
-	}
-
-	_, exists := pm.validatorAvailable[validator][position.Name]
+	active, exists := pm.delegations[id]
 	if !exists {
-		slog.Warn("attempted to unregister non-existent position for validator", "address", validator.String(), "position", position.Name)
 		return
 	}
-	pm.validatorAvailable[validator][position.Name]++
-	pm.totalActive[position.Name]--
+	validator := active.Validator
+	positionID := active.Position.Name
+	current, exists := pm.validatorAvailable[validator]
+	if !exists {
+		delete(pm.delegations, id)
+		return
+	}
+
+	current[positionID]++
+	pm.totalActive[positionID]--
+	delete(pm.delegations, id)
 }
 
 func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
@@ -144,7 +148,6 @@ func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
 
 	current, exists := pm.validatorAvailable[validator]
 	if !exists {
-		slog.Warn("attempted to unregister non-existent validator", "address", validator.String())
 		return
 	}
 	start := pm.makeValidatorsAvailablePositions(validator)
@@ -158,12 +161,12 @@ func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
 	delete(pm.validatorAvailable, validator)
 }
 
-func (pm *PositionManager) NewPosition() (*Position, thor.Address, bool) {
+func (pm *PositionManager) NewPosition() (thor.Bytes32, *ActivePosition, bool) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
 	if len(pm.positions) == 0 {
-		return nil, thor.Address{}, false
+		return thor.Bytes32{}, nil, false
 	}
 
 	validators := make([]thor.Address, 0, len(pm.validatorAvailable))
@@ -197,13 +200,18 @@ func (pm *PositionManager) NewPosition() (*Position, thor.Address, bool) {
 				pm.validatorAvailable[validator][positionID]--
 				pm.totalActive[positionID]++
 				position := pm.positions[positionID]
-				return position, validator, true
+				id := datagen.RandomHash()
+				pm.delegations[id] = &ActivePosition{
+					Position:  position,
+					Validator: validator,
+				}
+				return id, pm.delegations[id], true
 			}
 		}
 	}
 
 	slog.Debug("no available positions found")
-	return nil, thor.Address{}, false
+	return thor.Bytes32{}, nil, false
 }
 
 func (pm *PositionManager) makeValidatorsAvailablePositions(addr thor.Address) map[string]int {

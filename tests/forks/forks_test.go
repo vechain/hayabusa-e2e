@@ -148,7 +148,7 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 	if err != nil {
 		t.Fatalf("failed to create staker: %v", err)
 	}
-	if err := utils.WaitForFork(staker, config.ForkBlock); err != nil {
+	if err := utils.WaitForFork(t.Context(), staker, config.ForkBlock); err != nil {
 		t.Fatalf("failed to wait for fork: %v", err)
 	}
 

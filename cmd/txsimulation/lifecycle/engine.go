@@ -11,17 +11,15 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
-	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
 type Generator interface {
-	CreateValidator(acc *hayabusa.NodePair, startBlock uint32) ValidatorConfig
-	CreateDelegator(acc bind.Signer, startBlock uint32) DelegatorConfig
+	CreateValidator(startBlock uint32) (ValidatorConfig, bool)
+	CreateDelegator(startBlock uint32) (DelegatorConfig, bool)
 }
 
 type Engine struct {
@@ -29,7 +27,6 @@ type Engine struct {
 	validators  *validators.Service
 	delegations *delegations.PositionManager
 	lifecycles  map[thor.Bytes32]Lifecycle
-	withdrawn   map[thor.Bytes32]Lifecycle
 	workerPool  *WorkerPool
 	generator   Generator
 	mu          sync.Mutex
@@ -47,31 +44,10 @@ func NewEngine(
 		validators:  validators,
 		delegations: delegations,
 		lifecycles:  make(map[thor.Bytes32]Lifecycle),
-		withdrawn:   make(map[thor.Bytes32]Lifecycle),
 		stack:       stack,
 		generator:   generator,
 		workerPool:  pool,
 	}
-}
-
-func (e *Engine) Info() []*Info {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	info := make([]*Info, 0, len(e.lifecycles)+len(e.withdrawn))
-	for _, lifecycle := range e.lifecycles {
-		i := lifecycle.Info()
-		if i.Status < StatusQueued {
-			continue // Skip lifecycles that are not queued yet
-		}
-		info = append(info, lifecycle.Info())
-	}
-
-	for _, lifecycle := range e.withdrawn {
-		info = append(info, lifecycle.Info())
-	}
-
-	return info
 }
 
 func (e *Engine) AddLifecycle(lifecycle Lifecycle) {
@@ -123,11 +99,7 @@ func (e *Engine) Run() {
 
 			for _, id := range toRemove {
 				slog.Debug("removing lifecycle", "id", id)
-				existing, ok := e.lifecycles[id]
-				if ok {
-					delete(e.lifecycles, id)
-					e.withdrawn[id] = existing
-				}
+				delete(e.lifecycles, id)
 			}
 
 			e.mu.Unlock()
@@ -163,7 +135,7 @@ func (e *Engine) Flush(status Status) error {
 		best, err := ticker.Wait(15 * time.Second)
 		if err != nil {
 			slog.Error("failed to wait for best block", "error", err)
-			return err
+			continue
 		}
 		for _, lifecycle := range e.lifecycles {
 			e.workerPool.Run(func(l Lifecycle, current *api.JSONExpandedBlock) Worker {
@@ -200,18 +172,19 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 	mbp := int(e.stack.Config().MaxBlockProposers)
 	maxQueued := mbp / 8
 	desiredQueued := utils2.RandomBetween(0, maxQueued)
+	desiredQueued = max(desiredQueued, 3) // Ensure at least 3 queued
 	spaces := int(e.stack.Config().MaxBlockProposers) + desiredQueued - lifecycles
 	amount := utils2.RandomBetween(0, spaces)
 
 	slog.Info("🌚 generating validator cycles", "amount", amount, "lifecycles", lifecycles, "spaces", spaces)
 
 	for range amount {
-		account, err := e.stack.NextValidator()
-		if err != nil {
-			slog.Error("not generating any more validator cycles, no more validator keys")
+		lifecycle, ok := e.generator.CreateValidator(block.Number)
+		if !ok {
+			slog.Info("no more validator accounts available")
 			return
 		}
-		cycle := NewValidatorLifecycle(e.generator.CreateValidator(account, block.Number), e.validators, e.delegations, e.stack)
+		cycle := NewValidatorLifecycle(lifecycle, e.validators, e.delegations, e.stack, e.stack.RandomStakingPeriod())
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }
@@ -230,12 +203,12 @@ func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
 	slog.Info("🌚 generating delegator cycles", "amount", amount, "available", available, "totalSupply", totalSupply)
 
 	for i := 0; i < amount; i++ {
-		position, validationID, ok := e.delegations.NewPosition()
+		config, ok := e.generator.CreateDelegator(block.Number)
 		if !ok {
+			slog.Info("no more delegator accounts available")
 			return
 		}
-		config := e.generator.CreateDelegator(e.stack.Stargate(), block.Number)
-		cycle := NewDelegatorLifecycle(config, e.delegations, e.validators, e.stack, position, validationID)
+		cycle := NewDelegatorLifecycle(config, e.delegations, e.validators, e.stack)
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }

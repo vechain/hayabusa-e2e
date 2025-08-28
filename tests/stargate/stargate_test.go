@@ -498,7 +498,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 		stargate = setStargate(t, staker)
 	}()
 
-	if err := utils.WaitForFork(staker, config.ForkBlock); err != nil {
+	if err := utils.WaitForFork(t.Context(), staker, config.ForkBlock); err != nil {
 		t.Fatalf("failed to wait for fork: %v", err)
 	}
 
@@ -517,7 +517,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hay
 	}
 
 	posBlock := config.ForkBlock + config.TransitionPeriod
-	if err := utils.WaitForPOS(staker, posBlock); err != nil {
+	if err := utils.WaitForPOS(t.Context(), staker, posBlock); err != nil {
 		t.Logf("⚠️ WaitForPOS failed: %v, continuing to wait for PoS activation...", err)
 
 		timeout := time.After(10 * time.Minute)
@@ -608,11 +608,6 @@ func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
 	testutil.Send(t, hayabusa.Executor, params.Set(key, value))
 
 	return stargate
-}
-
-func receiptToID(receipt *api.Receipt) thor.Address {
-	id := receipt.Outputs[0].Events[0].Topics[2]
-	return thor.BytesToAddress(id.Bytes())
 }
 
 func receiptToDelegationID(t *testing.T, receipt *api.Receipt) *big.Int {

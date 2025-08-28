@@ -61,7 +61,7 @@ func TestHayabusaEviction(t *testing.T) {
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
-	require.NoError(t, utils.WaitForPOS(staker, block))
+	require.NoError(t, utils.WaitForPOS(t.Context(), staker, block))
 
 	_, validatorID, err = staker.FirstActive()
 	assert.NoError(t, err)
@@ -81,7 +81,7 @@ func TestHayabusaEviction(t *testing.T) {
 
 	require.NoError(t, network.NodeLifecycles()[validator2Node.GetID()].Stop())
 
-	err = utils.WaitForCondition(staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod+config.MinStakingPeriod, func() (bool, error) {
+	err = utils.WaitForCondition(t.Context(), staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod+config.MinStakingPeriod, func() (bool, error) {
 		valStatus, err := staker.GetValidation(id2)
 		if err != nil {
 			return false, err
@@ -90,7 +90,7 @@ func TestHayabusaEviction(t *testing.T) {
 	})
 
 	offlineBlock := config.ForkBlock + config.TransitionPeriod
-	exitBlock := offlineBlock + config.EpochLength + config.ValidatorEvictionThreshold + 1
+	exitBlock := offlineBlock + (config.EpochLength + thor.ValidatorEvictionThreshold()) + 1
 	ticker := utils.NewTicker(staker.Raw().Client())
 	t.Log("✅ waiting for block", exitBlock)
 	require.NoError(t, ticker.WaitForBlock(exitBlock))

@@ -14,7 +14,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
-	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
@@ -70,12 +69,15 @@ func NewValidatorLifecycle(
 	validations *validators.Service,
 	delegations *delegations.PositionManager,
 	stack *stack.Stack,
+	stakingPeriodLength uint32,
 ) *ValidatorLifecycle {
 	return &ValidatorLifecycle{
-		ValidatorConfig: config,
-		validations:     validations,
-		delegations:     delegations,
-		stack:           stack,
+		ValidatorConfig:     config,
+		validations:         validations,
+		delegations:         delegations,
+		stack:               stack,
+		stakingPeriodLength: stakingPeriodLength,
+		id:                  config.Account.Node.Address(),
 	}
 }
 
@@ -116,7 +118,7 @@ func (v *ValidatorLifecycle) Info() *Info {
 
 func (v *ValidatorLifecycle) Process(block uint32) error {
 	validator, ok := v.validations.LookupAddress(v.id)
-	if ok && validator.Status == validation.StatusExit {
+	if ok && (validator.Status == validation.StatusExit || validator.OfflineBlock != nil) {
 		v.delegations.UnregisterValidator(v.id)
 	}
 	if ok && validator.Status == validation.StatusActive {
@@ -152,59 +154,54 @@ func (v *ValidatorLifecycle) ProcessPending(block uint32) error {
 	}
 	slog.Debug("queuing validator", "account", v.Account.Node.Address(), "block", block)
 
-	period := v.stack.RandomStakingPeriod()
-	method := v.stack.Staker().AddValidation(v.Account.Node.Address(), RandomStake(), period)
+	existing, err := v.stack.Staker().GetValidation(v.Account.Node.Address())
+	if err != nil {
+		slog.Error("failed to check existing validator", "error", err, "account", v.Account.Node.Address())
+		return err
+	}
+	if existing.Exists() {
+		slog.Info("validator already exists, skipping queue", "account", v.Account.Node.Address())
+		return v.setQueuedReceipt()
+	}
+
+	method := v.stack.Staker().AddValidation(v.Account.Node.Address(), RandomStake(), v.stakingPeriodLength)
 	receipt, err := v.stack.SendTransactionAndWait(method, v.Account.Endorser)
 	if err != nil {
-		if strings.Contains(err.Error(), " validator already exists") {
+		if strings.Contains(err.Error(), "validator already exists") {
 			return v.setQueuedReceipt()
 		}
 		slog.Error("failed to queue validator", "error", err, "account", v.Account.Node.Address())
 		return err
 	}
 
-	v.id = v.Account.Node.Address()
 	v.queuedReceipt = receipt
 	v.status = StatusQueued
-	v.stakingPeriodLength = period
 
 	return nil
 }
 
 func (v *ValidatorLifecycle) setQueuedReceipt() error {
-	offset := uint64(0)
-	limit := uint64(1000)
-	var id thor.Bytes32
-	for {
-		events, err := v.stack.Staker().FilterValidatorQueued(nil, &api.Options{Limit: limit, Offset: offset}, logdb.ASC)
-		if err != nil {
-			slog.Error("failed to filter validator queued events", "error", err, "id", v.id)
-			return err
-		}
-		for _, event := range events {
-			if event.Node == v.id {
-				v.status = StatusQueued
-				v.stakingPeriodLength = event.Period
-				v.id = event.Node
-				break
-			}
-		}
-
-		if !id.IsZero() || len(events) == 0 {
-			break
-		}
-		offset += limit
-	}
-	if !id.IsZero() {
-		receipt, err := v.stack.Client().TransactionReceipt(&id)
-		if err != nil {
-			slog.Error("failed to get transaction receipt for queued validator", "error", err, "id", v.id)
-			return err
-		}
-		v.queuedReceipt = receipt
-
-		slog.Debug("validator queued", "id", v.id, "account", v.Account.Node.Address())
+	validator, ok := v.validations.LookupAddress(v.id)
+	if !ok {
+		slog.Warn("validator exists but not found in validations service", "id", v.id)
+		v.status = StatusQueued
 		return nil
+	}
+
+	switch validator.Status {
+	case validation.StatusActive:
+		slog.Debug("validator already active", "id", v.id, "account", v.Account.Node.Address())
+		v.status = StatusActive
+		v.activatedBlock = validator.StartBlock
+	case validation.StatusQueued:
+		slog.Debug("validator already queued", "id", v.id, "account", v.Account.Node.Address())
+		v.status = StatusQueued
+	case validation.StatusExit:
+		slog.Debug("validator already exited", "id", v.id, "account", v.Account.Node.Address())
+		v.status = StatusWithdrawn
+	default:
+		slog.Debug("validator exists with unknown status", "id", v.id, "status", validator.Status, "account", v.Account.Node.Address())
+		v.status = StatusQueued
 	}
 
 	return nil
@@ -214,7 +211,7 @@ func (v *ValidatorLifecycle) ProcessQueued(block uint32) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	if v.queuedReceipt == nil {
+	if v.queuedReceipt == nil && v.id.IsZero() {
 		return errors.New("cannot set activated block for validator that has not been queued")
 	}
 	if v.activatedBlock != 0 {
@@ -222,12 +219,18 @@ func (v *ValidatorLifecycle) ProcessQueued(block uint32) error {
 	}
 	validator, ok := v.validations.LookupAddress(v.id)
 	if !ok {
+		slog.Warn("validator not found in validations service", "id", v.id, "account", v.Account.Node.Address())
 		return nil
 	}
+
+	slog.Debug("checking validator status", "id", v.id, "status", validator.Status, "account", v.Account.Node.Address())
+
 	if validator.Status == validation.StatusActive {
-		slog.Debug("validator activated", "account", v.Account.Node.Address(), "block", block)
+		slog.Debug("validator activated", "account", v.Account.Node.Address(), "block", block, "startBlock", validator.StartBlock)
 		v.activatedBlock = validator.StartBlock
 		v.status = StatusActive
+	} else {
+		slog.Debug("validator not yet active", "id", v.id, "status", validator.Status, "account", v.Account.Node.Address())
 	}
 	return nil
 }
@@ -243,9 +246,23 @@ func (v *ValidatorLifecycle) ProcessActive(block uint32) error {
 	if v.status == StatusExitSignalled {
 		return nil
 	}
+
+	activeValidators := v.validations.GetActiveCount()
+	minValidators := uint32(1)
+
+	if activeValidators <= minValidators {
+		slog.Info("preventing validator exit to maintain minimum active validators",
+			"activeValidators", activeValidators,
+			"minValidators", minValidators,
+			"validator", v.id)
+		return v.stakeChange(block)
+	}
+
 	if block < v.Config.MinExitBlock(v.activatedBlock, v.stakingPeriodLength) {
 		return v.stakeChange(block)
 	}
+
+	slog.Info("signaling validator exit", "validator", v.id, "activeValidators", activeValidators)
 	method := v.stack.Staker().SignalExit(v.id)
 	receipt, err := v.stack.SendTransactionAndWait(method, v.Account.Endorser)
 	if receipt != nil {
@@ -289,7 +306,11 @@ func (v *ValidatorLifecycle) ProcessExited(block uint32) error {
 	if v.status != StatusExitSignalled || v.exitReceipt == nil {
 		return errors.New("cannot withdraw validator that has not signalled exit")
 	}
-	if block < v.Config.MinWithdrawBlock(v.exitReceipt.Meta.BlockNumber, v.stack.Config()) {
+	minWithdrawBlock := v.Config.MinWithdrawBlock(v.exitReceipt.Meta.BlockNumber, v.stack.Config())
+	if v.activatedBlock != 0 {
+		minWithdrawBlock += v.stack.Config().CooldownPeriod
+	}
+	if block < minWithdrawBlock {
 		return nil
 	}
 	method := v.stack.Staker().WithdrawStake(v.id)

@@ -361,7 +361,7 @@ func sendNoRequire(t *testing.T, signer bind.Signer, sender *bind.MethodBuilder)
 
 func waitForPoSAndAssertFirstActive(t *testing.T, staker *builtin.Staker, config *hayabusa.Config, expectedFirstActive thor.Address) uint32 {
 	block := config.ForkBlock + config.TransitionPeriod
-	require.NoError(t, utils.WaitForPOS(staker, block))
+	require.NoError(t, utils.WaitForPOS(t.Context(), staker, block))
 
 	_, validatorID, err := staker.FirstActive()
 	assert.NoError(t, err)
