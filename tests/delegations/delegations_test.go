@@ -372,7 +372,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 	if err != nil {
 		t.Fatalf("failed to create staker: %v", err)
 	}
-	if err := utils.WaitForFork(staker, config.ForkBlock); err != nil {
+	if err := utils.WaitForFork(t.Context(), staker, config.ForkBlock); err != nil {
 		t.Fatalf("failed to wait for fork: %v", err)
 	}
 
@@ -395,7 +395,7 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 	if _, _, err := senders.Send(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
+	if err := utils.WaitForPOS(t.Context(), staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		t.Fatalf("failed to wait for PoS: %v", err)
 	}
 

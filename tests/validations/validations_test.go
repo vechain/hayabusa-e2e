@@ -271,7 +271,7 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
-	require.NoError(t, utils.WaitForPOS(staker, block))
+	require.NoError(t, utils.WaitForPOS(t.Context(), staker, block))
 
 	_, validatorID, err = staker.FirstActive()
 	assert.NoError(t, err)
@@ -739,7 +739,7 @@ func TestBeneficiary(t *testing.T) {
 	sequence.Send(validator1.Endorser, staker.SetBeneficiary(id1, beneficiary))
 	sequence.Send(validator2.Endorser, staker.SetBeneficiary(id2, beneficiary))
 
-	assert.NoError(t, utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod))
+	assert.NoError(t, utils.WaitForPOS(t.Context(), staker, config.ForkBlock+config.TransitionPeriod))
 
 	blockRewards := hayabusa.GetExpectedReward(big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)))
 	ticker := utils.NewTicker(client)
@@ -835,7 +835,7 @@ func assertTotalStakeAndWeight(t *testing.T, staker *builtin.Staker, expectedAct
 
 func waitForPoSAndAssertFirstActive(t *testing.T, staker *builtin.Staker, config *hayabusa.Config, expectedFirstActive thor.Address) uint32 {
 	block := config.ForkBlock + config.TransitionPeriod
-	require.NoError(t, utils.WaitForPOS(staker, block))
+	require.NoError(t, utils.WaitForPOS(t.Context(), staker, block))
 
 	_, validatorID, err := staker.FirstActive()
 	assert.NoError(t, err)

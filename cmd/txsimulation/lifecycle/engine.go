@@ -27,7 +27,6 @@ type Engine struct {
 	validators  *validators.Service
 	delegations *delegations.PositionManager
 	lifecycles  map[thor.Bytes32]Lifecycle
-	withdrawn   map[thor.Bytes32]Lifecycle
 	workerPool  *WorkerPool
 	generator   Generator
 	mu          sync.Mutex
@@ -45,31 +44,10 @@ func NewEngine(
 		validators:  validators,
 		delegations: delegations,
 		lifecycles:  make(map[thor.Bytes32]Lifecycle),
-		withdrawn:   make(map[thor.Bytes32]Lifecycle),
 		stack:       stack,
 		generator:   generator,
 		workerPool:  pool,
 	}
-}
-
-func (e *Engine) Info() []*Info {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	info := make([]*Info, 0, len(e.lifecycles)+len(e.withdrawn))
-	for _, lifecycle := range e.lifecycles {
-		i := lifecycle.Info()
-		if i.Status < StatusQueued {
-			continue // Skip lifecycles that are not queued yet
-		}
-		info = append(info, lifecycle.Info())
-	}
-
-	for _, lifecycle := range e.withdrawn {
-		info = append(info, lifecycle.Info())
-	}
-
-	return info
 }
 
 func (e *Engine) AddLifecycle(lifecycle Lifecycle) {
@@ -121,11 +99,7 @@ func (e *Engine) Run() {
 
 			for _, id := range toRemove {
 				slog.Debug("removing lifecycle", "id", id)
-				existing, ok := e.lifecycles[id]
-				if ok {
-					delete(e.lifecycles, id)
-					e.withdrawn[id] = existing
-				}
+				delete(e.lifecycles, id)
 			}
 
 			e.mu.Unlock()
@@ -210,7 +184,7 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 			slog.Info("no more validator accounts available")
 			return
 		}
-		cycle := NewValidatorLifecycle(lifecycle, e.validators, e.delegations, e.stack)
+		cycle := NewValidatorLifecycle(lifecycle, e.validators, e.delegations, e.stack, e.stack.RandomStakingPeriod())
 		e.lifecycles[datagen.RandomHash()] = cycle
 	}
 }

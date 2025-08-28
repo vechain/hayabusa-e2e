@@ -59,7 +59,7 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 		"rotatingValidators", len(keys.RotatingValidators))
 
 	stargate := keys.FaucetKeys[len(keys.FaucetKeys)-1]
-	if err = setStargate(client, keys.Executors, stargate.Address()); err != nil {
+	if err = setStargate(ctx, client, keys.Executors, stargate.Address()); err != nil {
 		slog.Error("failed to set stargate", "error", err)
 		os.Exit(1)
 	}
@@ -83,7 +83,7 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 	// initial seeding of authority accounts
 	authorityConfigs := createAuthorityConfigs(keys, config)
 	for _, cfg := range authorityConfigs {
-		engine.AddLifecycle(lifecycle.NewValidatorLifecycle(cfg, validationsState, delegations, stack))
+		engine.AddLifecycle(lifecycle.NewValidatorLifecycle(cfg, validationsState, delegations, stack, config.MinStakingPeriod))
 	}
 	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
 		slog.Error("failed to flush initial authority validators", "error", err)
@@ -96,7 +96,7 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 	block := best.Number + config.TransitionPeriod*4
 	slog.Info("🕰️  waiting for dPoS to become active", "expected-by", block)
-	if err := utils2.WaitForPOS(staker, block); err != nil {
+	if err := utils2.WaitForPOS(ctx, staker, block); err != nil {
 		slog.Error("failed to wait for PoS", "error", err)
 		os.Exit(1)
 	}
@@ -139,7 +139,7 @@ func leadNetworkConfig(genesisURL string) (*hayabusa.Config, error) {
 	return config, nil
 }
 
-func setStargate(client *thorclient.Client, executors []*bind.PrivateKeySigner, stargate thor.Address) error {
+func setStargate(ctx context.Context, client *thorclient.Client, executors []*bind.PrivateKeySigner, stargate thor.Address) error {
 	// init contracts
 	params, err := builtin.NewParams(client)
 	if err != nil {
@@ -169,7 +169,7 @@ func setStargate(client *thorclient.Client, executors []*bind.PrivateKeySigner, 
 	if err != nil {
 		return fmt.Errorf("failed to create set stargate clause: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	slog.Info("🧑‍💻 proposing set stargate address in params", "address", stargate)
@@ -228,7 +228,7 @@ func setStargate(client *thorclient.Client, executors []*bind.PrivateKeySigner, 
 
 	// execute the proposal
 	slog.Info("🧑‍⚖️ executing set stargate address in params", "address", stargate)
-	executeCtx, executeCancel := context.WithTimeout(context.Background(), time.Minute)
+	executeCtx, executeCancel := context.WithTimeout(ctx, time.Minute)
 	defer executeCancel()
 	receipt, _, err = executor.Execute(proposalID).Send().WithSigner(executors[0]).SubmitAndConfirm(executeCtx)
 	if err != nil {

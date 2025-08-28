@@ -49,7 +49,7 @@ func runEnergyTest(t *testing.T) error {
 	energy, err := builtin.NewEnergy(client)
 	require.NoError(t, err)
 
-	require.NoError(t, utils.WaitForFork(staker, config.ForkBlock))
+	require.NoError(t, utils.WaitForFork(t.Context(), staker, config.ForkBlock))
 
 	senders := &utils.Senders{}
 	validators := 3
@@ -65,7 +65,7 @@ func runEnergyTest(t *testing.T) error {
 		assert.False(t, receipt.Reverted)
 	}
 	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10))
-	err = utils.WaitForCondition(staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod, func() (bool, error) {
+	err = utils.WaitForCondition(t.Context(), staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod, func() (bool, error) {
 		valStake, err := staker.GetValidation(hayabusa.ValidatorAccounts[0].Node.Address())
 		if err != nil {
 			return false, err
@@ -89,7 +89,7 @@ func runEnergyTest(t *testing.T) error {
 		require.Equal(t, expectedSupply.Cmp(supply), 0, "block %d: expected %s, got %s", blockNum, expectedSupply.String(), supply.String())
 	}
 
-	require.NoError(t, utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod))
+	require.NoError(t, utils.WaitForPOS(t.Context(), staker, config.ForkBlock+config.TransitionPeriod))
 
 	genesisBlock, err := client.Block("0")
 	require.NoError(t, err)

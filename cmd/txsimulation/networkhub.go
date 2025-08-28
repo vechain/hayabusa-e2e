@@ -95,7 +95,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 	generator := &networkHubGenerator{config: config, delegations: delegations, stargate: hayabusa.Stargate, validators: extraValidators}
 	engine := lifecycle.NewEngine(stack, validators, delegations, generator)
 
-	utils.WaitForFork(staker, config.ForkBlock)
+	utils.WaitForFork(ctx, staker, config.ForkBlock)
 
 	// initial seeding of validator accounts
 	for i, acc := range initialValidators {
@@ -118,7 +118,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 			config.StakingPeriods = uint32(utils2.RandomBetween(6, 12)) // create 20 short term validators
 		}
 		config.QueueDelay = lifecycle.Delay{Blocks: 0, Epochs: 0}
-		cycle := lifecycle.NewValidatorLifecycle(config, validators, delegations, stack)
+		cycle := lifecycle.NewValidatorLifecycle(config, validators, delegations, stack, stack.RandomStakingPeriod())
 		engine.AddLifecycle(cycle)
 	}
 
@@ -129,7 +129,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	slog.Info("✅ validator lifecycles flushed")
 
-	if err := utils.WaitForPOS(staker, config.ForkBlock+config.TransitionPeriod); err != nil {
+	if err := utils.WaitForPOS(ctx, staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		slog.Error("failed to wait for POS", "error", err)
 		os.Exit(1)
 	}

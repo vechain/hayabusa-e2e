@@ -13,17 +13,17 @@ import (
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
-func WaitForPOS(staker *builtin.Staker, maxBlock uint32) error {
+func WaitForPOS(ctx context.Context, staker *builtin.Staker, maxBlock uint32) error {
 	maxBlockWithBuffer := maxBlock + 10 // add 10 blocks in case of forks
-	return WaitForCondition(staker.Raw().Client(), maxBlockWithBuffer, func() (bool, error) {
+	return WaitForCondition(ctx, staker.Raw().Client(), maxBlockWithBuffer, func() (bool, error) {
 		_, id, err := staker.FirstActive()
 		return err == nil && !id.IsZero(), nil
 	})
 }
 
-func WaitForFork(staker *builtin.Staker, forkBlock uint32) error {
+func WaitForFork(ctx context.Context, staker *builtin.Staker, forkBlock uint32) error {
 	addr := staker.Raw().Address()
-	return WaitForCondition(staker.Raw().Client(), forkBlock, func() (bool, error) {
+	return WaitForCondition(ctx, staker.Raw().Client(), forkBlock, func() (bool, error) {
 		acc, err := staker.Raw().Client().AccountCode(addr)
 		if err != nil {
 			return false, err
@@ -32,23 +32,28 @@ func WaitForFork(staker *builtin.Staker, forkBlock uint32) error {
 	})
 }
 
-func WaitForCondition(client *thorclient.Client, maxBlock uint32, condition func() (bool, error)) error {
+func WaitForCondition(ctx context.Context, client *thorclient.Client, maxBlock uint32, condition func() (bool, error)) error {
 	for {
-		ok, err := condition()
-		if err != nil {
-			return err
+		select {
+		case <-ctx.Done():
+			return errors.New("timed out waiting for condition")
+		default:
+			ok, err := condition()
+			if err != nil {
+				return err
+			}
+			if ok {
+				return nil
+			}
+			best, err := client.Block("best")
+			if err != nil {
+				return err
+			}
+			if best.Number > maxBlock {
+				return errors.New("condition not met, max block reached")
+			}
+			time.Sleep(1 * time.Second)
 		}
-		if ok {
-			return nil
-		}
-		best, err := client.Block("best")
-		if err != nil {
-			return err
-		}
-		if best.Number > maxBlock {
-			return errors.New("condition not met, max block reached")
-		}
-		time.Sleep(1 * time.Second)
 	}
 }
 
