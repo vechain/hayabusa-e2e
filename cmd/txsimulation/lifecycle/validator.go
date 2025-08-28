@@ -2,7 +2,6 @@ package lifecycle
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"math/big"
 	"math/rand"
