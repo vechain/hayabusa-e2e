@@ -2,6 +2,7 @@ package lifecycle
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/big"
 	"math/rand"
@@ -77,6 +78,7 @@ func NewValidatorLifecycle(
 		delegations:         delegations,
 		stack:               stack,
 		stakingPeriodLength: stakingPeriodLength,
+		id:                  config.Account.Node.Address(),
 	}
 }
 
@@ -153,9 +155,13 @@ func (v *ValidatorLifecycle) ProcessPending(block uint32) error {
 	}
 	slog.Debug("queuing validator", "account", v.Account.Node.Address(), "block", block)
 
-	existing, ok := v.validations.LookupAddress(v.Account.Node.Address())
-	if ok {
-		slog.Info("validator already exists", "status", existing.Status, "account", v.Account.Node.Address())
+	existing, err := v.stack.Staker().GetValidation(v.Account.Node.Address())
+	if err != nil {
+		slog.Error("failed to check existing validator", "error", err, "account", v.Account.Node.Address())
+		return err
+	}
+	if existing.Exists() {
+		slog.Info("validator already exists, skipping queue", "account", v.Account.Node.Address())
 		return v.setQueuedReceipt()
 	}
 
@@ -169,7 +175,6 @@ func (v *ValidatorLifecycle) ProcessPending(block uint32) error {
 		return err
 	}
 
-	v.id = v.Account.Node.Address()
 	v.queuedReceipt = receipt
 	v.status = StatusQueued
 
@@ -177,8 +182,6 @@ func (v *ValidatorLifecycle) ProcessPending(block uint32) error {
 }
 
 func (v *ValidatorLifecycle) setQueuedReceipt() error {
-	v.id = v.Account.Node.Address()
-
 	validator, ok := v.validations.LookupAddress(v.id)
 	if !ok {
 		slog.Warn("validator exists but not found in validations service", "id", v.id)
