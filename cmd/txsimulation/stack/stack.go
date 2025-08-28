@@ -151,6 +151,14 @@ func (s *Stack) makeTx(method *bind.MethodBuilder, signer bind.Signer) (*bind.Se
 		}
 		s.best.Store(best)
 	}
+	var priorityFee *big.Int
+	fees, err := s.Client().FeesPriority()
+	if err != nil {
+		slog.Error("stack: failed to fetch fee history", "error", err)
+	} else {
+		priorityFee = (*big.Int)(fees.MaxPriorityFeePerGas)
+		priorityFee.Mul(priorityFee, big.NewInt(2))
+	}
 
 	if best.Number > 3 {
 		s.sentTxs[best.Number+1]++ // +1 should be mined at the next block, not best
@@ -162,9 +170,10 @@ func (s *Stack) makeTx(method *bind.MethodBuilder, signer bind.Signer) (*bind.Se
 		baseFee = big.NewInt(thor.InitialBaseFee)
 	}
 	options := &bind.TxOptions{
-		MaxFeePerGas: big.NewInt(0).Mul(baseFee, big.NewInt(2)),
-		Gas:          &gas,
-		Expiration:   s.DefaultExpiration(),
+		MaxFeePerGas:         big.NewInt(0).Mul(baseFee, big.NewInt(2)),
+		MaxPriorityFeePerGas: priorityFee,
+		Gas:                  &gas,
+		Expiration:           s.DefaultExpiration(),
 	}
 
 	return method.Send().WithOptions(options).WithSigner(signer), nil

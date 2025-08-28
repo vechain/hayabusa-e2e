@@ -135,7 +135,7 @@ func (e *Engine) Flush(status Status) error {
 		best, err := ticker.Wait(15 * time.Second)
 		if err != nil {
 			slog.Error("failed to wait for best block", "error", err)
-			return err
+			continue
 		}
 		for _, lifecycle := range e.lifecycles {
 			e.workerPool.Run(func(l Lifecycle, current *api.JSONExpandedBlock) Worker {
