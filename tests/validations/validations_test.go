@@ -306,12 +306,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	assertTotalStakeAndWeight(t, staker, 3)
 
-	queued, queuedWeight, err := staker.QueuedStake()
+	queued, err = staker.QueuedStake()
 	assert.NoError(t, err)
 
 	queuedStk := new(big.Int).Add(testutil.CalculateValidatorStake(), stake)
 	assert.Equal(t, queuedStk, queued)
-	assert.Equal(t, queuedStk, queuedWeight)
 
 	_, validatorID, err = staker.FirstQueued()
 	assert.NoError(t, err)
@@ -410,11 +409,10 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), total)
 	assert.Equal(t, big.NewInt(0).Mul(validatorStake, big.NewInt(3)), totalWeight)
-	queued, queuedWeight, err := staker.QueuedStake()
+	queued, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	// the pending vet increases the queued stake
 	assert.Equal(t, big.NewInt(0).Add(validatorStake, increase), queued)
-	assert.Equal(t, big.NewInt(0).Add(validatorStake, increase), queuedWeight)
 
 	block += config.MinStakingPeriod
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
@@ -452,11 +450,10 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	threeStake := big.NewInt(0).Mul(validatorStake, big.NewInt(3))
 	assert.Equal(t, big.NewInt(0).Add(threeStake, increase), total)
 	assert.Equal(t, big.NewInt(0).Add(threeStake, increase), totalWeight)
-	queued, queuedWeight, err = staker.QueuedStake()
+	queued, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	// the queued stake should not have changed
 	assert.Equal(t, validatorStake, queued)
-	assert.Equal(t, validatorStake, queuedWeight)
 
 	t.Log("✅ - Validator 1 stake decreased")
 	block += config.MinStakingPeriod
@@ -477,11 +474,10 @@ func TestHayabusaValidatorStakeChanges(t *testing.T) {
 	assert.Equal(t, expectedTotal, totalWeight)
 	assertQueuedStakeAndWeight(t, staker, 1)
 
-	queued, queuedWeight, err = staker.QueuedStake()
+	queued, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	// the queued stake should not have changed
 	assert.Equal(t, validatorStake, queued)
-	assert.Equal(t, validatorStake, queuedWeight)
 
 	validatorWithdraw(t, staker, validator1.Endorser, id1)
 
@@ -524,10 +520,9 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 
 	testutil.Send(t, validator3.Endorser, staker.SignalExit(id3))
 
-	queued, queuedWeight, err := staker.QueuedStake()
+	queued, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.True(t, queued.Cmp(new(big.Int)) == 0)
-	assert.True(t, queuedWeight.Cmp(new(big.Int)) == 0)
 	t.Log("✅ - Queued stake is decreased for the staked amount, queued weight is decreased for the 2x value of staked amount")
 
 	block += config.EpochLength
@@ -535,10 +530,9 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorExits(t *testing.T) {
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusExited, block)
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 
-	queued, queuedWeight, err = staker.QueuedStake()
+	queued, err = staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.True(t, queued.Cmp(new(big.Int)) == 0)
-	assert.True(t, queuedWeight.Cmp(new(big.Int)) == 0)
 	t.Log("✅ - All non-autoRenew validators have exited, queue is empty")
 }
 
@@ -570,19 +564,17 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusQueued, block)
 	t.Log("✅ - Initial state verified: 2 active, 1 queued")
 
-	initialQueued, initialQueuedWeight, err := staker.QueuedStake()
+	initialQueued, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	initialTotal, initialTotalWeight, err := staker.TotalStake()
 	assert.NoError(t, err)
 
 	validatorStake := testutil.CalculateValidatorStake()
 	expectedInitialQueued := validatorStake
-	expectedInitialQueuedWeight := new(big.Int).Mul(validatorStake, big.NewInt(1))
 	expectedInitialTotal := new(big.Int).Mul(validatorStake, big.NewInt(2))
 	expectedInitialTotalWeight := new(big.Int).Mul(validatorStake, big.NewInt(2))
 
 	assert.Equal(t, expectedInitialQueued, initialQueued)
-	assert.Equal(t, expectedInitialQueuedWeight, initialQueuedWeight)
 	assert.Equal(t, expectedInitialTotal, initialTotal)
 	assert.Equal(t, expectedInitialTotalWeight, initialTotalWeight)
 
@@ -592,12 +584,10 @@ func TestHayabusaQueuedWeightDecreasedWhenValidatorSelectedForLeaderGroup(t *tes
 	assertValidatorStatus(t, staker, id3, builtin.StakerStatusActive, block)
 	t.Log("✅ - Validator is removed from the queue by being selected in the leader group")
 
-	finalQueued, finalQueuedWeight, err := staker.QueuedStake()
+	finalQueued, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.True(t, big.NewInt(0).Cmp(finalQueued) == 0)
 	t.Log("✅ - Queued stake is decreased for the staked amount")
-	assert.True(t, big.NewInt(0).Cmp(finalQueuedWeight) == 0)
-	t.Log("✅ - Queued weight is decreased for the 2x value of staked amount")
 
 	finalTotal, finalTotalWeight, err := staker.TotalStake()
 	assert.NoError(t, err)
@@ -631,12 +621,10 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	assertValidatorStatus(t, staker, id1, builtin.StakerStatusActive, block)
 	assertValidatorStatus(t, staker, id2, builtin.StakerStatusQueued, block)
 
-	initialQueued, initialQueuedWeight, err := staker.QueuedStake()
+	initialQueued, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	expectedInitialQueued := testutil.CalculateValidatorStake()
-	expectedInitialQueuedWeight := new(big.Int).Mul(expectedInitialQueued, big.NewInt(1))
 	assert.Equal(t, expectedInitialQueued, initialQueued)
-	assert.Equal(t, expectedInitialQueuedWeight, initialQueuedWeight)
 	t.Log("✅ - Initial queued stake and weight verified")
 
 	delegatorStake := new(big.Int).Mul(big.NewInt(1e18), big.NewInt(1e6))
@@ -649,16 +637,13 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	// Get delegation ID from receipt
 	delegationID := new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2].Bytes())
 
-	finalQueued, finalQueuedWeight, err := staker.QueuedStake()
+	finalQueued, err := staker.QueuedStake()
 
 	assert.NoError(t, err)
 	expectedFinalQueued := new(big.Int).Add(expectedInitialQueued, delegatorStake)
 	// The multiplier formula divides by 100 so the weight is just the stake
-	expectedFinalQueuedWeight := new(big.Int).Add(initialQueuedWeight, delegatorStake)
 	assert.Equal(t, expectedFinalQueued, finalQueued)
 	t.Log("✅ - Queued stake is increased for the staked amount")
-	assert.Equal(t, expectedFinalQueuedWeight, finalQueuedWeight)
-	t.Log("✅ - Queued weight is increased for value of delegators stake")
 
 	// Remove delegator
 	_ = testutil.Send(t, hayabusa.Stargate, staker.WithdrawDelegation(delegationID))
@@ -667,12 +652,10 @@ func TestHayabusaQueuedStakeAndWeightChangesWhenDelegator(t *testing.T) {
 	assert.True(t, delegation.Stake.Sign() == 0)
 	t.Log("✅ - Delegator removed from queued validator")
 
-	afterRemovalQueued, afterRemovalQueuedWeight, err := staker.QueuedStake()
+	afterRemovalQueued, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	assert.Equal(t, initialQueued, afterRemovalQueued)
 	t.Log("✅ - Queued stake is decreased after delegator removal")
-	assert.Equal(t, initialQueuedWeight, afterRemovalQueuedWeight)
-	t.Log("✅ - Queued weight is decreased after delegator removal")
 }
 
 func TestHayabusaTotalStakeDecreased(t *testing.T) {
@@ -816,12 +799,10 @@ func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config,
 
 func assertQueuedStakeAndWeight(t *testing.T, staker *builtin.Staker, expectedQueuedCount int) {
 	validatorStake := testutil.CalculateValidatorStake()
-	queued, queuedWeight, err := staker.QueuedStake()
+	queued, err := staker.QueuedStake()
 	assert.NoError(t, err)
 	expectedQueuedStake := new(big.Int).Mul(validatorStake, big.NewInt(int64(expectedQueuedCount)))
-	expectedQueuedWeight := new(big.Int).Mul(validatorStake, big.NewInt(int64(expectedQueuedCount)))
 	assert.Equal(t, expectedQueuedStake, queued)
-	assert.Equal(t, expectedQueuedWeight, queuedWeight)
 }
 
 func assertTotalStakeAndWeight(t *testing.T, staker *builtin.Staker, expectedActiveCount int) {

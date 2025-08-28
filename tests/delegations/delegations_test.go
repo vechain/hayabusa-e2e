@@ -12,7 +12,6 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
-	"github.com/vechain/thor/v2/builtin/staker/stakes"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -27,8 +26,8 @@ func Test_StargateRewards(t *testing.T) {
 
 	multiplier := uint8(200)
 	delegators := int64(10)
-	dStake := stakes.NewWeightedStake(builtin.MinStake(), multiplier)
-	vStake := stakes.NewWeightedStake(builtin.MinStake(), multiplier)
+	dStake := hayabusa.NewWeightedStakeWithMultiplier(builtin.MinStake(), multiplier)
+	vStake := hayabusa.NewWeightedStakeWithMultiplier(builtin.MinStake(), multiplier)
 
 	for _, validationID := range validationIDs { // evenly distribute delegations among validators
 		senders := &utils.Senders{}
@@ -298,12 +297,12 @@ func Test_Delegations(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create first delegation
-		firstStake := stakes.NewWeightedStake(big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)), 100)
+		firstStake := hayabusa.NewWeightedStakeWithMultiplier(big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)), 100)
 		receipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], firstStake.VET(), 100))
 		firstDelegationID := testutil.ReceiptToID(receipt)
 
 		// Create second delegation
-		secondStake := stakes.NewWeightedStake(big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)), 100)
+		secondStake := hayabusa.NewWeightedStakeWithMultiplier(big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(3)), 100)
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validationIDs[5], secondStake.VET(), 100))
 		secondDelegationID := testutil.ReceiptToID(receipt)
 
