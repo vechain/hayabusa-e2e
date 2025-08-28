@@ -98,7 +98,6 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 	doubleSignedBlocksChan := make(chan PropagatedDoubleSignedBlock, 100)
 
 	go func() {
-		time.Sleep(10 * time.Second)
 		// connect to the double signing node and recieve blocks
 		tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:45367")
 		if err != nil {
@@ -106,9 +105,20 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 			os.Exit(1)
 		}
 		// Connect to the address with tcp
-		conn, err := net.DialTCP("tcp", nil, tcpAddr)
+		var conn *net.TCPConn
+		err = nil
+		// spin waiting for connection
+		for range 5 {
+			conn, err = net.DialTCP("tcp", nil, tcpAddr)
+			if err != nil {
+				fmt.Println(err)
+				time.Sleep(1 * time.Second)
+				continue
+			} else {
+				break
+			}
+		}
 		if err != nil {
-			fmt.Println(err)
 			os.Exit(1)
 		}
 
