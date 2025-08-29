@@ -98,6 +98,14 @@ func (d *DelegatorLifecycle) ID() string {
 	return d.id.String()
 }
 
+func (d *DelegatorLifecycle) ForceExit() {
+	if d.status == StatusActive {
+		d.ProcessActive(0, true)
+	} else {
+		d.ProcessExited(0, true)
+	}
+}
+
 func (d *DelegatorLifecycle) Process(block uint32) error {
 	defer func() {
 		if d.status == StatusExitSignalled || d.status == StatusWithdrawn {
@@ -110,9 +118,9 @@ func (d *DelegatorLifecycle) Process(block uint32) error {
 	case StatusQueued:
 		return d.ProcessQueued(block)
 	case StatusActive:
-		return d.ProcessActive(block)
+		return d.ProcessActive(block, false)
 	case StatusExitSignalled:
-		return d.ProcessExited(block)
+		return d.ProcessExited(block, false)
 	case StatusWithdrawn:
 
 	}
@@ -200,7 +208,7 @@ func (d *DelegatorLifecycle) ProcessQueued(block uint32) error {
 	return nil
 }
 
-func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
+func (d *DelegatorLifecycle) ProcessActive(block uint32, force bool) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -217,7 +225,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 		return fmt.Errorf("failed to get validator for delegation %s", d.ID())
 	}
 	lastActiveBlock := d.config.MinExitBlock(d.activatedBlock, d.stakingPeriodLength)
-	if block < lastActiveBlock && validator.Status < validation.StatusExit {
+	if !force && block < lastActiveBlock && validator.Status < validation.StatusExit {
 		return nil
 	}
 	slog.Debug("signalling exit for delegator", "id", d.ID())
@@ -236,7 +244,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 	return nil
 }
 
-func (d *DelegatorLifecycle) ProcessExited(block uint32) error {
+func (d *DelegatorLifecycle) ProcessExited(block uint32, force bool) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -247,7 +255,7 @@ func (d *DelegatorLifecycle) ProcessExited(block uint32) error {
 		return fmt.Errorf("cannot withdraw delegator that has not signalled exit: %s", d.ID())
 	}
 	minWithdrawBlock := d.config.MinWithdrawBlock(d.exitTx.receipt.Meta.BlockNumber, d.stack.Config())
-	if block < minWithdrawBlock {
+	if !force && block < minWithdrawBlock {
 		return nil
 	}
 	slog.Debug("withdrawing delegator", "id", d.ID())

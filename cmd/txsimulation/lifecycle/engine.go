@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -57,6 +58,13 @@ func (e *Engine) AddLifecycle(lifecycle Lifecycle) {
 	e.lifecycles[datagen.RandomHash()] = lifecycle
 }
 
+func (e *Engine) Lifecycles() map[thor.Bytes32]Lifecycle {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	return maps.Clone(e.lifecycles)
+}
+
 func (e *Engine) Run() {
 	ticker := utils.NewTicker(e.stack.Client())
 	for {
@@ -74,7 +82,6 @@ func (e *Engine) Run() {
 				e.generateValidatorCycles(best)
 				e.generateDelegatorCycles(best)
 			}
-
 			delegationStatus := make(map[Status]int)
 			validationStatus := make(map[Status]int)
 			toRemove := make([]thor.Bytes32, 0)
