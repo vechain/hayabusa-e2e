@@ -103,7 +103,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 		validators:      extraValidators,
 		validatorIndex:  0,
 	}
-	engine := lifecycle.NewEngine(stack, contratService, delegations, generator)
+	engine := lifecycle.NewEngine(stack, delegations, generator)
 
 	utils.WaitForFork(ctx, staker, config.ForkBlock)
 
