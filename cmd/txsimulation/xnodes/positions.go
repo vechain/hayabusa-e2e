@@ -1,4 +1,4 @@
-package delegations
+package xnodes
 
 import (
 	"math/big"

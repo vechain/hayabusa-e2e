@@ -1,4 +1,4 @@
-package lifecycle
+package delegations
 
 import (
 	"fmt"
@@ -9,9 +9,10 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/contract"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/xnodes"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -32,12 +33,12 @@ func (t *transaction) reset() {
 }
 
 type DelegatorLifecycle struct {
-	config          DelegatorConfig
-	delegations     *delegations.PositionManager
+	config          Config
+	xnodes          *xnodes.PositionManager
 	stack           *stack.Stack
 	contractService *contract.Service
 
-	status              Status
+	status              lifecycle.Status
 	queuedTx            transaction // the receipt of the queued transaction
 	exitTx              transaction // the receipt of the exit transaction
 	withdrawTw          transaction // the receipt of the withdraw transaction
@@ -50,36 +51,36 @@ type DelegatorLifecycle struct {
 }
 
 func NewDelegatorLifecycle(
-	config DelegatorConfig,
-	delegations *delegations.PositionManager,
-	validations *contract.Service,
+	config Config,
+	xnodes *xnodes.PositionManager,
+	contractService *contract.Service,
 	stack *stack.Stack,
 ) *DelegatorLifecycle {
 	return &DelegatorLifecycle{
 		config:          config,
-		delegations:     delegations,
-		contractService: validations,
+		xnodes:          xnodes,
+		contractService: contractService,
 		stack:           stack,
 	}
 }
 
-var _ Lifecycle = (*DelegatorLifecycle)(nil)
+var _ lifecycle.Lifecycle = (*DelegatorLifecycle)(nil)
 
-func (d *DelegatorLifecycle) Type() Type {
-	return TypeDelegator
+func (d *DelegatorLifecycle) Type() lifecycle.Type {
+	return lifecycle.TypeDelegator
 }
 
-func (d *DelegatorLifecycle) Status() Status {
+func (d *DelegatorLifecycle) Status() lifecycle.Status {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.status
 }
 
-func (d *DelegatorLifecycle) Info() *Info {
+func (d *DelegatorLifecycle) Info() *lifecycle.Info {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	return &Info{
+	return &lifecycle.Info{
 		Type:            d.Type(),
 		ID:              d.ID(),
 		Status:          d.status,
@@ -100,20 +101,20 @@ func (d *DelegatorLifecycle) ID() string {
 
 func (d *DelegatorLifecycle) Process(block uint32) error {
 	defer func() {
-		if d.status == StatusExitSignalled || d.status == StatusWithdrawn {
-			d.delegations.UnregisterDelegator(d.config.PositionID)
+		if d.status == lifecycle.StatusExitSignalled || d.status == lifecycle.StatusWithdrawn {
+			d.xnodes.UnregisterDelegator(d.config.PositionID)
 		}
 	}()
 	switch d.status {
-	case StatusPending:
+	case lifecycle.StatusPending:
 		return d.ProcessPending(block)
-	case StatusQueued:
+	case lifecycle.StatusQueued:
 		return d.ProcessQueued(block)
-	case StatusActive:
+	case lifecycle.StatusActive:
 		return d.ProcessActive(block)
-	case StatusExitSignalled:
+	case lifecycle.StatusExitSignalled:
 		return d.ProcessExited(block)
-	case StatusWithdrawn:
+	case lifecycle.StatusWithdrawn:
 
 	}
 
@@ -137,7 +138,7 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 		return errors.New("failed to get staking period info for validation")
 	}
 	if validator.Status == validation.StatusExit || validator.ExitBlock != nil {
-		d.status = StatusWithdrawn
+		d.status = lifecycle.StatusWithdrawn
 		return nil
 	}
 
@@ -154,7 +155,7 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 	}
 	if receipt != nil {
 		if receipt.Reverted { // `validation is not queued or active`
-			d.status = StatusWithdrawn
+			d.status = lifecycle.StatusWithdrawn
 			return nil
 		}
 
@@ -168,7 +169,7 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 		d.queuedTx.receipt = receipt
 		d.startPeriod = delegation.StartPeriod
 		d.id = id
-		d.status = StatusQueued
+		d.status = lifecycle.StatusQueued
 	}
 
 	slog.Debug("delegator queued", "id", d.ID())
@@ -179,7 +180,7 @@ func (d *DelegatorLifecycle) ProcessQueued(block uint32) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.status < StatusQueued {
+	if d.status < lifecycle.StatusQueued {
 		return fmt.Errorf("cannot set activated block for delegator that is not queued: %s", d.ID())
 	}
 	if d.activatedBlock != 0 {
@@ -193,7 +194,7 @@ func (d *DelegatorLifecycle) ProcessQueued(block uint32) error {
 	slog.Debug("delegation activated", "id", d.ID(), "block", block)
 	validatorCurrent := validator.CompleteIterations - 1
 	if d.startPeriod >= validatorCurrent {
-		d.status = StatusActive
+		d.status = lifecycle.StatusActive
 		d.activatedBlock = validator.StartBlock + (d.startPeriod * d.stakingPeriodLength)
 	}
 
@@ -207,7 +208,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 	if d.exitTx.receipt != nil {
 		return nil
 	}
-	if d.status == StatusExitSignalled {
+	if d.status == lifecycle.StatusExitSignalled {
 		slog.Warn("delegator already exit signalled", "id", d.ID())
 		return nil
 	}
@@ -229,7 +230,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32) error {
 		return err
 	}
 	if receipt != nil {
-		d.status = StatusExitSignalled
+		d.status = lifecycle.StatusExitSignalled
 		d.exitTx.receipt = receipt
 	}
 
@@ -243,7 +244,7 @@ func (d *DelegatorLifecycle) ProcessExited(block uint32) error {
 	if d.withdrawTw.receipt != nil {
 		return nil
 	}
-	if d.exitTx.receipt == nil || d.status != StatusExitSignalled {
+	if d.exitTx.receipt == nil || d.status != lifecycle.StatusExitSignalled {
 		return fmt.Errorf("cannot withdraw delegator that has not signalled exit: %s", d.ID())
 	}
 	minWithdrawBlock := d.config.MinWithdrawBlock(d.exitTx.receipt.Meta.BlockNumber, d.stack.Config())
@@ -259,7 +260,7 @@ func (d *DelegatorLifecycle) ProcessExited(block uint32) error {
 		return err
 	}
 	if receipt != nil {
-		d.status = StatusWithdrawn
+		d.status = lifecycle.StatusWithdrawn
 		d.withdrawTw.receipt = receipt
 	}
 

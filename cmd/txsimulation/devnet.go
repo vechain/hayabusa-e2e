@@ -24,6 +24,8 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/xnodes"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	utils2 "github.com/vechain/hayabusa-e2e/utils"
 	protocolbuiltin "github.com/vechain/thor/v2/builtin"
@@ -68,23 +70,24 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	stack := stack.NewStack(ctx, staker, config)
 	contractService := contract.NewState(stack)
-	delegations := delegations.NewManager(
+	delegations := xnodes.NewManager(
 		config.MaxBlockProposers,
-		delegations.DistributionTypeEven,
-		delegations.DevnetPositions(config.MaxBlockProposers),
+		xnodes.DistributionTypeEven,
+		xnodes.DevnetPositions(config.MaxBlockProposers),
 	)
 	generator := &devnetGenerator{
-		config:      config,
-		stargate:    stargate,
-		validators:  keys.RotatingValidators,
-		delegations: delegations,
+		stargate:        stargate,
+		validators:      keys.RotatingValidators,
+		contractService: contractService,
+		delegations:     delegations,
+		stack:           stack,
 	}
 	engine := lifecycle.NewEngine(stack, contractService, delegations, generator)
 
 	// initial seeding of authority accounts
 	authorityConfigs := createAuthorityConfigs(keys, config)
 	for _, cfg := range authorityConfigs {
-		engine.AddLifecycle(lifecycle.NewValidatorLifecycle(cfg, contractService, delegations, stack, config.MinStakingPeriod))
+		engine.AddLifecycle(validators.NewValidatorLifecycle(cfg, contractService, delegations, stack, config.MinStakingPeriod))
 	}
 	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
 		slog.Error("failed to flush initial authority validators", "error", err)
@@ -110,7 +113,7 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 
 	return engine, func() {
-		// cleanup current delegations for future runs, wait for a while to let pending txs be mined
+		// cleanup current xnodes for future runs, wait for a while to let pending txs be mined
 		delay := 30 * time.Second
 		slog.Info("🧹 running final cleanup...", "delay", delay)
 		time.Sleep(delay)
@@ -328,21 +331,22 @@ func parseStorageValue(storageValue thor.Bytes32) (uint32, error) {
 
 // Devnet generator with realistic synthetic activity
 type devnetGenerator struct {
-	config         *hayabusa.Config
-	stargate       *bind.PrivateKeySigner
-	validators     []*bind.PrivateKeySigner
-	validatorIndex int
-	delegations    *delegations.PositionManager
+	stargate        *bind.PrivateKeySigner
+	validators      []*bind.PrivateKeySigner
+	contractService *contract.Service
+	validatorIndex  int
+	delegations     *xnodes.PositionManager
+	stack           *stack.Stack
 }
 
-func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.ValidatorConfig, bool) {
+func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.Lifecycle, bool) {
 	// Create validators with different staking strategies
 	stakingStrategy := utils.RandomBetween(1, 4)
 	var stakingPeriods uint32
 	var queueDelay lifecycle.Delay
 
 	if g.validatorIndex >= len(g.validators) {
-		return lifecycle.ValidatorConfig{}, false
+		return nil, false
 	}
 	acc := &hayabusa.NodePair{
 		Node:     g.validators[g.validatorIndex],
@@ -365,7 +369,7 @@ func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.Validato
 		queueDelay = lifecycle.Delay{Blocks: 0, Epochs: uint32(utils.RandomBetween(1, 5))}
 	}
 
-	return lifecycle.ValidatorConfig{
+	config := validators.Config{
 		Config: lifecycle.Config{
 			QueueDelay:     queueDelay,
 			StartBlock:     startBlock,
@@ -374,13 +378,15 @@ func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.Validato
 		},
 		Account:             acc,
 		StakeChangeInterval: uint32(utils.RandomBetween(10, 30)),
-	}, true
+	}
+
+	return validators.NewValidatorLifecycle(config, g.contractService, g.delegations, g.stack, g.stack.RandomStakingPeriod()), true
 }
 
-func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.DelegatorConfig, bool) {
+func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.Lifecycle, bool) {
 	id, pos, ok := g.delegations.NewPosition()
 	if !ok {
-		return lifecycle.DelegatorConfig{}, false
+		return nil, false
 	}
 	// Create delegators with different strategies
 	delegationStrategy := utils.RandomBetween(1, 3)
@@ -403,7 +409,7 @@ func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.Delegato
 		Epochs: uint32(utils.RandomBetween(1, 3)),
 	}
 
-	return lifecycle.DelegatorConfig{
+	config := delegations.Config{
 		Config: lifecycle.Config{
 			QueueDelay:     queueDelay,
 			StartBlock:     startBlock,
@@ -414,7 +420,8 @@ func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.Delegato
 		ValidationID: pos.Validator,
 		Position:     pos.Position,
 		PositionID:   id,
-	}, true
+	}
+	return delegations.NewDelegatorLifecycle(config, g.delegations, g.contractService, g.stack), true
 }
 
 type DevnetKeys struct {
@@ -485,10 +492,10 @@ func loadDevnetKeys(dir string) (*DevnetKeys, error) {
 	}, nil
 }
 
-func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []lifecycle.ValidatorConfig {
-	configs := make([]lifecycle.ValidatorConfig, len(keys.Authorities))
+func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []validators.Config {
+	configs := make([]validators.Config, len(keys.Authorities))
 	for i, key := range keys.Authorities {
-		cfg := lifecycle.ValidatorConfig{
+		cfg := validators.Config{
 			Config: lifecycle.Config{
 				WithdrawDelay: lifecycle.Delay{
 					Blocks: config.CooldownPeriod,

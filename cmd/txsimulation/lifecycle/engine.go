@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/contract"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/xnodes"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -18,14 +18,14 @@ import (
 )
 
 type Generator interface {
-	CreateValidator(startBlock uint32) (ValidatorConfig, bool)
-	CreateDelegator(startBlock uint32) (DelegatorConfig, bool)
+	CreateValidator(startBlock uint32) (Lifecycle, bool)
+	CreateDelegator(startBlock uint32) (Lifecycle, bool)
 }
 
 type Engine struct {
 	stack           *stack.Stack
 	contractService *contract.Service
-	delegations     *delegations.PositionManager
+	delegations     *xnodes.PositionManager
 	lifecycles      map[thor.Bytes32]Lifecycle
 	workerPool      *WorkerPool
 	generator       Generator
@@ -35,7 +35,7 @@ type Engine struct {
 func NewEngine(
 	stack *stack.Stack,
 	contractService *contract.Service,
-	delegations *delegations.PositionManager,
+	delegations *xnodes.PositionManager,
 	generator Generator,
 ) *Engine {
 	pool := NewWorkerPool(10)
@@ -183,8 +183,7 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 			slog.Info("no more validator accounts available")
 			return
 		}
-		cycle := NewValidatorLifecycle(lifecycle, e.contractService, e.delegations, e.stack, e.stack.RandomStakingPeriod())
-		e.lifecycles[datagen.RandomHash()] = cycle
+		e.lifecycles[datagen.RandomHash()] = lifecycle
 	}
 }
 
@@ -202,12 +201,11 @@ func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
 	slog.Info("🌚 generating delegator cycles", "amount", amount, "available", available, "totalSupply", totalSupply)
 
 	for i := 0; i < amount; i++ {
-		config, ok := e.generator.CreateDelegator(block.Number)
+		lifecycle, ok := e.generator.CreateDelegator(block.Number)
 		if !ok {
 			slog.Info("no more delegator accounts available")
 			return
 		}
-		cycle := NewDelegatorLifecycle(config, e.delegations, e.contractService, e.stack)
-		e.lifecycles[datagen.RandomHash()] = cycle
+		e.lifecycles[datagen.RandomHash()] = lifecycle
 	}
 }
