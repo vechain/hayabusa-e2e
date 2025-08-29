@@ -11,6 +11,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
@@ -100,6 +101,43 @@ func (s *Stack) RandomStakingPeriod() uint32 {
 	}
 }
 
+func (s *Stack) SendClauses(clauses []*tx.Clause, signer bind.Signer) (*tx.Transaction, error) {
+	chainTag, err := s.Client().ChainTag()
+	if err != nil {
+		slog.Error("failed to fetch chain tag", "error", err)
+		return nil, err
+	}
+
+	options := s.makeOptions()
+	builder := tx.NewBuilder(tx.TypeDynamicFee)
+
+	for _, clause := range clauses {
+		builder.Clause(clause)
+	}
+
+	builder.
+		MaxFeePerGas(options.MaxFeePerGas).
+		MaxPriorityFeePerGas(options.MaxPriorityFeePerGas).
+		Gas(10_000_000).
+		ChainTag(chainTag).
+		Expiration(*s.DefaultExpiration()).
+		BlockRef(*options.BlockRef).
+		Nonce(datagen.RandUint64()).
+		Build()
+
+	trx := builder.Build()
+	trx, err = signer.SignTransaction(trx)
+	if err != nil {
+		slog.Error("failed to sign transaction", "error", err)
+		return nil, err
+	}
+	if _, err := s.Client().SendTransaction(trx); err != nil {
+		slog.Error("failed to send transaction", "error", err)
+		return nil, err
+	}
+	return trx, nil
+}
+
 func (s *Stack) SendTransaction(method *bind.MethodBuilder, signer bind.Signer) (*tx.Transaction, error) {
 	sender, err := s.makeTx(method, signer)
 	if err != nil {
@@ -139,6 +177,11 @@ func (s *Stack) DefaultExpiration() *uint32 {
 }
 
 func (s *Stack) makeTx(method *bind.MethodBuilder, signer bind.Signer) (*bind.SendBuilder, error) {
+	options := s.makeOptions()
+	return method.Send().WithOptions(options).WithSigner(signer), nil
+}
+
+func (s *Stack) makeOptions() *bind.TxOptions {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	best := s.best.Load()
@@ -147,7 +190,7 @@ func (s *Stack) makeTx(method *bind.MethodBuilder, signer bind.Signer) (*bind.Se
 		best, err = s.Client().Block("best")
 		if err != nil {
 			slog.Error("stack: failed to fetch best block", "error", err)
-			return nil, err
+			return &bind.TxOptions{}
 		}
 		s.best.Store(best)
 	}
@@ -160,21 +203,18 @@ func (s *Stack) makeTx(method *bind.MethodBuilder, signer bind.Signer) (*bind.Se
 		priorityFee.Mul(priorityFee, big.NewInt(2))
 	}
 
-	if best.Number > 3 {
-		s.sentTxs[best.Number+1]++ // +1 should be mined at the next block, not best
-	}
-
 	gas := uint64(1_000_000)
 	baseFee := (*big.Int)(best.BaseFeePerGas)
 	if baseFee == nil {
 		baseFee = big.NewInt(thor.InitialBaseFee)
 	}
-	options := &bind.TxOptions{
+	ref := tx.NewBlockRef(best.Number)
+
+	return &bind.TxOptions{
 		MaxFeePerGas:         big.NewInt(0).Mul(baseFee, big.NewInt(2)),
 		MaxPriorityFeePerGas: priorityFee,
 		Gas:                  &gas,
 		Expiration:           s.DefaultExpiration(),
+		BlockRef:             &ref,
 	}
-
-	return method.Send().WithOptions(options).WithSigner(signer), nil
 }

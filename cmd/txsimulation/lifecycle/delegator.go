@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/contract"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -32,10 +32,10 @@ func (t *transaction) reset() {
 }
 
 type DelegatorLifecycle struct {
-	config      DelegatorConfig
-	delegations *delegations.PositionManager
-	stack       *stack.Stack
-	validations *validators.Service
+	config          DelegatorConfig
+	delegations     *delegations.PositionManager
+	stack           *stack.Stack
+	contractService *contract.Service
 
 	status              Status
 	queuedTx            transaction // the receipt of the queued transaction
@@ -52,14 +52,14 @@ type DelegatorLifecycle struct {
 func NewDelegatorLifecycle(
 	config DelegatorConfig,
 	delegations *delegations.PositionManager,
-	validations *validators.Service,
+	validations *contract.Service,
 	stack *stack.Stack,
 ) *DelegatorLifecycle {
 	return &DelegatorLifecycle{
-		config:      config,
-		delegations: delegations,
-		validations: validations,
-		stack:       stack,
+		config:          config,
+		delegations:     delegations,
+		contractService: validations,
+		stack:           stack,
 	}
 }
 
@@ -98,14 +98,6 @@ func (d *DelegatorLifecycle) ID() string {
 	return d.id.String()
 }
 
-func (d *DelegatorLifecycle) ForceExit() {
-	if d.status == StatusActive {
-		d.ProcessActive(0, true)
-	} else {
-		d.ProcessExited(0, true)
-	}
-}
-
 func (d *DelegatorLifecycle) Process(block uint32) error {
 	defer func() {
 		if d.status == StatusExitSignalled || d.status == StatusWithdrawn {
@@ -139,7 +131,7 @@ func (d *DelegatorLifecycle) ProcessPending(block uint32) error {
 		return nil
 	}
 
-	validator, ok := d.validations.LookupAddress(d.config.ValidationID)
+	validator, ok := d.contractService.LookupAddress(d.config.ValidationID)
 	if !ok || validator == nil {
 		slog.Error("failed to get staking period info for validation", "id", d.config.ValidationID)
 		return errors.New("failed to get staking period info for validation")
@@ -193,7 +185,7 @@ func (d *DelegatorLifecycle) ProcessQueued(block uint32) error {
 	if d.activatedBlock != 0 {
 		return nil // already activated
 	}
-	validator, ok := d.validations.LookupAddress(d.config.ValidationID)
+	validator, ok := d.contractService.LookupAddress(d.config.ValidationID)
 	if !ok {
 		slog.Error("failed to get validator for delegation", "id", d.ID())
 		return fmt.Errorf("failed to get validator for delegation %s", d.ID())
@@ -219,7 +211,7 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32, force bool) error {
 		slog.Warn("delegator already exit signalled", "id", d.ID())
 		return nil
 	}
-	validator, ok := d.validations.LookupAddress(d.config.ValidationID)
+	validator, ok := d.contractService.LookupAddress(d.config.ValidationID)
 	if !ok {
 		slog.Error("failed to get validator for delegation", "id", d.ID())
 		return fmt.Errorf("failed to get validator for delegation %s", d.ID())
@@ -228,7 +220,11 @@ func (d *DelegatorLifecycle) ProcessActive(block uint32, force bool) error {
 	if !force && block < lastActiveBlock && validator.Status < validation.StatusExit {
 		return nil
 	}
-	slog.Debug("signalling exit for delegator", "id", d.ID())
+	if force {
+		slog.Info("force exiting delegator", "id", d.ID())
+	} else {
+		slog.Debug("signalling exit for delegator", "id", d.ID())
+	}
 
 	sender := d.stack.Staker().SignalDelegationExit(d.id)
 	receipt, err := d.sendOrPoll(sender, &d.exitTx, "delegation has ended", "delegation has not started yet")

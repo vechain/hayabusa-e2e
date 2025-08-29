@@ -9,11 +9,11 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/contract"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/networkhub/thorbuilder"
@@ -91,7 +91,7 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 		positions = delegations.MainnetPositions
 	}
 	delegations := delegations.NewManager(config.MaxBlockProposers, delegations.DistributionTypeEven, positions)
-	validators := validators.NewState(stack)
+	validators := contract.NewState(stack)
 	generator := &networkHubGenerator{config: config, delegations: delegations, stargate: hayabusa.Stargate, validators: extraValidators}
 	engine := lifecycle.NewEngine(stack, validators, delegations, generator)
 
