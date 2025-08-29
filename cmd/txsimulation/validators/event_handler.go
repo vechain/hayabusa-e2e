@@ -9,20 +9,20 @@ import (
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
-// ValidatorEventHandler - handles event filtering and lookups
-type ValidatorEventHandler struct {
+// EventHandler - handles event filtering and lookups
+type EventHandler struct {
 	stack       *stack.Stack
 	validatorID thor.Address
 }
 
-func NewValidatorEventHandler(stack *stack.Stack, validatorID thor.Address) *ValidatorEventHandler {
-	return &ValidatorEventHandler{
+func NewEventHandler(stack *stack.Stack, validatorID thor.Address) *EventHandler {
+	return &EventHandler{
 		stack:       stack,
 		validatorID: validatorID,
 	}
 }
 
-func (eh *ValidatorEventHandler) FindQueuedReceipt() (*api.Receipt, error) {
+func (eh *EventHandler) FindQueuedReceipt() (*api.Receipt, error) {
 	offset := uint64(0)
 	limit := uint64(1000)
 
@@ -47,7 +47,7 @@ func (eh *ValidatorEventHandler) FindQueuedReceipt() (*api.Receipt, error) {
 	return nil, nil
 }
 
-func (eh *ValidatorEventHandler) FindExitReceipt() (*api.Receipt, error) {
+func (eh *EventHandler) FindExitReceipt() (*api.Receipt, error) {
 	offset := uint64(0)
 	limit := uint64(1000)
 
@@ -76,6 +76,6 @@ func (eh *ValidatorEventHandler) FindExitReceipt() (*api.Receipt, error) {
 	return nil, nil
 }
 
-func (eh *ValidatorEventHandler) CheckValidatorStatus() (*builtin.Validation, error) {
+func (eh *EventHandler) CheckValidatorStatus() (*builtin.Validation, error) {
 	return eh.stack.Staker().GetValidation(eh.validatorID)
 }

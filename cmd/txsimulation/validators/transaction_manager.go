@@ -72,11 +72,11 @@ func (tm *TransactionManager) SignalExit(validatorID thor.Address) error {
 
 	method := tm.stack.Staker().SignalExit(validatorID)
 	receipt, err := tm.stack.SendTransactionAndWait(method, tm.account.Endorser)
+	tm.exitReceipt = receipt
 	if err != nil {
 		return err
 	}
 
-	tm.exitReceipt = receipt
 	return nil
 }
 

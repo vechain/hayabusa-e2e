@@ -47,10 +47,10 @@ type ValidatorLifecycle struct {
 	id     thor.Address
 
 	// Composed services - each handles one concern
-	stateManager    *ValidatorStateManager
+	stateManager    *StateManager
 	txManager       *TransactionManager
 	stakeManager    *StakeManager
-	eventHandler    *ValidatorEventHandler
+	eventHandler    *EventHandler
 	contractService *contract.Service
 	xnodes          *xnodes.PositionManager
 
@@ -71,10 +71,10 @@ func NewValidatorLifecycle(
 		id:              id,
 		contractService: contractService,
 		xnodes:          xnodes,
-		stateManager:    NewValidatorStateManager(id, stack),
+		stateManager:    NewStateManager(id, stack),
 		txManager:       NewTransactionManager(stack, config.Account),
 		stakeManager:    NewStakeManager(stack, id, config.StakeChangeInterval, stakingPeriodLength),
-		eventHandler:    NewValidatorEventHandler(stack, id),
+		eventHandler:    NewEventHandler(stack, id),
 	}
 }
 
@@ -228,7 +228,7 @@ func (v *ValidatorLifecycle) processActive(block uint32) error {
 			"activeValidators", activeValidators,
 			"minValidators", minValidators,
 			"validator", v.id)
-		return v.stakeManager.ChangeStake(block, v.config.Account)
+		return nil
 	}
 
 	if block < v.config.MinExitBlock(v.stateManager.ActivatedBlock(), v.stakeManager.StakingPeriodLength()) {

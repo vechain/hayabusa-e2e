@@ -10,8 +10,8 @@ import (
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
-// ValidatorStateManager - handles state transitions only
-type ValidatorStateManager struct {
+// StateManager - handles state transitions only
+type StateManager struct {
 	validatorID    thor.Address
 	status         lifecycle.Status
 	activatedBlock uint32
@@ -19,23 +19,23 @@ type ValidatorStateManager struct {
 	stack          *stack.Stack
 }
 
-func NewValidatorStateManager(validatorID thor.Address, stack *stack.Stack) *ValidatorStateManager {
-	return &ValidatorStateManager{
+func NewStateManager(validatorID thor.Address, stack *stack.Stack) *StateManager {
+	return &StateManager{
 		validatorID: validatorID,
 		status:      lifecycle.StatusPending,
 		stack:       stack,
 	}
 }
 
-func (sm *ValidatorStateManager) Status() lifecycle.Status {
+func (sm *StateManager) Status() lifecycle.Status {
 	return sm.status
 }
 
-func (sm *ValidatorStateManager) ActivatedBlock() uint32 {
+func (sm *StateManager) ActivatedBlock() uint32 {
 	return sm.activatedBlock
 }
 
-func (sm *ValidatorStateManager) RefreshState(eventHandler *ValidatorEventHandler, txManager *TransactionManager) error {
+func (sm *StateManager) RefreshState(eventHandler *EventHandler, txManager *TransactionManager) error {
 	if !sm.firstProcessed {
 		sm.firstProcessed = true
 		slog.Info("starting validator lifecycle", "account", sm.validatorID)
@@ -44,14 +44,14 @@ func (sm *ValidatorStateManager) RefreshState(eventHandler *ValidatorEventHandle
 	return nil
 }
 
-func (sm *ValidatorStateManager) TransitionTo(newStatus lifecycle.Status, activatedBlock uint32) {
+func (sm *StateManager) TransitionTo(newStatus lifecycle.Status, activatedBlock uint32) {
 	sm.status = newStatus
 	if activatedBlock > 0 {
 		sm.activatedBlock = activatedBlock
 	}
 }
 
-func (sm *ValidatorStateManager) performInitialStateCheck(eventHandler *ValidatorEventHandler, txManager *TransactionManager) error {
+func (sm *StateManager) performInitialStateCheck(eventHandler *EventHandler, txManager *TransactionManager) error {
 	existing, err := eventHandler.CheckValidatorStatus()
 	if err != nil {
 		slog.Error("failed to check existing validator", "error", err, "account", sm.validatorID)
@@ -84,7 +84,7 @@ func (sm *ValidatorStateManager) performInitialStateCheck(eventHandler *Validato
 	return nil
 }
 
-func (sm *ValidatorStateManager) HandleExistingValidator(eventHandler *ValidatorEventHandler, txManager *TransactionManager) error {
+func (sm *StateManager) HandleExistingValidator(eventHandler *EventHandler, txManager *TransactionManager) error {
 	periodDetails, err := sm.stack.Staker().GetValidationPeriodDetails(sm.validatorID)
 	if err != nil {
 		slog.Warn("failed to get staking period info for existing validator", "id", sm.validatorID)
@@ -105,7 +105,7 @@ func (sm *ValidatorStateManager) HandleExistingValidator(eventHandler *Validator
 	return nil
 }
 
-func (sm *ValidatorStateManager) CheckAlreadyExited(eventHandler *ValidatorEventHandler) error {
+func (sm *StateManager) CheckAlreadyExited(eventHandler *EventHandler) error {
 	validator, err := eventHandler.CheckValidatorStatus()
 	if err != nil {
 		slog.Error("failed to get validator info", "error", err, "account", sm.validatorID)
