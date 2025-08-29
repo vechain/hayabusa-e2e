@@ -18,11 +18,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/contract"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/devnetcleanup"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/lifecycle"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	utils2 "github.com/vechain/hayabusa-e2e/utils"
 	protocolbuiltin "github.com/vechain/thor/v2/builtin"
@@ -66,7 +67,7 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 	slog.Info("✅  stargate set to", "address", stargate.Address())
 
 	stack := stack.NewStack(ctx, staker, config)
-	validationsState := validators.NewState(stack)
+	contractService := contract.NewState(stack)
 	delegations := delegations.NewManager(
 		config.MaxBlockProposers,
 		delegations.DistributionTypeEven,
@@ -78,12 +79,12 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 		validators:  keys.RotatingValidators,
 		delegations: delegations,
 	}
-	engine := lifecycle.NewEngine(stack, validationsState, delegations, generator)
+	engine := lifecycle.NewEngine(stack, contractService, delegations, generator)
 
 	// initial seeding of authority accounts
 	authorityConfigs := createAuthorityConfigs(keys, config)
 	for _, cfg := range authorityConfigs {
-		engine.AddLifecycle(lifecycle.NewValidatorLifecycle(cfg, validationsState, delegations, stack, config.MinStakingPeriod))
+		engine.AddLifecycle(lifecycle.NewValidatorLifecycle(cfg, contractService, delegations, stack, config.MinStakingPeriod))
 	}
 	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
 		slog.Error("failed to flush initial authority validators", "error", err)
@@ -102,11 +103,18 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 	slog.Info("✅  dPoS is now active, starting devnet simulation")
 
-	stop := func() {
-		slog.Info("stopping Hayabusa devnet simulation")
+	cleaner := devnetcleanup.New(stack, contractService, stargate)
+	// cleanup old delegation positions from previous runs
+	if err := cleaner.Run(); err != nil {
+		slog.Error("failed to run initial cleanup", "error", err)
 	}
 
-	return engine, stop
+	return engine, func() {
+		// cleanup current delegations for future runs
+		if err := cleaner.Run(); err != nil {
+			slog.Error("failed to run final cleanup", "error", err)
+		}
+	}
 }
 
 // loadHayabusaGenesis loads Hayabusa genesis configuration
