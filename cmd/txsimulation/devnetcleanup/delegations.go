@@ -40,6 +40,7 @@ func (c *Cleanup) Run() error {
 	}
 
 	currentID := big.NewInt(1)
+
 	lastID := events[0].DelegationID
 	searchLimit := big.NewInt(999)
 	if c.previousCleaned != nil {
@@ -99,7 +100,6 @@ func (c *Cleanup) exitDelegations(delegations []*big.Int, method exitMethod) {
 		slog.Info("processing cleanup", "first", ids[0], "last", ids[len(ids)-1], "count", len(ids))
 
 		for _, id := range ids {
-			slog.Info("exiting delegation", "id", id)
 			_, err := c.stack.SendTransaction(method(id), c.stargate)
 			if err != nil {
 				slog.Error("failed to send exit delegation transaction", "id", id, "error", err)
