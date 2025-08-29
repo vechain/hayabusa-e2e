@@ -62,13 +62,16 @@ contract GetValidators {
             if (stake == 0) {
                 continue;
             }
-            (uint32 startPeriod, ) = STAKER.getDelegationPeriodDetails(i);
+            (uint32 startPeriod, uint32 endPeriod) = STAKER.getDelegationPeriodDetails(i);
             (,,, uint32 completedPeriods) = STAKER.getValidationPeriodDetails(validator);
 
             if (isLocked) {
                 tmpLocked[lockedCount] = i;
                 lockedCount++;
-            } else if (startPeriod < completedPeriods + 1) {
+            } else if (
+                startPeriod > completedPeriods + 1 ||
+                endPeriod <= completedPeriods
+            ) {
                 tmpWithdrawable[withdrawableCount] = i;
                 withdrawableCount++;
             }

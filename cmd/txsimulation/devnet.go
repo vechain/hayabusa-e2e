@@ -110,7 +110,10 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 	}
 
 	return engine, func() {
-		// cleanup current delegations for future runs
+		// cleanup current delegations for future runs, wait for a while to let pending txs be mined
+		delay := 30 * time.Second
+		slog.Info("🧹 running final cleanup...", "delay", delay)
+		time.Sleep(delay)
 		if err := cleaner.Run(); err != nil {
 			slog.Error("failed to run final cleanup", "error", err)
 		}

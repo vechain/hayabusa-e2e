@@ -13,9 +13,10 @@ import (
 )
 
 type Cleanup struct {
-	stack    *stack.Stack
-	contract *contract.Service
-	stargate *bind.PrivateKeySigner
+	stack           *stack.Stack
+	contract        *contract.Service
+	stargate        *bind.PrivateKeySigner
+	previousCleaned *big.Int
 }
 
 func New(stack *stack.Stack, contract *contract.Service, stargate *bind.PrivateKeySigner) *Cleanup {
@@ -41,6 +42,9 @@ func (c *Cleanup) Run() error {
 	currentID := big.NewInt(1)
 	lastID := events[0].DelegationID
 	searchLimit := big.NewInt(999)
+	if c.previousCleaned != nil {
+		currentID = c.previousCleaned.Add(c.previousCleaned, big.NewInt(1))
+	}
 
 	var locked []*big.Int
 	var withdrawable []*big.Int
@@ -54,6 +58,7 @@ func (c *Cleanup) Run() error {
 		currentLocked, currentWithdrawable, err := c.contract.FetchLockedDelegators(currentID, end)
 		if err != nil {
 			slog.Error("failed to fetch delegations", "err", err)
+			return err
 		}
 		locked = append(locked, currentLocked...)
 		withdrawable = append(withdrawable, currentWithdrawable...)
@@ -70,6 +75,7 @@ func (c *Cleanup) Run() error {
 		c.exitDelegations(withdrawable, c.stack.Staker().WithdrawDelegation)
 	}
 
+	c.previousCleaned = lastID
 	slog.Info("cleanup completed")
 	return nil
 }

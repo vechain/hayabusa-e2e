@@ -164,6 +164,16 @@ func (v *ValidatorLifecycle) initialCheck() error {
 			return err
 		}
 	}
+	if existing.Status == builtin.StakerStatusActive {
+		periodDetails, err := v.stack.Staker().GetValidationPeriodDetails(v.Account.Node.Address())
+		if err != nil {
+			slog.Error("failed to get staking period info for existing validator", "error", err, "account", v.Account.Node.Address())
+			return err
+		}
+		slog.Info("validator is already active", "account", v.Account.Node.Address(), "startBlock", periodDetails.StartBlock)
+		v.activatedBlock = periodDetails.StartBlock
+		v.status = StatusActive
+	}
 
 	if v.queuedReceipt != nil {
 		slog.Info("checking if validator is active", "account", v.Account.Node.Address())

@@ -204,7 +204,7 @@ func (s *Service) FetchAll(blockID thor.Bytes32) (map[thor.Address]*validation.V
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.unpackValidators(rawResult[1])
+	result, err := s.unpackValidators(rawResult)
 	if err != nil {
 		return nil, err
 	}
@@ -261,13 +261,13 @@ func (s *Service) FetchLockedDelegators(firstID, lastID *big.Int) ([]*big.Int, [
 	return s.unpackLockedDelegators(res)
 }
 
-func (s *Service) fetchStakerInfo(blockID thor.Bytes32) ([]*api.CallResult, error) {
+func (s *Service) fetchStakerInfo(blockID thor.Bytes32) (*api.CallResult, error) {
 	calldata := getValidatorsABI.Id()
 	res, err := s.callOnSimulatedContract(calldata, blockID.String())
 	if err != nil {
 		return nil, err
 	}
-	return []*api.CallResult{res}, nil
+	return res, nil
 }
 
 func weiToVET(wei *big.Int) uint64 {
