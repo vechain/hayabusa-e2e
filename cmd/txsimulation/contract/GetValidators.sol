@@ -39,6 +39,57 @@ contract GetValidators {
         return ENERGY.totalBurned();
     }
 
+    function getLockedDelegators(uint256 firstID, uint256 maxID) public view returns (
+        uint256[] memory locked,
+        uint256[] memory withdrawable
+    ) {
+        // Temporary buffers (max 1000)
+        uint256[1000] memory tmpLocked;
+        uint256[1000] memory tmpWithdrawable;
+        uint256 lockedCount = 0;
+        uint256 withdrawableCount = 0;
+
+        uint256 end = maxID;
+        if (end > firstID + 999) {
+            end = firstID + 999;
+        }
+
+        for (uint256 i = firstID; i <= end; i++) {
+            (address validator,uint256 stake,, bool isLocked) = STAKER.getDelegation(i);
+            if (validator == address(0)) {
+                break; // stop when no more delegations
+            }
+            if (stake == 0) {
+                continue;
+            }
+            (uint32 startPeriod, uint32 endPeriod) = STAKER.getDelegationPeriodDetails(i);
+            (,,, uint32 completedPeriods) = STAKER.getValidationPeriodDetails(validator);
+
+            if (isLocked) {
+                tmpLocked[lockedCount] = i;
+                lockedCount++;
+            } else if (
+                startPeriod > completedPeriods + 1 ||
+                endPeriod <= completedPeriods
+            ) {
+                tmpWithdrawable[withdrawableCount] = i;
+                withdrawableCount++;
+            }
+        }
+
+        // Copy only the used portion into the return arrays
+        locked = new uint256[](lockedCount);
+        for (uint256 j = 0; j < lockedCount; j++) {
+            locked[j] = tmpLocked[j];
+        }
+
+        withdrawable = new uint256[](withdrawableCount);
+        for (uint256 j = 0; j < withdrawableCount; j++) {
+            withdrawable[j] = tmpWithdrawable[j];
+        }
+    }
+
+
     function getValidators() public view returns (
         address[] memory,  // masters
         address[] memory, // endorsors

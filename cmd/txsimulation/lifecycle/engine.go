@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/contract"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/validators"
+	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/xnodes"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
@@ -18,35 +18,35 @@ import (
 )
 
 type Generator interface {
-	CreateValidator(startBlock uint32) (ValidatorConfig, bool)
-	CreateDelegator(startBlock uint32) (DelegatorConfig, bool)
+	CreateValidator(startBlock uint32) (Lifecycle, bool)
+	CreateDelegator(startBlock uint32) (Lifecycle, bool)
 }
 
 type Engine struct {
-	stack       *stack.Stack
-	validators  *validators.Service
-	delegations *delegations.PositionManager
-	lifecycles  map[thor.Bytes32]Lifecycle
-	workerPool  *WorkerPool
-	generator   Generator
-	mu          sync.Mutex
+	stack           *stack.Stack
+	contractService *contract.Service
+	delegations     *xnodes.PositionManager
+	lifecycles      map[thor.Bytes32]Lifecycle
+	workerPool      *WorkerPool
+	generator       Generator
+	mu              sync.Mutex
 }
 
 func NewEngine(
 	stack *stack.Stack,
-	validators *validators.Service,
-	delegations *delegations.PositionManager,
+	contractService *contract.Service,
+	delegations *xnodes.PositionManager,
 	generator Generator,
 ) *Engine {
 	pool := NewWorkerPool(10)
 	pool.Start()
 	return &Engine{
-		validators:  validators,
-		delegations: delegations,
-		lifecycles:  make(map[thor.Bytes32]Lifecycle),
-		stack:       stack,
-		generator:   generator,
-		workerPool:  pool,
+		contractService: contractService,
+		delegations:     delegations,
+		lifecycles:      make(map[thor.Bytes32]Lifecycle),
+		stack:           stack,
+		generator:       generator,
+		workerPool:      pool,
 	}
 }
 
@@ -74,7 +74,6 @@ func (e *Engine) Run() {
 				e.generateValidatorCycles(best)
 				e.generateDelegatorCycles(best)
 			}
-
 			delegationStatus := make(map[Status]int)
 			validationStatus := make(map[Status]int)
 			toRemove := make([]thor.Bytes32, 0)
@@ -184,8 +183,7 @@ func (e *Engine) generateValidatorCycles(block *api.JSONExpandedBlock) {
 			slog.Info("no more validator accounts available")
 			return
 		}
-		cycle := NewValidatorLifecycle(lifecycle, e.validators, e.delegations, e.stack, e.stack.RandomStakingPeriod())
-		e.lifecycles[datagen.RandomHash()] = cycle
+		e.lifecycles[datagen.RandomHash()] = lifecycle
 	}
 }
 
@@ -203,12 +201,11 @@ func (e *Engine) generateDelegatorCycles(block *api.JSONExpandedBlock) {
 	slog.Info("🌚 generating delegator cycles", "amount", amount, "available", available, "totalSupply", totalSupply)
 
 	for i := 0; i < amount; i++ {
-		config, ok := e.generator.CreateDelegator(block.Number)
+		lifecycle, ok := e.generator.CreateDelegator(block.Number)
 		if !ok {
 			slog.Info("no more delegator accounts available")
 			return
 		}
-		cycle := NewDelegatorLifecycle(config, e.delegations, e.validators, e.stack)
-		e.lifecycles[datagen.RandomHash()] = cycle
+		e.lifecycles[datagen.RandomHash()] = lifecycle
 	}
 }

@@ -1,11 +1,9 @@
 package lifecycle
 
 import (
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/delegations"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/thorclient/bind"
 )
 
 // Delay represents a delay in epochs and blocks before performing the next action
@@ -85,20 +83,6 @@ type Config struct {
 	StartBlock     uint32
 	StakingPeriods uint32
 	WithdrawDelay  Delay
-}
-
-type ValidatorConfig struct {
-	Config
-	Account             *hayabusa.NodePair
-	StakeChangeInterval uint32 // interval in staking periods to change stake
-}
-
-type DelegatorConfig struct {
-	Config
-	Account      bind.Signer
-	Position     *delegations.Position
-	PositionID   thor.Bytes32
-	ValidationID thor.Address
 }
 
 func (c Config) QueueBlock(config *hayabusa.Config) uint32 {

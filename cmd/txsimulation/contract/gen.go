@@ -1,4 +1,4 @@
-package validators
+package contract
 
 //go:generate mkdir -p ./compiled
 //go:generate curl https://raw.githubusercontent.com/vechain/thor/refs/heads/release/hayabusa/builtin/gen/staker.sol -o ./compiled/Staker.sol

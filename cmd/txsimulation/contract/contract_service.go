@@ -1,4 +1,4 @@
-package validators
+package contract
 
 import (
 	"bytes"
@@ -204,7 +204,7 @@ func (s *Service) FetchAll(blockID thor.Bytes32) (map[thor.Address]*validation.V
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.unpackValidators(rawResult[1])
+	result, err := s.unpackValidators(rawResult)
 	if err != nil {
 		return nil, err
 	}
@@ -212,10 +212,8 @@ func (s *Service) FetchAll(blockID thor.Bytes32) (map[thor.Address]*validation.V
 	return result, nil
 }
 
-func (s *Service) fetchStakerInfo(blockID thor.Bytes32) ([]*api.CallResult, error) {
-	getValidatorsAddress := "0x841a6556c524d47030762eb14dc4af897e605d9b"
-	to := thor.MustParseAddress(getValidatorsAddress)
-	selector := hexutil.Encode(getValidatorsABI.Id())
+func (s *Service) callOnSimulatedContract(calldata []byte, revision string) (*api.CallResult, error) {
+	to := thor.MustParseAddress("0x841a6556c524d47030762eb14dc4af897e605d9b")
 
 	res, err := s.stack.Client().InspectClauses(&api.BatchCallData{
 		Clauses: api.Clauses{
@@ -224,10 +222,11 @@ func (s *Service) fetchStakerInfo(blockID thor.Bytes32) ([]*api.CallResult, erro
 			},
 			{
 				To:   &to,
-				Data: selector,
+				Data: hexutil.Encode(calldata),
 			},
 		},
-	}, thorclient.Revision(blockID.String()))
+	}, thorclient.Revision(revision))
+
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +240,32 @@ func (s *Service) fetchStakerInfo(blockID thor.Bytes32) ([]*api.CallResult, erro
 		if r.Reverted || r.VMError != "" {
 			return nil, errors.New("staker contract call reverted or had VM error: " + r.VMError)
 		}
+	}
+
+	return res[1], nil
+}
+
+func (s *Service) FetchLockedDelegators(firstID, lastID *big.Int) ([]*big.Int, []*big.Int, error) {
+	input, err := getLockedDelegatorsABI.Inputs.Pack(firstID, lastID)
+	if err != nil {
+		return nil, nil, err
+	}
+	selector := hexutil.Encode(getLockedDelegatorsABI.Id())
+	data := append(common.FromHex(selector), input...)
+
+	res, err := s.callOnSimulatedContract(data, "best")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return s.unpackLockedDelegators(res)
+}
+
+func (s *Service) fetchStakerInfo(blockID thor.Bytes32) (*api.CallResult, error) {
+	calldata := getValidatorsABI.Id()
+	res, err := s.callOnSimulatedContract(calldata, blockID.String())
+	if err != nil {
+		return nil, err
 	}
 	return res, nil
 }
@@ -300,7 +325,24 @@ func (s *Service) unpackValidators(result *api.CallResult) (map[thor.Address]*va
 	return validators, nil
 }
 
+func (s *Service) unpackLockedDelegators(result *api.CallResult) ([]*big.Int, []*big.Int, error) {
+	bytes, err := hexutil.Decode(result.Data)
+	if err != nil {
+		return nil, nil, err
+	}
+	out, err := getLockedDelegatorsABI.Outputs.UnpackValues(bytes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	locked := out[0].([]*big.Int)
+	withdrawable := out[1].([]*big.Int)
+
+	return locked, withdrawable, nil
+}
+
 var getValidatorsABI abi.Method
+var getLockedDelegatorsABI abi.Method
 var once sync.Once
 
 func (s *Service) initABI() error {
@@ -317,6 +359,12 @@ func (s *Service) initABI() error {
 		if !ok {
 			err = fmt.Errorf("getValidatorsABI method not found in staker contract ABI")
 			slog.Error("Failed to find getValidatorsABI method", "error", err)
+			return
+		}
+		getLockedDelegatorsABI, ok = helperABI.Methods["getLockedDelegators"]
+		if !ok {
+			err = fmt.Errorf("getLockedDelegatorsABI method not found in staker contract ABI")
+			slog.Error("Failed to find getLockedDelegatorsABI method", "error", err)
 			return
 		}
 	})
