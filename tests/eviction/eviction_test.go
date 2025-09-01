@@ -9,6 +9,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/utils/common"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
@@ -91,7 +92,7 @@ func TestHayabusaEviction(t *testing.T) {
 
 	offlineBlock := config.ForkBlock + config.TransitionPeriod
 	exitBlock := offlineBlock + (config.EpochLength + config.ValidatorEvictionThreshold) + 1
-	ticker := utils.NewTicker(staker.Raw().Client())
+	ticker := common.NewTicker(staker.Raw().Client())
 	t.Log("✅ waiting for block", exitBlock)
 	require.NoError(t, ticker.WaitForBlock(exitBlock))
 	t.Log("✅ waiting done")
@@ -105,7 +106,7 @@ func TestHayabusaEviction(t *testing.T) {
 }
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
-	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
+	assert.NoError(t, common.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.GetValidation(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)

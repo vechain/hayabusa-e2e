@@ -18,7 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
-	"github.com/vechain/hayabusa-e2e/utils"
+	netUtils "github.com/vechain/networkhub/utils/common"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/builtin/staker/validation"
 	"github.com/vechain/thor/v2/thor"
@@ -72,7 +72,7 @@ func (s *Service) GetActiveCount() uint32 {
 }
 
 func (s *Service) poll() {
-	ticker := utils.NewTicker(s.stack.Client())
+	ticker := netUtils.NewTicker(s.stack.Client())
 	for {
 		select {
 		case <-s.stack.Context().Done():
@@ -84,9 +84,9 @@ func (s *Service) poll() {
 				time.Sleep(5 * time.Second) // Retry after a short delay
 				continue
 			}
-			validators, err := s.FetchAll(block.ID)
+			validators, err := s.FetchAll(block.(*api.JSONExpandedBlock).ID)
 			if err != nil {
-				slog.Error("Failed to fetch validatorInfo", "error", err, "block", block.ID)
+				slog.Error("Failed to fetch validatorInfo", "error", err, "block", block.(*api.JSONExpandedBlock).ID)
 				continue
 			}
 

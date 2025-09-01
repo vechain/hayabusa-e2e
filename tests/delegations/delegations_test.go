@@ -12,6 +12,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/utils/common"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -42,7 +43,7 @@ func Test_StargateRewards(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	ticker := utils.NewTicker(staker.Raw().Client())
+	ticker := common.NewTicker(staker.Raw().Client())
 	best, err := staker.Raw().Client().Block("best")
 	require.NoError(t, err)
 	require.NoError(t, ticker.WaitForBlock(best.Number+config.MinStakingPeriod))
@@ -83,7 +84,7 @@ func Test_StargateRewards(t *testing.T) {
 func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	t.Parallel()
 	staker, config, validationIDs := newDelegationSetup(t)
-	ticker := utils.NewTicker(staker.Raw().Client())
+	ticker := common.NewTicker(staker.Raw().Client())
 
 	multiplier := uint8(100)
 	receipt := testutil.Send(t, hayabusa.Stargate,
@@ -128,7 +129,7 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 
 func Test_Delegations(t *testing.T) {
 	staker, config, validationIDs := newDelegationSetup(t)
-	ticker := utils.NewTicker(staker.Raw().Client())
+	ticker := common.NewTicker(staker.Raw().Client())
 
 	t.Run("Delegate update auto renew after first period", func(t *testing.T) {
 		t.Parallel()

@@ -11,6 +11,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/utils/common"
 	native "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -141,7 +142,7 @@ func runEnergyTest(t *testing.T) error {
 
 	firstPoSBlock := poaBlock + config.TransitionPeriod
 	block = config.ForkBlock + config.TransitionPeriod + config.MinStakingPeriod + 10 // wait for 1 staking period + 10 blocks (to handle forks)
-	require.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(block))
+	require.NoError(t, common.NewTicker(staker.Raw().Client()).WaitForBlock(block))
 
 	acc1Blocks := 0
 	for i := firstPoSBlock; i < block-10; i++ {
