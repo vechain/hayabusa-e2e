@@ -40,13 +40,7 @@ func main() {
 	} else {
 		engine, stop = startAgainstDevnet(ctx)
 	}
-
 	defer stop()
-	//defer func() {
-	//	if err := recover(); err != nil {
-	//		slog.Warn("recovered from panic", "error", err)
-	//	}
-	//}()
 
 	slog.Info("🚒 starting engine")
 	engine.Run()
