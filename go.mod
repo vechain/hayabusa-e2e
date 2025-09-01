@@ -15,14 +15,14 @@ require (
 	github.com/cqroot/prompt v0.9.4
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/stretchr/testify v1.10.0
-	github.com/vechain/thor/v2 v2.3.2-0.20250828095955-7ac607de33ad
+	github.com/vechain/thor/v2 v2.3.2-0.20250828134807-dcd18366eac2
 )
 
 require (
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
 	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/pkg/errors v0.9.1
-	github.com/vechain/networkhub v0.0.5-0.20250819120439-71315d6e4883
+	github.com/vechain/networkhub v0.0.5-0.20250828131643-f75f96d2f3f6
 )
 
 require (

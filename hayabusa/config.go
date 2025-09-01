@@ -54,7 +54,6 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 			Balance: (*devgenesis.HexOrDecimal256)(big.NewInt(0)),
 			Energy:  (*devgenesis.HexOrDecimal256)(big.NewInt(0)),
 		})
-		stakerIndex = len(genesis.Accounts) - 1
 	}
 
 	// params config - set max-block-proposers

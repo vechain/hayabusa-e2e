@@ -45,7 +45,7 @@ func Test_VerifyLexicographicalOrder(t *testing.T) {
 			block, err := client.Block(strconv.FormatUint(uint64(doubleSignedBlock.number), 10))
 			assert.NoError(t, err)
 
-			assert.Equal(t, bytes.Compare(expectedBlock.Bytes(), block.ID.Bytes()), 0)
+			assert.Equal(t, 0, bytes.Compare(expectedBlock.Bytes(), block.ID.Bytes()))
 		}
 	}
 
@@ -78,7 +78,6 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 	t.Cleanup(network.Stop)
 	require.NoError(t, network.Start())
 
-	client := network.ThorClient()
 	nodeConfig := &thorbuilder.Config{
 		DownloadConfig: &thorbuilder.DownloadConfig{
 			Branch:  "hayabusa/doublesigning-node",
@@ -144,6 +143,7 @@ func newNetworkSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, []thor.By
 		}
 	}()
 
+	client := network.ThorClient()
 	staker, err := builtin.NewStaker(client)
 	if err != nil {
 		t.Fatalf("failed to create staker: %v", err)
