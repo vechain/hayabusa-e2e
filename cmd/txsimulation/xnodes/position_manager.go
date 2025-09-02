@@ -22,8 +22,9 @@ type PositionManager struct {
 	distributionType     DistributionType
 
 	delegations        map[thor.Bytes32]*ActivePosition
-	validatorAvailable map[thor.Address]map[string]int // active positions per validator
-	totalActive        map[string]int                  // total number of active positions
+	validatorAvailable map[thor.Address]map[string]int // current available positions per validator
+	validatorOriginal  map[thor.Address]map[string]int // original allocated positions per validator (NEW)
+	totalActive        map[string]int
 	mu                 sync.Mutex
 }
 
@@ -45,7 +46,8 @@ func NewManager(maxLeaderGroupLength uint32, distributionType DistributionType, 
 		positions:            positionMap,
 		distributionType:     distributionType,
 
-		validatorAvailable: make(map[thor.Address]map[string]int), // active positions per validator
+		validatorAvailable: make(map[thor.Address]map[string]int),
+		validatorOriginal:  make(map[thor.Address]map[string]int),
 		totalActive:        make(map[string]int),
 		delegations:        make(map[thor.Bytes32]*ActivePosition),
 	}
@@ -114,7 +116,14 @@ func (pm *PositionManager) RegisterValidator(validator thor.Address) {
 		return
 	}
 
-	pm.validatorAvailable[validator] = pm.makeValidatorsAvailablePositions(validator)
+	allocation := pm.makeValidatorsAvailablePositions(validator)
+	pm.validatorAvailable[validator] = allocation
+
+	// Store the original allocation
+	pm.validatorOriginal[validator] = make(map[string]int)
+	for positionID, count := range allocation {
+		pm.validatorOriginal[validator][positionID] = count
+	}
 }
 
 func (pm *PositionManager) UnregisterDelegator(id thor.Bytes32) {
@@ -150,15 +159,21 @@ func (pm *PositionManager) UnregisterValidator(validator thor.Address) {
 	if !exists {
 		return
 	}
-	start := pm.makeValidatorsAvailablePositions(validator)
+
+	original, exists := pm.validatorOriginal[validator]
+	if !exists {
+		delete(pm.validatorAvailable, validator)
+		return
+	}
 
 	for positionID, available := range current {
-		// reset the totals
-		used := start[positionID] - available
+		// Calculate how many were actually used
+		used := original[positionID] - available
 		pm.totalActive[positionID] -= used
 	}
 
 	delete(pm.validatorAvailable, validator)
+	delete(pm.validatorOriginal, validator)
 }
 
 func (pm *PositionManager) NewPosition() (thor.Bytes32, *ActivePosition, bool) {

@@ -70,11 +70,11 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	stack := stack.NewStack(ctx, staker, config)
 	contractService := contract.NewState(stack)
-	xnodes := xnodes.NewManager(
-		config.MaxBlockProposers,
-		xnodes.DistributionTypeEven,
-		xnodes.DevnetPositions(config.MaxBlockProposers),
-	)
+	positions := xnodes.NoPositions
+	if *delegationsEnabled {
+		positions = xnodes.DevnetPositions(config.MaxBlockProposers)
+	}
+	xnodes := xnodes.NewManager(config.MaxBlockProposers, xnodes.DistributionTypeEven, positions)
 	generator := &devnetGenerator{
 		stargate:        stargate,
 		validators:      keys.RotatingValidators,
@@ -380,7 +380,15 @@ func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.Lifecycl
 		StakeChangeInterval: uint32(utils.RandomBetween(10, 30)),
 	}
 
-	return validators.NewValidatorLifecycle(config, g.contractService, g.xnodes, g.stack, g.stack.RandomStakingPeriod()), true
+	stakingPeriod := g.stack.Config().MinStakingPeriod
+	stakingPeriodStrategy := utils.RandomBetween(0, 50)
+	if stakingPeriodStrategy > 47 { // rarely want a high staking period, otherwise entire network eventually locks into high staking periods
+		stakingPeriod = g.stack.Config().HighStakingPeriod
+	} else if stakingPeriodStrategy > 40 { // medium staking period, similar logic to above
+		stakingPeriod = g.stack.Config().MidStakingPeriod
+	}
+
+	return validators.NewValidatorLifecycle(config, g.contractService, g.xnodes, g.stack, stakingPeriod), true
 }
 
 func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.Lifecycle, bool) {
