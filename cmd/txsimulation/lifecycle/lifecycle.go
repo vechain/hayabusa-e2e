@@ -1,6 +1,8 @@
 package lifecycle
 
 import (
+	"math"
+
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
@@ -89,8 +91,15 @@ func (c Config) QueueBlock(config *hayabusa.Config) uint32 {
 	return c.StartBlock + c.QueueDelay.Blocks + (c.QueueDelay.Epochs * config.EpochLength)
 }
 
-func (c Config) MinExitBlock(activatedBlock, stakingPeriod uint32) uint32 {
-	return activatedBlock + (c.StakingPeriods * stakingPeriod)
+func (c Config) MinExitBlock(activatedBlock, stakingPeriodLength uint32) uint32 {
+	if c.StakingPeriods == math.MaxUint32 {
+		return math.MaxUint32
+	}
+	maxPeriods := math.MaxUint32 / stakingPeriodLength
+	if maxPeriods >= c.StakingPeriods {
+		return math.MaxUint32
+	}
+	return activatedBlock + (c.StakingPeriods * stakingPeriodLength)
 }
 
 func (c Config) MinWithdrawBlock(exitBlock uint32, config *hayabusa.Config) uint32 {
