@@ -38,7 +38,7 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 		return nil, err
 	}
 
-	repo := "https://github.com/vechain/thor"
+	repo := "git@github.com:vechain/thor.git"
 
 	workingDir, ok := os.LookupEnv("THOR_WORKING_DIR")
 	var thorBuilder *thorbuilder.Config
@@ -54,7 +54,7 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 		thorBuilder = &thorbuilder.Config{
 			DownloadConfig: &thorbuilder.DownloadConfig{
 				RepoUrl:    repo,
-				Branch:     "vanja/feat/797-performance-improvement-on-housekeep",
+				Branch:     "release/hayabusa",
 				IsReusable: true,
 			},
 		}
