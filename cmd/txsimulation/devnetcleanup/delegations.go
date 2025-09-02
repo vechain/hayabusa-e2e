@@ -27,7 +27,12 @@ func New(stack *stack.Stack, contract *contract.Service, stargate *bind.PrivateK
 	}
 }
 
-func (c *Cleanup) Run() error {
+func (c *Cleanup) Run(enabled bool) error {
+	if !enabled {
+		slog.Info("delegation cleanup is disabled")
+		return nil
+	}
+
 	limit := uint64(1)
 	events, err := c.stack.Staker().FilterDelegationAdded(nil, &api.Options{Limit: &limit}, "desc")
 	if err != nil {

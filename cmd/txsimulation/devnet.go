@@ -62,11 +62,14 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 		"rotatingValidators", len(keys.RotatingValidators))
 
 	stargate := keys.FaucetKeys[len(keys.FaucetKeys)-1]
-	if err = setStargate(ctx, client, keys.Executors, stargate.Address()); err != nil {
-		slog.Error("failed to set stargate", "error", err)
-		os.Exit(1)
+	if *delegationsEnabled {
+		// set stargate in params if not already set
+		if err = setStargate(ctx, client, keys.Executors, stargate.Address()); err != nil {
+			slog.Error("failed to set stargate", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("✅  stargate set to", "address", stargate.Address())
 	}
-	slog.Info("✅  stargate set to", "address", stargate.Address())
 
 	stack := stack.NewStack(ctx, staker, config)
 	contractService := contract.NewState(stack)
@@ -108,7 +111,7 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	cleaner := devnetcleanup.New(stack, contractService, stargate)
 	// cleanup old delegation positions from previous runs
-	if err := cleaner.Run(); err != nil {
+	if err := cleaner.Run(*delegationsEnabled); err != nil {
 		slog.Error("failed to run initial cleanup", "error", err)
 	}
 
@@ -117,7 +120,7 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 		delay := 30 * time.Second
 		slog.Info("🧹 running final cleanup...", "delay", delay)
 		time.Sleep(delay)
-		if err := cleaner.Run(); err != nil {
+		if err := cleaner.Run(*delegationsEnabled); err != nil {
 			slog.Error("failed to run final cleanup", "error", err)
 		}
 	}
