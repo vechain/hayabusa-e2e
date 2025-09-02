@@ -48,7 +48,6 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 		return nil, fmt.Errorf("failed to load network config: %w", err)
 	}
 
-	fmt.Println("The nodes are: ", nodes)
 	return &Network{
 		ctx:     ctx,
 		config:  config,

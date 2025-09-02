@@ -121,13 +121,13 @@ func startAgainstNetworkHub(ctx context.Context) (*lifecycle.Engine, func()) {
 			StakeChangeInterval: uint32(utils2.RandomBetween(5, 20)),
 		}
 		if i < 50 { // create 50 long term validators
-			config.StakingPeriods = 5000
+			config.Config.StakingPeriods = 5000
 		} else if i < 70 { // create 20 mid-term validators
-			config.StakingPeriods = uint32(utils2.RandomBetween(30, 100)) // create 20 mid term validators
+			config.Config.StakingPeriods = uint32(utils2.RandomBetween(30, 100)) // create 20 mid term validators
 		} else {
-			config.StakingPeriods = uint32(utils2.RandomBetween(6, 12)) // create 20 short term validators
+			config.Config.StakingPeriods = uint32(utils2.RandomBetween(6, 12)) // create 20 short term validators
 		}
-		config.QueueDelay = lifecycle.Delay{Blocks: 0, Epochs: 0}
+		config.Config.QueueDelay = lifecycle.Delay{Blocks: 0, Epochs: 0}
 		cycle := validators.NewValidatorLifecycle(config, contratService, delegations, stack, stack.RandomStakingPeriod())
 		engine.AddLifecycle(cycle)
 	}

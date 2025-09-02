@@ -71,8 +71,8 @@ func (e *Engine) Run() {
 			}
 			_, id, _ := e.stack.Staker().FirstActive()
 			if !id.IsZero() {
-				e.generateValidatorCycles(best.(*api.JSONExpandedBlock))
-				e.generateDelegatorCycles(best.(*api.JSONExpandedBlock))
+				e.generateValidatorCycles(best)
+				e.generateDelegatorCycles(best)
 			}
 			delegationStatus := make(map[Status]int)
 			validationStatus := make(map[Status]int)
@@ -87,7 +87,7 @@ func (e *Engine) Run() {
 				}
 				if lifecycle.Status() != StatusWithdrawn {
 					e.workerPool.Run(func() {
-						if err := lifecycle.Process(best.(*api.JSONExpandedBlock).Number); err != nil {
+						if err := lifecycle.Process(best.Number); err != nil {
 							slog.Error("failed to process lifecycle", "type", lifecycle.Type(), "id", lifecycle.ID(), "error", err)
 						}
 					})
@@ -139,11 +139,11 @@ func (e *Engine) Flush(status Status) error {
 		for _, lifecycle := range e.lifecycles {
 			e.workerPool.Run(func(l Lifecycle, current *api.JSONExpandedBlock) Worker {
 				return func() {
-					if err := lifecycle.Process(best.(*api.JSONExpandedBlock).Number); err != nil {
+					if err := lifecycle.Process(best.Number); err != nil {
 						slog.Error("failed to process lifecycle", "type", lifecycle.Type(), "id", lifecycle.ID(), "error", err)
 					}
 				}
-			}(lifecycle, best.(*api.JSONExpandedBlock)))
+			}(lifecycle, best))
 		}
 
 		processed = true

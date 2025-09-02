@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/vechain/networkhub/utils/common"
-	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thorclient"
 
 	"github.com/stretchr/testify/require"
@@ -84,7 +83,7 @@ func runTestMissedSlot(t *testing.T) error {
 	for range 60 {
 		best, err := ticker.Wait(5 * time.Minute)
 		require.NoError(t, err)
-		if best.(*api.JSONExpandedBlock).Timestamp-prev.(*api.JSONExpandedBlock).Timestamp > 15 {
+		if best.Timestamp-prev.Timestamp > 15 {
 			missedSlot = true
 			break
 		}

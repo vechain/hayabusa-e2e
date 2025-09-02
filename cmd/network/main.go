@@ -54,7 +54,7 @@ func main() {
 		return
 	}
 	fmt.Println("\n🕐 Waiting for POS to become active... expected at block ", config.ForkBlock+config.TransitionPeriod)
-	if err := utils.WaitForPOS(t.Context(), staker, config.ForkBlock+config.TransitionPeriod); err != nil {
+	if err := utils.WaitForPOS(context.Background(), staker, config.ForkBlock+config.TransitionPeriod); err != nil {
 		fmt.Println("  - Error waiting for PoS:", err)
 		return
 	}

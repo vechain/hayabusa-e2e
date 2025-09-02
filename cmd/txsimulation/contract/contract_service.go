@@ -84,9 +84,9 @@ func (s *Service) poll() {
 				time.Sleep(5 * time.Second) // Retry after a short delay
 				continue
 			}
-			validators, err := s.FetchAll(block.(*api.JSONExpandedBlock).ID)
+			validators, err := s.FetchAll(block.ID)
 			if err != nil {
-				slog.Error("Failed to fetch validatorInfo", "error", err, "block", block.(*api.JSONExpandedBlock).ID)
+				slog.Error("Failed to fetch validatorInfo", "error", err, "block", block.ID)
 				continue
 			}
 

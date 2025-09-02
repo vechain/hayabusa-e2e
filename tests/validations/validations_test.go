@@ -730,11 +730,11 @@ func TestBeneficiary(t *testing.T) {
 	block, err := ticker.Wait(time.Second * 20)
 	require.NoError(t, err)
 
-	assert.Equal(t, block.(*api.JSONExpandedBlock).Beneficiary, beneficiary, "Block beneficiary should match the set beneficiary")
+	assert.Equal(t, block.Beneficiary, beneficiary, "Block beneficiary should match the set beneficiary")
 
-	beneficiaryBeforeBlock, err := staker.Raw().Client().Account(&beneficiary, thorclient.Revision(block.(*api.JSONExpandedBlock).ParentID.String()))
+	beneficiaryBeforeBlock, err := staker.Raw().Client().Account(&beneficiary, thorclient.Revision(block.ParentID.String()))
 	require.NoError(t, err)
-	beneficiaryAfterBlock, err := staker.Raw().Client().Account(&beneficiary, thorclient.Revision(block.(*api.JSONExpandedBlock).ID.String()))
+	beneficiaryAfterBlock, err := staker.Raw().Client().Account(&beneficiary, thorclient.Revision(block.ID.String()))
 	require.NoError(t, err)
 
 	difference := new(big.Int).Sub((*big.Int)(beneficiaryAfterBlock.Energy), (*big.Int)(beneficiaryBeforeBlock.Energy))
