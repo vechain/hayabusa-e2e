@@ -69,8 +69,8 @@ contract GetValidators {
                 tmpLocked[lockedCount] = i;
                 lockedCount++;
             } else if (
-                startPeriod > completedPeriods + 1 ||
-                endPeriod <= completedPeriods
+                startPeriod > completedPeriods + 1 || // not started
+                endPeriod <= completedPeriods // ended
             ) {
                 tmpWithdrawable[withdrawableCount] = i;
                 withdrawableCount++;

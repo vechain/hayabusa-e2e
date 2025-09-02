@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/contract"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/xnodes"
@@ -23,30 +22,27 @@ type Generator interface {
 }
 
 type Engine struct {
-	stack           *stack.Stack
-	contractService *contract.Service
-	delegations     *xnodes.PositionManager
-	lifecycles      map[thor.Bytes32]Lifecycle
-	workerPool      *WorkerPool
-	generator       Generator
-	mu              sync.Mutex
+	stack       *stack.Stack
+	delegations *xnodes.PositionManager
+	lifecycles  map[thor.Bytes32]Lifecycle
+	workerPool  *WorkerPool
+	generator   Generator
+	mu          sync.Mutex
 }
 
 func NewEngine(
 	stack *stack.Stack,
-	contractService *contract.Service,
 	delegations *xnodes.PositionManager,
 	generator Generator,
 ) *Engine {
 	pool := NewWorkerPool(10)
 	pool.Start()
 	return &Engine{
-		contractService: contractService,
-		delegations:     delegations,
-		lifecycles:      make(map[thor.Bytes32]Lifecycle),
-		stack:           stack,
-		generator:       generator,
-		workerPool:      pool,
+		delegations: delegations,
+		lifecycles:  make(map[thor.Bytes32]Lifecycle),
+		stack:       stack,
+		generator:   generator,
+		workerPool:  pool,
 	}
 }
 

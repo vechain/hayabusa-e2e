@@ -70,24 +70,24 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 
 	stack := stack.NewStack(ctx, staker, config)
 	contractService := contract.NewState(stack)
-	delegations := xnodes.NewManager(
-		config.MaxBlockProposers,
-		xnodes.DistributionTypeEven,
-		xnodes.DevnetPositions(config.MaxBlockProposers),
-	)
+	positions := xnodes.NoPositions
+	if *delegationsEnabled {
+		positions = xnodes.DevnetPositions(config.MaxBlockProposers)
+	}
+	xnodes := xnodes.NewManager(config.MaxBlockProposers, xnodes.DistributionTypeEven, positions)
 	generator := &devnetGenerator{
 		stargate:        stargate,
 		validators:      keys.RotatingValidators,
 		contractService: contractService,
-		delegations:     delegations,
+		xnodes:          xnodes,
 		stack:           stack,
 	}
-	engine := lifecycle.NewEngine(stack, contractService, delegations, generator)
+	engine := lifecycle.NewEngine(stack, xnodes, generator)
 
 	// initial seeding of authority accounts
 	authorityConfigs := createAuthorityConfigs(keys, config)
 	for _, cfg := range authorityConfigs {
-		engine.AddLifecycle(validators.NewValidatorLifecycle(cfg, contractService, delegations, stack, config.MinStakingPeriod))
+		engine.AddLifecycle(validators.NewValidatorLifecycle(cfg, contractService, xnodes, stack, config.MinStakingPeriod))
 	}
 	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
 		slog.Error("failed to flush initial authority validators", "error", err)
@@ -335,7 +335,7 @@ type devnetGenerator struct {
 	validators      []*bind.PrivateKeySigner
 	contractService *contract.Service
 	validatorIndex  int
-	delegations     *xnodes.PositionManager
+	xnodes          *xnodes.PositionManager
 	stack           *stack.Stack
 }
 
@@ -380,11 +380,19 @@ func (g *devnetGenerator) CreateValidator(startBlock uint32) (lifecycle.Lifecycl
 		StakeChangeInterval: uint32(utils.RandomBetween(10, 30)),
 	}
 
-	return validators.NewValidatorLifecycle(config, g.contractService, g.delegations, g.stack, g.stack.RandomStakingPeriod()), true
+	stakingPeriod := g.stack.Config().MinStakingPeriod
+	stakingPeriodStrategy := utils.RandomBetween(0, 50)
+	if stakingPeriodStrategy > 47 { // rarely want a high staking period, otherwise entire network eventually locks into high staking periods
+		stakingPeriod = g.stack.Config().HighStakingPeriod
+	} else if stakingPeriodStrategy > 40 { // medium staking period, similar logic to above
+		stakingPeriod = g.stack.Config().MidStakingPeriod
+	}
+
+	return validators.NewValidatorLifecycle(config, g.contractService, g.xnodes, g.stack, stakingPeriod), true
 }
 
 func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.Lifecycle, bool) {
-	id, pos, ok := g.delegations.NewPosition()
+	id, pos, ok := g.xnodes.NewPosition()
 	if !ok {
 		return nil, false
 	}
@@ -421,7 +429,7 @@ func (g *devnetGenerator) CreateDelegator(startBlock uint32) (lifecycle.Lifecycl
 		Position:     pos.Position,
 		PositionID:   id,
 	}
-	return delegations.NewDelegatorLifecycle(config, g.delegations, g.contractService, g.stack), true
+	return delegations.NewDelegatorLifecycle(config, g.xnodes, g.contractService, g.stack), true
 }
 
 type DevnetKeys struct {
