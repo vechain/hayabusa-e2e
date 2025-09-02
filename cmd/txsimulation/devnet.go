@@ -28,6 +28,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/xnodes"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	utils2 "github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/utils/common"
 	protocolbuiltin "github.com/vechain/thor/v2/builtin"
 	genesisthor "github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/thor"
@@ -211,7 +212,7 @@ func setStargate(ctx context.Context, client *thorclient.Client, executors []*bi
 	}
 
 	// wait for the receipts
-	ticker := utils2.NewTicker(client)
+	ticker := common.NewTicker(client)
 	approved := make(map[thor.Address]bool)
 	for range 6 {
 		if len(approved) >= len(executors) {

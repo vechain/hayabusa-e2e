@@ -7,7 +7,7 @@ import (
 
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/contract"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
-	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/utils/common"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thorclient/bind"
 )
@@ -87,14 +87,11 @@ func (c *Cleanup) exitDelegations(delegations []*big.Int, method exitMethod) {
 	var groups [][]*big.Int
 	groupSize := 100
 	for i := 0; i < len(delegations); i += groupSize {
-		end := i + groupSize
-		if end > len(delegations) {
-			end = len(delegations)
-		}
+		end := min(i+groupSize, len(delegations))
 		groups = append(groups, delegations[i:end])
 	}
 
-	ticker := utils.NewTicker(c.stack.Client())
+	ticker := common.NewTicker(c.stack.Client())
 
 	for _, ids := range groups {
 		slog.Info("processing cleanup", "first", ids[0], "last", ids[len(ids)-1], "count", len(ids))

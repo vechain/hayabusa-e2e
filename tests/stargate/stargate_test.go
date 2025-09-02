@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/networkhub/utils/common"
 	native "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thorclient"
 
@@ -34,7 +35,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 	})
 }
 
-func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, validationID thor.Address, expectedPeriods uint32) error {
+func waitForCompletedPeriods(ticker *common.Ticker, staker *builtin.Staker, validationID thor.Address, expectedPeriods uint32) error {
 	err := ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
 		periodDetails, err := staker.GetValidationPeriodDetails(validationID)
 		slog.Info("⚠️ - completed periods, waiting for greater or equal than expected", "completed", int(periodDetails.CompletedPeriods), "expected", expectedPeriods)
@@ -54,7 +55,7 @@ func runTestStargateSingleDelegator(t *testing.T) error {
 	staker, stargate, config, validationIDs, client := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
-	ticker := utils.NewTicker(staker.Raw().Client())
+	ticker := common.NewTicker(staker.Raw().Client())
 	validation, err := staker.GetValidation(validationID)
 	require.NoError(t, err)
 
@@ -224,7 +225,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOff(t *testing.T) error {
 	staker, stargate, config, validationIDs, _ := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
-	ticker := utils.NewTicker(staker.Raw().Client())
+	ticker := common.NewTicker(staker.Raw().Client())
 	_, err := staker.GetValidation(validationID)
 	require.NoError(t, err)
 
@@ -330,7 +331,7 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	staker, stargate, config, validationIDs, _ := newDelegationSetup(t)
 
 	validationID := validationIDs[0]
-	ticker := utils.NewTicker(staker.Raw().Client())
+	ticker := common.NewTicker(staker.Raw().Client())
 	_, err := staker.GetValidation(validationID)
 	require.NoError(t, err)
 

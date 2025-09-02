@@ -11,6 +11,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/utils/common"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
@@ -99,7 +100,7 @@ func TestHayabusaNoForkThenJoinLater(t *testing.T) {
 	t.Log("✅ - Queued validator OK")
 
 	block := config.ForkBlock + config.TransitionPeriod
-	ticker := utils.NewTicker(client)
+	ticker := common.NewTicker(client)
 	require.NoError(t, ticker.WaitForBlock(block))
 
 	_, validatorID, err := staker.FirstActive()
@@ -136,7 +137,7 @@ func TestHayabusaFullFlowJoinQueuedCooldownExit(t *testing.T) {
 	sequence := testutil.NewTxSequence(t)
 
 	staker := testutil.SetupStakerAndWaitForFork(t, client, config)
-	ticker := utils.NewTicker(client)
+	ticker := common.NewTicker(client)
 
 	id1 := testutil.AddValidator(sequence, staker, validator1, config.MinStakingPeriod)
 	id2 := testutil.AddValidator(sequence, staker, validator2, config.MinStakingPeriod)
@@ -725,7 +726,7 @@ func TestBeneficiary(t *testing.T) {
 	assert.NoError(t, utils.WaitForPOS(t.Context(), staker, config.ForkBlock+config.TransitionPeriod))
 
 	blockRewards := hayabusa.GetExpectedReward(big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)))
-	ticker := utils.NewTicker(client)
+	ticker := common.NewTicker(client)
 	block, err := ticker.Wait(time.Second * 20)
 	require.NoError(t, err)
 
@@ -770,14 +771,14 @@ func assertMatchingValidators(t *testing.T, staker *builtin.Staker, id1 thor.Add
 }
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
-	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
+	assert.NoError(t, common.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.GetValidation(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
 func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) error {
-	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
+	assert.NoError(t, common.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.GetValidation(validatorID)
 	assert.NoError(t, err)
 	if validator.Status == builtin.StakerStatusUnknown {

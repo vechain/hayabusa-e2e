@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/networkhub/utils/common"
 	"github.com/vechain/thor/v2/thorclient"
 
 	"github.com/stretchr/testify/require"
@@ -68,8 +69,8 @@ func runTestMissedSlot(t *testing.T) error {
 
 	// wait for PoS
 	block := config.ForkBlock + config.TransitionPeriod
-	ticker := utils.NewTicker(staker.Raw().Client())
 	require.NoError(t, utils.WaitForPOS(t.Context(), staker, block))
+	ticker := common.NewTicker(staker.Raw().Client())
 
 	// wait for a missed slot
 	prev, err := ticker.Wait(35 * time.Second)

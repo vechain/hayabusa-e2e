@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/utils/common"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
@@ -150,7 +151,7 @@ func TestStakerPauseForValidation(t *testing.T) {
 func TestPauseForDelegator(t *testing.T) {
 	t.Parallel()
 	config, client := setupTestNetwork(t, 2)
-	ticker := utils.NewTicker(client)
+	ticker := common.NewTicker(client)
 
 	validator1 := hayabusa.ValidatorAccounts[0]
 	validator2 := hayabusa.ValidatorAccounts[1]
@@ -372,7 +373,7 @@ func waitForPoSAndAssertFirstActive(t *testing.T, staker *builtin.Staker, config
 }
 
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
-	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
+	assert.NoError(t, common.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.GetValidation(validatorID)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)

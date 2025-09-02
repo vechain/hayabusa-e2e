@@ -10,7 +10,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/stack"
 	utils2 "github.com/vechain/hayabusa-e2e/cmd/txsimulation/utils"
 	"github.com/vechain/hayabusa-e2e/cmd/txsimulation/xnodes"
-	"github.com/vechain/hayabusa-e2e/utils"
+	netUtils "github.com/vechain/networkhub/utils/common"
 	"github.com/vechain/thor/v2/api"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
@@ -54,7 +54,7 @@ func (e *Engine) AddLifecycle(lifecycle Lifecycle) {
 }
 
 func (e *Engine) Run() {
-	ticker := utils.NewTicker(e.stack.Client())
+	ticker := netUtils.NewTicker(e.stack.Client())
 	for {
 		select {
 		case <-e.stack.Context().Done():
@@ -123,7 +123,7 @@ func (e *Engine) Flush(status Status) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	ticker := utils.NewTicker(e.stack.Client())
+	ticker := netUtils.NewTicker(e.stack.Client())
 
 	processed := false
 	for !processed {
