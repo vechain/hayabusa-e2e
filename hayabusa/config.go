@@ -33,6 +33,7 @@ type Config struct {
 	HighStakingPeriod          uint32 // staker-high-staking-period
 	BlockInterval              uint64 // block interval
 	ValidatorEvictionThreshold uint32 // validator eviction threshold
+	EvictionEpochDivider       uint32 // eviction epoch divider
 }
 
 // Apply the configuration to the genesis file.
@@ -94,6 +95,7 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 		HighStakingPeriod:          c.HighStakingPeriod,
 		ValidatorEvictionThreshold: c.ValidatorEvictionThreshold,
 		HayabusaTP:                 &c.TransitionPeriod,
+		EvictionEpochDivider:       c.EvictionEpochDivider,
 	}
 }
 
