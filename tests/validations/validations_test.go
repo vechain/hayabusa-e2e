@@ -306,11 +306,11 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	assertTotalStakeAndWeight(t, staker, 3)
 
-	queuedStake, err := staker.QueuedStake()
+	actualQueued, err := staker.QueuedStake()
 	assert.NoError(t, err)
 
-	queuedStk := new(big.Int).Add(testutil.CalculateValidatorStake(), queuedStake)
-	assert.Equal(t, queuedStk, queued)
+	expectedQueued := new(big.Int).Add(testutil.CalculateValidatorStake(), stake)
+	assert.Equal(t, expectedQueued, actualQueued)
 
 	_, validatorID, err = staker.FirstQueued()
 	assert.NoError(t, err)
