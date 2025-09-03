@@ -239,8 +239,8 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	active, queued, err := staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), active.String())
-	assert.Equal(t, big.NewInt(0).String(), queued.String())
+	assert.Equal(t, uint64(0), active)
+	assert.Equal(t, uint64(0), queued)
 
 	stake := big.NewInt(1e18)
 	stake = new(big.Int).Mul(stake, big.NewInt(1e6))
@@ -248,8 +248,8 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 	id1 := testutil.AddValidator(sequence, staker, validator1, config.MinStakingPeriod)
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), active.String())
-	assert.Equal(t, big.NewInt(1).String(), queued.String())
+	assert.Equal(t, uint64(0), active)
+	assert.Equal(t, uint64(1), queued)
 
 	id2 := testutil.AddValidator(sequence, staker, validator2, config.MinStakingPeriod)
 	id3 := testutil.AddValidator(sequence, staker, validator3, config.MinStakingPeriod)
@@ -262,8 +262,8 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), active.String())
-	assert.Equal(t, big.NewInt(4).String(), queued.String())
+	assert.Equal(t, uint64(0), active)
+	assert.Equal(t, uint64(4), queued)
 
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -285,8 +285,8 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(3).String(), active.String())
-	assert.Equal(t, big.NewInt(1).String(), queued.String())
+	assert.Equal(t, uint64(3), active)
+	assert.Equal(t, uint64(1), queued)
 	t.Log("✅ - Three validators are activated one is queued")
 
 	assertTotalStakeAndWeight(t, staker, 3)
@@ -301,16 +301,16 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(3).String(), active.String())
-	assert.Equal(t, big.NewInt(2).String(), queued.String())
+	assert.Equal(t, uint64(3), active)
+	assert.Equal(t, uint64(2), queued)
 
 	assertTotalStakeAndWeight(t, staker, 3)
 
-	queued, err = staker.QueuedStake()
+	actualQueued, err := staker.QueuedStake()
 	assert.NoError(t, err)
 
-	queuedStk := new(big.Int).Add(testutil.CalculateValidatorStake(), stake)
-	assert.Equal(t, queuedStk, queued)
+	expectedQueued := new(big.Int).Add(testutil.CalculateValidatorStake(), stake)
+	assert.Equal(t, expectedQueued, actualQueued)
 
 	_, validatorID, err = staker.FirstQueued()
 	assert.NoError(t, err)
@@ -334,8 +334,8 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(3).String(), active.String())
-	assert.Equal(t, big.NewInt(1).String(), queued.String())
+	assert.Equal(t, uint64(3), active)
+	assert.Equal(t, uint64(1), queued)
 
 	_, validationID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -352,8 +352,8 @@ func TestHayabusaQueuedAndThenEnter(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(3).String(), active.String())
-	assert.Equal(t, big.NewInt(1).String(), queued.String())
+	assert.Equal(t, uint64(3), active)
+	assert.Equal(t, uint64(1), queued)
 
 	t.Log("✅ - Three validators are active one is queued and one has exited")
 }
