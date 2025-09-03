@@ -29,8 +29,8 @@ func TestHayabusaEviction(t *testing.T) {
 
 	active, queued, err := staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), active.String())
-	assert.Equal(t, big.NewInt(0).String(), queued.String())
+	assert.Equal(t, uint64(0), active)
+	assert.Equal(t, uint64(0), queued)
 
 	stake := big.NewInt(1e18)
 	stake = new(big.Int).Mul(stake, big.NewInt(1e6))
@@ -38,8 +38,8 @@ func TestHayabusaEviction(t *testing.T) {
 	id1 := testutil.AddValidator(sequence, staker, validator1, config.MinStakingPeriod)
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), active.String())
-	assert.Equal(t, big.NewInt(1).String(), queued.String())
+	assert.Equal(t, uint64(0), active)
+	assert.Equal(t, uint64(1), queued)
 
 	id2 := testutil.AddValidator(sequence, staker, validator2, config.MinStakingPeriod)
 	id3 := testutil.AddValidator(sequence, staker, validator3, config.MinStakingPeriod)
@@ -52,8 +52,8 @@ func TestHayabusaEviction(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(0).String(), active.String())
-	assert.Equal(t, big.NewInt(4).String(), queued.String())
+	assert.Equal(t, uint64(0), active)
+	assert.Equal(t, uint64(4), queued)
 
 	_, validatorID, err := staker.FirstQueued()
 	assert.NoError(t, err)
@@ -75,8 +75,8 @@ func TestHayabusaEviction(t *testing.T) {
 
 	active, queued, err = staker.GetValidationsNum()
 	assert.NoError(t, err)
-	assert.Equal(t, big.NewInt(3).String(), active.String())
-	assert.Equal(t, big.NewInt(1).String(), queued.String())
+	assert.Equal(t, uint64(3), active)
+	assert.Equal(t, uint64(1), queued)
 	t.Log("✅ - Three validators are activated one is queued")
 
 	require.NoError(t, network.NodeLifecycles()[validator2Node.GetID()].Stop())
@@ -90,7 +90,7 @@ func TestHayabusaEviction(t *testing.T) {
 	})
 
 	offlineBlock := config.ForkBlock + config.TransitionPeriod
-	exitBlock := offlineBlock + config.EvictionEpochDivider + config.EpochLength
+	exitBlock := offlineBlock + config.EvictionCheckInterval + config.EpochLength
 	ticker := utils.NewTicker(staker.Raw().Client())
 	t.Log("✅ waiting for block", exitBlock)
 	require.NoError(t, ticker.WaitForBlock(exitBlock))

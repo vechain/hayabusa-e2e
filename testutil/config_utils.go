@@ -27,7 +27,7 @@ func SetupTestNetworkWithEpochAndBlockInterval(t *testing.T, maxBlockProposers u
 		Name:                       t.Name(),
 		BlockInterval:              blockInterval,
 		ValidatorEvictionThreshold: 10,
-		EvictionEpochDivider:       20,
+		EvictionCheckInterval:      20,
 	}
 
 	network, err := hayabusa.NewNetwork(config, t.Context())
