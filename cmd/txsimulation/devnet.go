@@ -502,6 +502,11 @@ func loadDevnetKeys(dir string) (*DevnetKeys, error) {
 
 func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []validators.Config {
 	configs := make([]validators.Config, len(keys.Authorities))
+	slog.Info("creating authority configs",
+		"count", len(keys.Authorities),
+		"cooldownPeriod", config.CooldownPeriod,
+		"minStakingPeriod", config.MinStakingPeriod,
+		"devnetLongTermValidators", *devnetLongTermValidators)
 	for i, key := range keys.Authorities {
 		cfg := validators.Config{
 			Config: lifecycle.Config{
@@ -517,6 +522,7 @@ func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []validat
 			StakeChangeInterval: 8,
 		}
 		if i < *devnetLongTermValidators { // we keep a certain amount of long term validators to ensure stability in the network
+			slog.Info("keeping long term validator", "address", key.Address())
 			cfg.StakingPeriods = math.MaxUint32
 		}
 		configs[i] = cfg
