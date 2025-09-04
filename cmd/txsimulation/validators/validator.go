@@ -231,7 +231,9 @@ func (v *ValidatorLifecycle) processActive(block uint32) error {
 		return nil
 	}
 
-	if block < v.config.MinExitBlock(v.stateManager.ActivatedBlock(), v.stakeManager.StakingPeriodLength()) {
+	minExitBlock := v.config.MinExitBlock(v.stateManager.ActivatedBlock(), v.stakeManager.StakingPeriodLength())
+	slog.Info("checking validator for exit", "validator", v.id, "activeValidators", activeValidators, "minExitBlock", minExitBlock, "currentBlock", block)
+	if block < minExitBlock {
 		return v.stakeManager.ChangeStake(block, v.config.Account)
 	}
 
