@@ -96,7 +96,7 @@ func (c Config) MinExitBlock(activatedBlock, stakingPeriodLength uint32) uint32 
 		return math.MaxUint32
 	}
 	maxPeriods := math.MaxUint32 / stakingPeriodLength
-	if maxPeriods >= c.StakingPeriods {
+	if maxPeriods <= c.StakingPeriods {
 		return math.MaxUint32
 	}
 	return activatedBlock + (c.StakingPeriods * stakingPeriodLength)

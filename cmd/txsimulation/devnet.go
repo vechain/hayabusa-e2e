@@ -520,6 +520,7 @@ func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []validat
 			StakeChangeInterval: 8,
 		}
 		if i < *devnetLongTermValidators { // we keep a certain amount of long term validators to ensure stability in the network
+			slog.Info("keeping longterm validator", "index", i, "address", key.Address())
 			cfg.StakingPeriods = math.MaxUint32
 		}
 		configs[i] = cfg
