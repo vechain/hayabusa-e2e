@@ -516,7 +516,7 @@ func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []validat
 			Account:             &hayabusa.NodePair{Endorser: keys.Endorsors[i], Node: key},
 			StakeChangeInterval: 8,
 		}
-		if i == 0 { // we keep 1 long term PoA candidate, the rest are just there for dPoS transitions.
+		if i < *devnetLongTermValidators { // we keep a certain amount of long term validators to ensure stability in the network
 			cfg.StakingPeriods = math.MaxUint32
 		}
 		configs[i] = cfg
