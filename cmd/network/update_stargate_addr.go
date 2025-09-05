@@ -19,13 +19,12 @@ func setStargateAddr(client *thorclient.Client, stargate thor.Address) error {
 		return fmt.Errorf("failed to create params: %w", err)
 	}
 
-	key := thor.MustParseBytes32(hayabusa.ParamsStargateKey)
-	value := new(big.Int).SetBytes(stargate.Bytes())
+	value := new(big.Int).SetBytes(hayabusa.ParamsStargateKey.Bytes())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	receipt, _, err := params.Set(key, value).Send().WithSigner(hayabusa.Executor).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
+	receipt, _, err := params.Set(hayabusa.ParamsStargateKey, value).Send().WithSigner(hayabusa.Executor).WithOptions(testutil.TxOptions()).SubmitAndConfirm(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to set stargate address: %w", err)
 	}
