@@ -5,12 +5,14 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/thor/v2/api"
 	native "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
@@ -34,7 +36,7 @@ func runEnergyTest(t *testing.T) error {
 		MidStakingPeriod:  12,
 		HighStakingPeriod: 180,
 		Name:              t.Name(),
-		BlockInterval:     uint64(5),
+		BlockInterval:     uint64(2),
 	}
 	growthStopTimeKey := thor.Blake2b([]byte("growth-stop-time"))
 
@@ -64,16 +66,41 @@ func runEnergyTest(t *testing.T) error {
 	for _, receipt := range receipts {
 		assert.False(t, receipt.Reverted)
 	}
-	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10))
-	err = utils.WaitForCondition(t.Context(), staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod, func() (bool, error) {
+
+	assert.NoError(t, utils.WaitForCondition(t.Context(), staker.Raw().Client(), config.ForkBlock+config.TransitionPeriod, func() (bool, error) {
 		valStake, err := staker.GetValidation(hayabusa.ValidatorAccounts[0].Node.Address())
 		if err != nil {
 			return false, err
 		}
 		return !valStake.Address.IsZero(), nil
-	})
-	assert.NoError(t, err)
-	testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(hayabusa.ValidatorAccounts[0].Node.Address(), delegationStake, 200))
+	}))
+
+	// send addDelegation transaction in multiple attempts
+	// to handle forks in GH Action
+	delegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(10))
+	assert.NoError(t, func() error {
+		var (
+			err     error
+			receipt *api.Receipt
+			sender  = staker.AddDelegation(hayabusa.ValidatorAccounts[0].Node.Address(), delegationStake, 200)
+		)
+		for range 4 {
+			receipt, _, err = sender.Send().
+				WithOptions(testutil.TxOptions()).
+				WithSigner(hayabusa.Stargate).
+				SubmitAndConfirm(testutil.TxContext(t))
+			if err == nil && receipt != nil && !receipt.Reverted {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+
+		if err != nil {
+			return err
+		}
+		testutil.DebugRevert(t, receipt, sender)
+		return nil
+	}())
 
 	genesisVET := big.NewInt(0)
 	genesisVTHO := big.NewInt(0)
