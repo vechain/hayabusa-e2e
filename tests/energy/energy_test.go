@@ -29,7 +29,7 @@ func runEnergyTest(t *testing.T) error {
 		Nodes:             3,
 		MaxBlockProposers: 3,
 		ForkBlock:         4,
-		TransitionPeriod:  4,
+		TransitionPeriod:  8,
 		EpochLength:       4,
 		CooldownPeriod:    4,
 		MinStakingPeriod:  4,
