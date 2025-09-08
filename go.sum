@@ -167,10 +167,6 @@ github.com/vechain/go-ethereum v1.8.15-0.20241126085506-c74017ec91b2 h1:ch3DqXvl
 github.com/vechain/go-ethereum v1.8.15-0.20241126085506-c74017ec91b2/go.mod h1:yPUCNmntAh1PritrMfSi7noK+9vVPStZX3wgh3ieaY0=
 github.com/vechain/goleveldb v1.0.1-0.20220809091043-51eb019c8655 h1:CbHcWpCi7wOYfpoErRABh3Slyq9vO0Ay/EHN5GuJSXQ=
 github.com/vechain/goleveldb v1.0.1-0.20220809091043-51eb019c8655/go.mod h1:RRCYJbIwD5jmqPI9XoAFR0OcDxqUctll6zUj/+B4S48=
-github.com/vechain/networkhub v0.0.5-0.20250819120439-71315d6e4883 h1:Si2C1MlTKKx2ZsJD0/iP5zrm4i4aIhKArYCrkzYap2E=
-github.com/vechain/networkhub v0.0.5-0.20250819120439-71315d6e4883/go.mod h1:aF1ovictX85iXRvN++DAKKFbK2mcHTGG8hBriuRhNUo=
-github.com/vechain/networkhub v0.0.5-0.20250903133854-42e3b6e55dbe h1:EOPoqfL9Qy5kNxaYNj+SHkZikvbF6e/dszucRKHxhp4=
-github.com/vechain/networkhub v0.0.5-0.20250903133854-42e3b6e55dbe/go.mod h1:OuNmua7Py5+4wYRtyCo0DFbrV7L8x+bqzFC7mJGnvAE=
 github.com/vechain/networkhub v0.0.5-0.20250903134714-68afb10dd848 h1:drAIoknauj9P/KufTjIBQCoG5Dne7E8UKIyfbdm6oXA=
 github.com/vechain/networkhub v0.0.5-0.20250903134714-68afb10dd848/go.mod h1:TmDM5lBRNkVyuw07MgXiP2nbwrqsjwLox7nDXr+Mv1g=
 github.com/vechain/thor/v2 v2.3.2-0.20250903112608-b945ee4fdfe6 h1:QvVsfznlaLwUzFUpGc+6mNTAfpvZQyyL/TrUoZclPzk=
