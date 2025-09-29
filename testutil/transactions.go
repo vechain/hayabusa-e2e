@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"errors"
+	"math"
 	"math/big"
 	"sync"
 	"testing"
@@ -10,8 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/thorclient/bind"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func TxContext(t *testing.T) context.Context {
@@ -96,4 +102,47 @@ func (s *TxSequence) Send(signer bind.Signer, sender *bind.MethodBuilder) *api.R
 func ReceiptToID(receipt *api.Receipt) *big.Int {
 	// 0 is the event, 1 is the validation ID
 	return new(big.Int).SetBytes(receipt.Outputs[0].Events[0].Topics[2][:])
+}
+
+func SendClauses(
+	t *testing.T,
+	signer bind.Signer,
+	clauses []*tx.Clause,
+	client *thorclient.Client,
+	ctx context.Context,
+) *api.Receipt {
+	chainTag, err := client.ChainTag()
+	require.NoError(t, err)
+
+	trx := tx.NewBuilder(tx.TypeLegacy).
+		Clauses(clauses).
+		ChainTag(chainTag).
+		Gas(10_000_000).
+		Nonce(datagen.RandUint64()).
+		Expiration(math.MaxUint32).
+		Build()
+
+	trx, err = signer.SignTransaction(trx)
+	require.NoError(t, err, "failed to sign transaction")
+
+	send, err := client.SendTransaction(trx)
+	require.NoError(t, err, "failed to send transaction")
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+
+	for {
+		select {
+		case <-ctx.Done():
+			require.Fail(t, "context done before transaction is mined")
+			return nil
+		case <-ticker.C:
+			receipt, err := client.TransactionReceipt(send.ID)
+			if errors.Is(err, httpclient.ErrNotFound) {
+				continue
+			}
+			require.NoError(t, err, "failed to get transaction receipt")
+			require.False(t, receipt.Reverted, "transaction reverted")
+			return receipt
+		}
+	}
 }
