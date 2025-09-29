@@ -72,6 +72,11 @@ func Test_ContractSuicide_StakerRecipient(t *testing.T) {
 	validation, err := staker.GetValidation(val1.Node.Address())
 	require.NoError(t, err)
 	assert.Equal(t, validation.Status, builtin.StakerStatusExited)
+
+	// Wait for cooldown and withdraw
+	cooldownBlock := exitBlock + config.CooldownPeriod
+	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(cooldownBlock))
+	testutil.Send(t, val1.Endorser, staker.WithdrawStake(val1.Node.Address()))
 }
 
 func Test_ContractBalance_TransferBeforeFork(t *testing.T) {
@@ -101,10 +106,10 @@ func Test_ContractBalance_TransferBeforeFork(t *testing.T) {
 
 	// Send VET to the contract before the fork
 	to := staker.Raw().Address()
-	sendVETClauses := []*tx.Clause{tx.NewClause(to).WithValue(big.NewInt(10000))}
+	sendVETClauses := []*tx.Clause{tx.NewClause(to).WithValue(builtin.MinStake())}
 	testutil.SendClauses(t, hayabusa.AdditionalAccounts[0], sendVETClauses, client, testutil.TxContext(t))
 	require.NoError(t, utils.WaitForFork(t.Context(), staker, config.ForkBlock))
-	balance := big.NewInt(10000)
+	balance := builtin.MinStake()
 	assertStakerBalance(t, client, staker, balance)
 
 	// Add the validators
