@@ -64,8 +64,9 @@ func Test_ContractSuicide_StakerRecipient(t *testing.T) {
 	testutil.Send(t, hayabusa.AdditionalAccounts[0], bind.Method("destroy"))
 	assertStakerBalance(t, client, staker, new(big.Int).Mul(builtin.MinStake(), big.NewInt(3)))
 
-	// TODO: This is failing, housekeeping fails due to balance check
 	// Signal exit and wait for 1 validator
+	// The below exit and withdraw should verify balance sheet.
+	// If the below statements are untrue, we have an issue processing extra VET
 	receipt = testutil.Send(t, val1.Endorser, staker.SignalExit(val1.Node.Address()))
 	exitBlock := receipt.Meta.BlockNumber + (config.MinStakingPeriod - receipt.Meta.BlockNumber%config.MinStakingPeriod)
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(exitBlock))
@@ -122,6 +123,8 @@ func Test_ContractBalance_TransferBeforeFork(t *testing.T) {
 	balance.Add(balance, builtin.MinStake())
 	assertStakerBalance(t, client, staker, balance)
 
+	// The below exit and withdraw should verify balance sheet.
+	// If the below statements are untrue, we have an issue processing extra VET
 	// Exit 1 validator
 	receipt := testutil.Send(t, val1.Endorser, staker.SignalExit(val1.Node.Address()))
 	exitBlock := receipt.Meta.BlockNumber + (config.MinStakingPeriod - receipt.Meta.BlockNumber%config.MinStakingPeriod)
