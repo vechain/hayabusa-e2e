@@ -22,7 +22,7 @@ require (
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
 	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/pkg/errors v0.9.1
-	github.com/vechain/networkhub v0.0.5-0.20250930143323-e5c023d8eb98
+	github.com/vechain/networkhub v0.0.5-0.20250930144741-4e6ba55ed175
 
 )
 
@@ -45,7 +45,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/docker v26.1.5+incompatible // indirect
+	github.com/docker/docker v28.0.0+incompatible // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
