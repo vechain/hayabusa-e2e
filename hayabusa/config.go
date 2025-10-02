@@ -6,11 +6,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/networkhub/network/node/genesis"
 	"github.com/vechain/thor/v2/builtin"
 	devgenesis "github.com/vechain/thor/v2/genesis"
-	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -42,21 +40,6 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 
 	genesis.ForkConfig.HAYABUSA = c.ForkBlock
 	genesis.ExtraData = datagen.RandomHash().String()
-
-	// staker config - set all values
-	stakerIndex := slices.IndexFunc(genesis.Accounts, func(acc devgenesis.Account) bool {
-		return acc.Address == builtin.Staker.Address
-	})
-	if stakerIndex == -1 {
-		genesis.Accounts = append(genesis.Accounts, devgenesis.Account{
-			Address: builtin.Staker.Address,
-			Storage: map[string]thor.Bytes32{},
-			Code:    hexutil.Encode(runtime.EmptyRuntimeBytecode),
-			Balance: (*devgenesis.HexOrDecimal256)(big.NewInt(0)),
-			Energy:  (*devgenesis.HexOrDecimal256)(big.NewInt(0)),
-		})
-		stakerIndex = len(genesis.Accounts) - 1
-	}
 
 	// params config - set max-block-proposers
 	paramsIndex := slices.IndexFunc(genesis.Accounts, func(acc devgenesis.Account) bool {

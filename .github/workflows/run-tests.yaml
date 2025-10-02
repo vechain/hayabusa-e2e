@@ -46,6 +46,7 @@ jobs:
           - tests/stargate
           - tests/pause
           - tests/eviction
+          - tests/balance
       fail-fast: false
 
     steps:
