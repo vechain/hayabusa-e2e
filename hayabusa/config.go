@@ -36,7 +36,7 @@ type Config struct {
 
 // Apply the configuration to the genesis file.
 func (c *Config) Apply(genesis *genesis.CustomGenesis) {
-	genesis.LaunchTime = uint64(time.Now().Unix())
+	genesis.LaunchTime = uint64(time.Now().Add(time.Second * 10).Unix())
 
 	genesis.ForkConfig.HAYABUSA = c.ForkBlock
 	genesis.ExtraData = datagen.RandomHash().String()

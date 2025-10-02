@@ -58,12 +58,17 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 				IsReusable: true,
 			},
 		}
-		builder := thorbuilder.New(thorBuilder)
-		err := builder.Download()
-		if err != nil {
-			return nil, fmt.Errorf("failed to download thor: %w", err)
-		}
-		workingDir = builder.DownloadPath
+	}
+	// pre-build before creating the genesis. Genesis sets a future timestamp,
+	// so we can more easily predict the first block if we build and then set the timestamp
+	builder := thorbuilder.New(thorBuilder)
+	err := builder.Download()
+	if err != nil {
+		return nil, fmt.Errorf("failed to download thor: %w", err)
+	}
+	_, err = builder.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build thor: %w", err)
 	}
 
 	nodes := make([]node.Config, 0)
@@ -81,8 +86,6 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 		Nodes:       nodes,
 		ThorBuilder: thorBuilder,
 	}
-	builder := thorbuilder.New(netConfig.ThorBuilder)
-	builder.Download()
 	if _, err := network.LoadConfig(netConfig); err != nil {
 		return nil, fmt.Errorf("failed to load network config: %w", err)
 	}
