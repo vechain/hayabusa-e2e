@@ -257,7 +257,10 @@ func (v *ValidatorLifecycle) processExitSignalled(block uint32) error {
 	}
 
 	exitBlock := v.txManager.ExitReceipt().Meta.BlockNumber
-	minWithdrawBlock := v.config.MinWithdrawBlock(exitBlock, v.stateManager.stack.Config())
+	minWithdrawBlock := v.config.MinWithdrawBlock(exitBlock, v.stateManager.stack.Config()) +
+		v.stakeManager.StakingPeriodLength() +
+		v.txManager.stack.Config().CooldownPeriod
+
 	if v.stateManager.ActivatedBlock() != 0 {
 		minWithdrawBlock += v.stateManager.stack.Config().CooldownPeriod
 	}
