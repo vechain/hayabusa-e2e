@@ -90,7 +90,7 @@ func startAgainstDevnet(ctx context.Context) (*lifecycle.Engine, func()) {
 	// initial seeding of authority accounts
 	authorityConfigs := createAuthorityConfigs(keys, config)
 	for _, cfg := range authorityConfigs {
-		engine.AddLifecycle(validators.NewValidatorLifecycle(cfg, contractService, xnodes, stack, config.MinStakingPeriod))
+		engine.AddLifecycle(validators.NewValidatorLifecycle(cfg.config, contractService, xnodes, stack, cfg.stakingPeriodLength))
 	}
 	if err := engine.Flush(lifecycle.StatusQueued); err != nil {
 		slog.Error("failed to flush initial authority validators", "error", err)
@@ -506,8 +506,13 @@ func loadDevnetKeys(dir string) (*DevnetKeys, error) {
 	}, nil
 }
 
-func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []validators.Config {
-	configs := make([]validators.Config, len(keys.Authorities))
+type authorityConfig struct {
+	config              validators.Config
+	stakingPeriodLength uint32
+}
+
+func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []authorityConfig {
+	configs := make([]authorityConfig, len(keys.Authorities))
 	for i, key := range keys.Authorities {
 		cfg := validators.Config{
 			Config: lifecycle.Config{
@@ -522,11 +527,13 @@ func createAuthorityConfigs(keys *DevnetKeys, config *hayabusa.Config) []validat
 			Account:             &hayabusa.NodePair{Endorser: keys.Endorsors[i], Node: key},
 			StakeChangeInterval: 8,
 		}
+		stakingPeriodLength := config.MinStakingPeriod
 		if i < *devnetLongTermValidators { // we keep a certain amount of long term validators to ensure stability in the network
 			slog.Info("keeping longterm validator", "index", i, "address", key.Address())
 			cfg.StakingPeriods = math.MaxUint32
+			stakingPeriodLength = config.HighStakingPeriod
 		}
-		configs[i] = cfg
+		configs[i] = authorityConfig{config: cfg, stakingPeriodLength: stakingPeriodLength}
 	}
 	return configs
 }
