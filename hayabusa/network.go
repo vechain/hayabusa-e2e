@@ -3,6 +3,7 @@ package hayabusa
 import (
 	"context"
 	"fmt"
+	"github.com/vechain/networkhub/client"
 	"log/slog"
 	"os"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/hayabusa-e2e/utils"
-	"github.com/vechain/networkhub/environments/local"
 	networkhubNetwork "github.com/vechain/networkhub/network"
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/network/node/genesis"
@@ -20,12 +20,12 @@ import (
 )
 
 type Network struct {
-	ctx       context.Context
-	config    *Config
-	network   *local.Local
-	genesis   *genesis.CustomGenesis
-	nodes     []node.Config
-	usedPorts []int // to track used ports for cleanup
+	ctx           context.Context
+	config        *Config
+	netwHubClient *client.Client
+	genesis       *genesis.CustomGenesis
+	nodes         []node.Config
+	usedPorts     []int // to track used ports for cleanup
 
 	mu sync.Mutex
 }
@@ -59,17 +59,6 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 			},
 		}
 	}
-	// pre-build before creating the genesis. Genesis sets a future timestamp,
-	// so we can more easily predict the first block if we build and then set the timestamp
-	builder := thorbuilder.New(thorBuilder)
-	err := builder.Download()
-	if err != nil {
-		return nil, fmt.Errorf("failed to download thor: %w", err)
-	}
-	_, err = builder.Build()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build thor: %w", err)
-	}
 
 	nodes := make([]node.Config, 0)
 	genesis := Genesis(config)
@@ -80,23 +69,25 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 		usedPorts = append(usedPorts, apiPort, p2pPort)
 	}
 
-	network := local.NewEnv()
-	netConfig := &networkhubNetwork.Network{
-		BaseID:      config.Name,
-		Nodes:       nodes,
-		ThorBuilder: thorBuilder,
-	}
-	if _, err := network.LoadConfig(netConfig); err != nil {
-		return nil, fmt.Errorf("failed to load network config: %w", err)
+	netwkHub, err := client.New(
+		&networkhubNetwork.Network{
+			BaseID:      config.Name,
+			Nodes:       nodes,
+			ThorBuilder: thorBuilder,
+			Environment: "local",
+		},
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Network{
-		ctx:       ctx,
-		config:    config,
-		network:   network,
-		genesis:   genesis,
-		nodes:     nodes,
-		usedPorts: usedPorts,
+		ctx:           ctx,
+		config:        config,
+		netwHubClient: netwkHub,
+		genesis:       genesis,
+		nodes:         nodes,
+		usedPorts:     usedPorts,
 	}, nil
 }
 
@@ -112,7 +103,7 @@ func (n *Network) Stop() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if err := n.network.StopNetwork(); err != nil {
+	if err := n.netwHubClient.Stop(); err != nil {
 		slog.Error("🛑 failed to stop network", "error", err)
 	}
 	globalPortManager.RemovePorts(n.config.Name)
@@ -128,8 +119,12 @@ func (n *Network) NodeConfigs() []node.Config {
 func (n *Network) NodeLifecycles() map[string]node.Lifecycle {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	nodes, err := n.netwHubClient.Nodes()
+	if err != nil {
+		panic(err)
+	}
 
-	return n.network.Nodes()
+	return nodes
 }
 
 func (n *Network) Start() error {
@@ -145,7 +140,7 @@ func (n *Network) Start() error {
 		n.Stop()
 	}()
 
-	if err := n.network.StartNetwork(); err != nil {
+	if err := n.netwHubClient.Start(); err != nil {
 		return err
 	}
 
@@ -183,7 +178,7 @@ func (n *Network) AttachNode(buildConfig *thorbuilder.Config, additionalArgs map
 	node.SetAdditionalArgs(additionalArgs)
 	n.nodes = append(n.nodes, node)
 	n.usedPorts = append(n.usedPorts, apiPort, p2pPort)
-	if err := n.network.AttachNode(node); err != nil {
+	if err := n.netwHubClient.AddNode(node); err != nil {
 		return fmt.Errorf("failed to attach node: %w", err)
 	}
 	if err := node.HealthCheck(0, 30*time.Second); err != nil {
