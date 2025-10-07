@@ -69,7 +69,7 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 	if c.EpochLength == 0 {
 		c.EpochLength = thor.EpochLength()
 	}
-	genesis.Config = &thor.Config{
+	err := genesis.Config.ConfigFromThor(&thor.Config{
 		BlockInterval:              c.BlockInterval,
 		EpochLength:                c.EpochLength,
 		CooldownPeriod:             c.CooldownPeriod,
@@ -79,6 +79,9 @@ func (c *Config) Apply(genesis *genesis.CustomGenesis) {
 		ValidatorEvictionThreshold: c.ValidatorEvictionThreshold,
 		HayabusaTP:                 &c.TransitionPeriod,
 		EvictionCheckInterval:      c.EvictionCheckInterval,
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
