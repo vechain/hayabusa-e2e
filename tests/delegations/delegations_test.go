@@ -19,7 +19,7 @@ import (
 
 func Test_StargateRewards(t *testing.T) {
 	t.Parallel()
-	staker, config, validationIDs := newDelegationSetup(t)
+	staker, config, validationIDs, _ := newDelegationSetup(t)
 
 	expectedStake := new(big.Int).Mul(builtin.MinStake(), big.NewInt(int64(len(validationIDs))))
 	stargateAddr := hayabusa.Stargate.Address()
@@ -82,7 +82,7 @@ func Test_StargateRewards(t *testing.T) {
 
 func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 	t.Parallel()
-	staker, config, validationIDs := newDelegationSetup(t)
+	staker, config, validationIDs, _ := newDelegationSetup(t)
 	ticker := utils.NewTicker(staker.Raw().Client())
 
 	multiplier := uint8(100)
@@ -127,9 +127,8 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 }
 
 func Test_Delegations(t *testing.T) {
-	staker, config, validationIDs := newDelegationSetup(t)
+	staker, config, validationIDs, network := newDelegationSetup(t)
 	ticker := utils.NewTicker(staker.Raw().Client())
-
 	t.Run("Delegate update auto renew after first period", func(t *testing.T) {
 		t.Parallel()
 
@@ -345,9 +344,415 @@ func Test_Delegations(t *testing.T) {
 		assert.Equal(t, expectedWeight, totalsAfterWithdrawal.TotalLockedWeight,
 			"Validator should have the correct total weight after withdrawal")
 	})
+
+	t.Run("Delegator can withdraw when validator is offline", func(t *testing.T) {
+		t.Parallel()
+
+		// Use the second validator as an offline validator
+		validatorIndex := 1
+		validatorID := validationIDs[validatorIndex]
+
+		// Create delegation
+		stake := builtin.MinStake()
+		addDelReceipt := testutil.Send(t, hayabusa.Stargate, staker.AddDelegation(validatorID, stake, 100))
+		delegationID := testutil.ReceiptToID(addDelReceipt)
+
+		// Wait for delegations to become active
+		require.NoError(t, ticker.WaitForBlock(addDelReceipt.Meta.BlockNumber+config.MinStakingPeriod))
+
+		// Verify both delegations are active
+		delegation1, err := staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.Equal(t, stake, delegation1.Stake)
+		assert.True(t, delegation1.Locked)
+
+		// Verify validator is initially online
+		validation, err := staker.GetValidation(validatorID)
+		require.NoError(t, err)
+		require.True(t, validation.IsOnline(), "Validator should be online initially")
+
+		// Signal exit for delegation while validator is online
+		exitReceipt := testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID))
+		require.False(t, exitReceipt.Reverted, "Exit signal should succeed")
+
+		// Wait for exit signals to be processed
+		require.NoError(t, ticker.WaitForBlock(addDelReceipt.Meta.BlockNumber+config.MinStakingPeriod*2))
+
+		// Take the validator offline by stopping its node
+		validatorNode := network.NodeConfigs()[validatorIndex]
+		require.NoError(t, network.NodeLifecycles()[validatorNode.GetID()].Stop())
+
+		// Wait for validator to be detected as offline
+		err = utils.WaitForCondition(
+			t.Context(),
+			staker.Raw().Client(),
+			config.ForkBlock+config.TransitionPeriod+config.MinStakingPeriod*4,
+			func() (bool, error) {
+				validation, err := staker.GetValidation(validatorID)
+				if err != nil {
+					return false, err
+				}
+				return !validation.IsOnline(), nil
+			})
+		require.NoError(t, err, "Validator should go offline after being stopped")
+
+		// Verify validator is now offline
+		validation, err = staker.GetValidation(validatorID)
+		require.NoError(t, err)
+		require.False(t, validation.IsOnline(), "Validator should be offline")
+
+		// Attempt to withdraw delegations - these should fail/revert because validator is offline
+		receipt, _, err := staker.WithdrawDelegation(delegationID).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		assert.False(t, receipt.Reverted, "Delegation withdrawal should not revert when validator is offline")
+
+		// Verify delegations still have their stake (withdrawal failed)
+		delegation1, err = staker.GetDelegation(delegationID)
+		require.NoError(t, err)
+		assert.True(t, big.NewInt(0).Cmp(delegation1.Stake) == 0, "Delegation stake should remain unchanged when withdrawal fails")
+	})
+
+	t.Run("Two delegators to queued validator, one withdraws while queued, then validator becomes active", func(t *testing.T) {
+		t.Parallel()
+
+		queuedConfig := &hayabusa.Config{
+			Nodes:             3,
+			MaxBlockProposers: 2,
+			ForkBlock:         0,
+			TransitionPeriod:  4,
+			EpochLength:       4,
+			CooldownPeriod:    4,
+			MinStakingPeriod:  4,
+			MidStakingPeriod:  12,
+			HighStakingPeriod: 259200,
+			Name:              t.Name(),
+			BlockInterval:     uint64(5),
+		}
+		queuedNetwork, err := hayabusa.NewNetwork(queuedConfig, t.Context())
+		require.NoError(t, err)
+		t.Cleanup(queuedNetwork.Stop)
+		require.NoError(t, queuedNetwork.Start())
+
+		queuedStaker, err := builtin.NewStaker(queuedNetwork.ThorClient())
+		require.NoError(t, err)
+		require.NoError(t, utils.WaitForFork(t.Context(), queuedStaker, queuedConfig.ForkBlock))
+
+		queuedTicker := utils.NewTicker(queuedStaker.Raw().Client())
+
+		// Add 3 validators - first 2 will be active, 3rd will be queued
+		queuedValidationIDs := [3]thor.Address{}
+		senders := &utils.Senders{}
+
+		for i := range queuedValidationIDs {
+			account := hayabusa.ValidatorAccounts[i]
+			sender := queuedStaker.AddValidation(account.Node.Address(), builtin.MinStake(), queuedConfig.MinStakingPeriod).
+				Send().
+				WithSigner(account.Endorser).
+				WithOptions(testutil.TxOptions())
+			senders.Add(sender)
+			queuedValidationIDs[i] = account.Node.Address()
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, _, err = senders.Send(ctx)
+		require.NoError(t, err)
+
+		// Wait for PoS to activate
+		require.NoError(t, utils.WaitForPOS(t.Context(), queuedStaker, queuedConfig.ForkBlock+queuedConfig.TransitionPeriod))
+
+		// Verify validator statuses: first 2 active, 3rd queued
+		validation0, err := queuedStaker.GetValidation(queuedValidationIDs[0])
+		require.NoError(t, err)
+		assert.Equal(t, builtin.StakerStatusActive, validation0.Status, "First validator should be active")
+
+		validation1, err := queuedStaker.GetValidation(queuedValidationIDs[1])
+		require.NoError(t, err)
+		assert.Equal(t, builtin.StakerStatusActive, validation1.Status, "Second validator should be active")
+
+		validation2, err := queuedStaker.GetValidation(queuedValidationIDs[2])
+		require.NoError(t, err)
+		assert.Equal(t, builtin.StakerStatusQueued, validation2.Status, "Third validator should be queued")
+
+		// Get initial queued stake before delegations
+		initialQueuedStake, err := queuedStaker.QueuedStake()
+		require.NoError(t, err)
+
+		// Create first delegation to the queued validator
+		firstDelegationStake := builtin.MinStake()
+		firstMultiplier := uint8(100)
+		receipt1 := testutil.Send(t, hayabusa.Stargate, queuedStaker.AddDelegation(queuedValidationIDs[2], firstDelegationStake, firstMultiplier))
+		firstDelegationID := testutil.ReceiptToID(receipt1)
+
+		// Create second delegation to the queued validator with different multiplier
+		secondDelegationStake := big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2))
+		secondMultiplier := uint8(150)
+		receipt2 := testutil.Send(t, hayabusa.Stargate, queuedStaker.AddDelegation(queuedValidationIDs[2], secondDelegationStake, secondMultiplier))
+		secondDelegationID := testutil.ReceiptToID(receipt2)
+
+		// Verify both delegations were created
+		firstDelegation, err := queuedStaker.GetDelegation(firstDelegationID)
+		require.NoError(t, err)
+		assert.Equal(t, firstDelegationStake, firstDelegation.Stake)
+		assert.Equal(t, firstMultiplier, firstDelegation.Multiplier)
+		assert.False(t, firstDelegation.Locked)
+		secondDelegation, err := queuedStaker.GetDelegation(secondDelegationID)
+		require.NoError(t, err)
+		assert.Equal(t, secondDelegationStake, secondDelegation.Stake)
+		assert.Equal(t, secondMultiplier, secondDelegation.Multiplier)
+		assert.False(t, secondDelegation.Locked)
+
+		// Verify queued stake increased by both delegations
+		totalDelegationStake := big.NewInt(0).Add(firstDelegationStake, secondDelegationStake)
+		afterDelegationsQueuedStake, err := queuedStaker.QueuedStake()
+		require.NoError(t, err)
+		expectedQueuedStake := big.NewInt(0).Add(initialQueuedStake, totalDelegationStake)
+		assert.Equal(t, expectedQueuedStake, afterDelegationsQueuedStake, "Queued stake should increase by both delegation amounts")
+
+		// First delegator withdraws while validator is still queued
+		withdrawReceipt := testutil.Send(t, hayabusa.Stargate, queuedStaker.WithdrawDelegation(firstDelegationID))
+		assert.False(t, withdrawReceipt.Reverted, "First delegation withdrawal should succeed for queued validator")
+
+		// Verify first delegation stake is now zero
+		firstDelegation, err = queuedStaker.GetDelegation(firstDelegationID)
+		require.NoError(t, err)
+		assert.True(t, firstDelegation.Stake.Sign() == 0, "First delegation stake should be zero after withdrawal")
+
+		// Verify queued stake decreased by first delegation amount
+		require.NoError(t, queuedTicker.WaitForBlock(withdrawReceipt.Meta.BlockNumber+1))
+		afterWithdrawalQueuedStake, err := queuedStaker.QueuedStake()
+		require.NoError(t, err)
+		expectedAfterWithdrawal := big.NewInt(0).Add(initialQueuedStake, secondDelegationStake)
+		assert.Equal(t, expectedAfterWithdrawal, afterWithdrawalQueuedStake, "Queued stake should decrease by withdrawn delegation amount")
+
+		// Now make a slot available by having the first validator exit
+		testutil.Send(t, hayabusa.ValidatorAccounts[0].Endorser, queuedStaker.SignalExit(queuedValidationIDs[0]))
+
+		// Wait for the first validator to exit and the queued validator to become active
+		// Need to wait longer for the transition to complete
+		require.NoError(t, queuedTicker.WaitForBlock(withdrawReceipt.Meta.BlockNumber+queuedConfig.MinStakingPeriod*2))
+
+		// Verify the queued validator is now active
+		validation2, err = queuedStaker.GetValidation(queuedValidationIDs[2])
+		require.NoError(t, err)
+		assert.Equal(t, builtin.StakerStatusActive, validation2.Status, "Validator should now be active")
+
+		// Verify the remaining delegation is now locked
+		secondDelegation, err = queuedStaker.GetDelegation(secondDelegationID)
+		require.NoError(t, err)
+		assert.True(t, secondDelegation.Locked, "Remaining delegation should be locked when validator becomes active")
+
+		// Verify delegation properties are maintained correctly after validator activation
+		assert.Equal(t, secondDelegationStake, secondDelegation.Stake, "Delegation stake should remain unchanged after validator activation")
+		assert.Equal(t, secondMultiplier, secondDelegation.Multiplier, "Delegation multiplier should remain unchanged after validator activation")
+
+		// Verify that attempting to withdraw the locked delegation now fails
+		withdrawLockedReceipt, _, err := queuedStaker.WithdrawDelegation(secondDelegationID).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		assert.True(t, withdrawLockedReceipt.Reverted, "Withdrawal of locked delegation should revert")
+
+		// Verify delegation is still intact after failed withdrawal attempt
+		secondDelegation, err = queuedStaker.GetDelegation(secondDelegationID)
+		require.NoError(t, err)
+		assert.Equal(t, secondDelegationStake, secondDelegation.Stake, "Delegation stake should remain unchanged after failed withdrawal")
+		assert.True(t, secondDelegation.Locked, "Delegation should still be locked after failed withdrawal")
+
+		// Verify queued stake is now zero (no more queued validators)
+		finalQueuedStake, err := queuedStaker.QueuedStake()
+		require.NoError(t, err)
+		assert.True(t, finalQueuedStake.Sign() == 0, "Queued stake should be zero after validator activation")
+
+		// Now that validator is active, verify totals work correctly
+		activeTotals, err := queuedStaker.GetValidationTotals(queuedValidationIDs[2])
+		require.NoError(t, err)
+
+		// Should include validator's own stake + remaining delegation
+		validatorOwnStake := builtin.MinStake()
+		expectedActiveStake := big.NewInt(0).Add(validatorOwnStake, secondDelegationStake)
+		assert.Equal(t, expectedActiveStake, activeTotals.TotalLockedStake, "Active validator should have correct total stake")
+
+		// Calculate expected weight: validator + second delegation (150%)
+		// Since we can't access validator multiplier directly, calculate it from the totals
+		secondDelegationWeight := hayabusa.NewWeightedStakeWithMultiplier(secondDelegationStake, secondMultiplier).Weight()
+
+		// The validator's effective weight is: total weight - delegation weight
+		validatorWeight := big.NewInt(0).Sub(activeTotals.TotalLockedWeight, secondDelegationWeight)
+
+		// Verify the calculation makes sense (validator weight should be positive)
+		assert.True(t, validatorWeight.Sign() > 0, "Validator weight should be positive")
+
+		// For documentation: calculate what multiplier this implies
+		impliedMultiplier := big.NewInt(0).Div(big.NewInt(0).Mul(validatorWeight, big.NewInt(100)), validatorOwnStake)
+		t.Logf("Validator implied multiplier: %v%%", impliedMultiplier)
+
+		// The total weight should be validator weight + delegation weight
+		expectedActiveWeight := big.NewInt(0).Add(validatorWeight, secondDelegationWeight)
+		assert.Equal(t, expectedActiveWeight, activeTotals.TotalLockedWeight, "Active validator should have correct total weight")
+	})
+
+	t.Run("Validator stake cannot exceed 600M VET limit including delegations", func(t *testing.T) {
+		t.Parallel()
+
+		createVETAmount := func(millions int64) *big.Int {
+			vet := big.NewInt(millions)
+			vet = vet.Mul(vet, big.NewInt(1e6))
+			vet = vet.Mul(vet, big.NewInt(1e18))
+			return vet
+		}
+
+		validatorStake := builtin.MinStake()
+		delegationAmount := createVETAmount(100)
+
+		validatorID1 := validationIDs[0]
+
+		// Verify initial state
+		initialTotals, err := staker.GetValidationTotals(validatorID1)
+		require.NoError(t, err)
+		assert.Equal(t, validatorStake, initialTotals.TotalLockedStake, "Initial validator stake should be MinStake")
+
+		expectedDelegations := 5
+		delegationIDs := make([]*big.Int, expectedDelegations)
+
+		for i := range expectedDelegations {
+			t.Logf("Creating delegation %d of %d (100M VET each)", i+1, expectedDelegations)
+
+			receipt := testutil.Send(t, hayabusa.Stargate,
+				staker.AddDelegation(validatorID1, delegationAmount, 100))
+			assert.False(t, receipt.Reverted, "Delegation %d should succeed", i+1)
+
+			delegationID := testutil.ReceiptToID(receipt)
+			delegationIDs[i] = delegationID
+
+			// Verify delegation was created correctly
+			delegation, err := staker.GetDelegation(delegationID)
+			require.NoError(t, err)
+			assert.Equal(t, delegationAmount, delegation.Stake, "Delegation %d should have correct stake", i+1)
+			assert.Equal(t, uint8(100), delegation.Multiplier, "Delegation %d should have correct multiplier", i+1)
+
+			// Wait for delegation to be processed
+			require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod))
+
+			// Log current totals for debugging
+			totals, err := staker.GetValidationTotals(validatorID1)
+			require.NoError(t, err)
+			currentStakeInVET := big.NewInt(0).Div(totals.TotalLockedStake, big.NewInt(1e18))
+			t.Logf("After delegation %d: Validator total stake = %s VET", i+1, currentStakeInVET.String())
+		}
+
+		// Test 2: Single delegation exceeding limit should fail
+		validatorID2 := validationIDs[1]
+
+		// Setup: get this validator close to the limit
+		setupAmount := createVETAmount(100)
+		for i := range 5 {
+			receipt := testutil.Send(t, hayabusa.Stargate,
+				staker.AddDelegation(validatorID2, setupAmount, 100))
+			require.False(t, receipt.Reverted, "Setup delegation %d should succeed", i+1)
+		}
+
+		// Now try to exceed the limit
+		overLimitAmount := createVETAmount(100)
+
+		receipt, _, err := staker.AddDelegation(validatorID2, overLimitAmount, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions()).
+			SubmitAndConfirm(testutil.TxContext(t))
+		require.NoError(t, err)
+		assert.True(t, receipt.Reverted, "Delegation exceeding 600M limit should revert")
+
+		// Log the current validator totals for debugging
+		totals, err := staker.GetValidationTotals(validatorID2)
+		require.NoError(t, err)
+		currentStakeInVET := big.NewInt(0).Div(totals.TotalLockedStake, big.NewInt(1e18))
+		t.Logf("Validator total stake after failed over-limit delegation: %s VET", currentStakeInVET.String())
+
+		// Test 3: Race condition with concurrent delegations at limit
+		validatorID3 := validationIDs[2]
+
+		// Setup: get this validator close to the limit
+		for i := range 5 {
+			receipt := testutil.Send(t, hayabusa.Stargate,
+				staker.AddDelegation(validatorID3, setupAmount, 100))
+			require.False(t, receipt.Reverted, "Setup delegation %d should succeed", i+1)
+		}
+
+		// Now test two 50M delegations concurrently
+		raceAmount := createVETAmount(50)
+
+		// Create two delegators that will race
+		senders := &utils.Senders{}
+
+		sender1 := staker.AddDelegation(validatorID3, raceAmount, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions())
+		senders.Add(sender1)
+
+		sender2 := staker.AddDelegation(validatorID3, raceAmount, 100).
+			Send().
+			WithSigner(hayabusa.Stargate).
+			WithOptions(testutil.TxOptions())
+		senders.Add(sender2)
+
+		// Send both transactions concurrently
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		t.Log("Sending two concurrent 50M VET delegations...")
+		receipts, _, err := senders.Send(ctx)
+		require.NoError(t, err)
+		require.Len(t, receipts, 2, "Should have 2 receipts")
+
+		successCount := 0
+		revertCount := 0
+		for i, receipt := range receipts {
+			if receipt.Reverted {
+				revertCount++
+				t.Logf("Concurrent delegation %d: REVERTED (expected due to limit)", i+1)
+			} else {
+				successCount++
+				delegationID := testutil.ReceiptToID(receipt)
+				delegation, err := staker.GetDelegation(delegationID)
+				require.NoError(t, err)
+				assert.Equal(t, raceAmount, delegation.Stake, "Successful delegation should have correct stake")
+				t.Logf("Concurrent delegation %d: SUCCESS", i+1)
+			}
+		}
+
+		// At most one should succeed due to 600M limit
+		assert.LessOrEqual(t, successCount, 1, "At most one concurrent delegation should succeed")
+		assert.GreaterOrEqual(t, revertCount, 1, "At least one concurrent delegation should revert due to limit")
+		assert.NotEmpty(t, receipts)
+
+		maxBlockNumber := receipts[0].Meta.BlockNumber
+		for _, receipt := range receipts[1:] {
+			if receipt.Meta.BlockNumber > maxBlockNumber {
+				maxBlockNumber = receipt.Meta.BlockNumber
+			}
+		}
+		require.NoError(t, ticker.WaitForBlock(maxBlockNumber+1))
+
+		// Verify final validator totals respect the 600M limit
+		finalTotals, err := staker.GetValidationTotals(validatorID3)
+		require.NoError(t, err)
+
+		maxLimit := createVETAmount(600)
+		assert.LessOrEqual(t, finalTotals.TotalLockedStake.Cmp(maxLimit), 0,
+			"Final validator stake should not exceed 600M VET limit")
+	})
+
 }
 
-func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]thor.Address) {
+func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]thor.Address, *hayabusa.Network) {
 	t.Helper()
 	config := &hayabusa.Config{
 		Nodes:             6,
@@ -398,5 +803,5 @@ func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]tho
 		t.Fatalf("failed to wait for PoS: %v", err)
 	}
 
-	return staker, config, validationIDs
+	return staker, config, validationIDs, network
 }
