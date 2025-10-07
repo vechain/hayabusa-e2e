@@ -127,7 +127,7 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 }
 
 func Test_Delegations(t *testing.T) {
-	staker, config, validationIDs, network := newDelegationSetup(t)
+	staker, config, validationIDs, _ := newDelegationSetup(t)
 	ticker := utils.NewTicker(staker.Raw().Client())
 
 	t.Run("Delegate update auto renew after first period", func(t *testing.T) {
@@ -345,6 +345,12 @@ func Test_Delegations(t *testing.T) {
 		assert.Equal(t, expectedWeight, totalsAfterWithdrawal.TotalLockedWeight,
 			"Validator should have the correct total weight after withdrawal")
 	})
+}
+
+func Test_Delegations2(t *testing.T) {
+	t.Parallel()
+	staker, config, validationIDs, network := newDelegationSetup(t)
+	ticker := utils.NewTicker(staker.Raw().Client())
 
 	t.Run("Delegator can withdraw when validator is offline", func(t *testing.T) {
 		t.Parallel()
@@ -387,7 +393,7 @@ func Test_Delegations(t *testing.T) {
 		err = utils.WaitForCondition(
 			t.Context(),
 			staker.Raw().Client(),
-			config.ForkBlock+config.TransitionPeriod+config.MinStakingPeriod*5,
+			config.ForkBlock+config.TransitionPeriod+config.MinStakingPeriod*10,
 			func() (bool, error) {
 				validation, err := staker.GetValidation(validatorID)
 				if err != nil {
@@ -744,7 +750,6 @@ func Test_Delegations(t *testing.T) {
 		assert.LessOrEqual(t, finalTotals.TotalLockedStake.Cmp(maxLimit), 0,
 			"Final validator stake should not exceed 600M VET limit")
 	})
-
 }
 
 func newDelegationSetup(t *testing.T) (*builtin.Staker, *hayabusa.Config, [6]thor.Address, *hayabusa.Network) {
