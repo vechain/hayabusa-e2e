@@ -3,7 +3,6 @@ package hayabusa
 import (
 	"context"
 	"fmt"
-	"github.com/vechain/networkhub/client"
 	"log/slog"
 	"os"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/hayabusa-e2e/utils"
+	"github.com/vechain/networkhub/client"
 	networkhubNetwork "github.com/vechain/networkhub/network"
 	"github.com/vechain/networkhub/network/node"
 	"github.com/vechain/networkhub/network/node/genesis"
@@ -59,12 +59,21 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 			},
 		}
 	}
+	// pre-build before creating the genesis. Genesis sets a future timestamp,
+	// so we can more easily predict the first block if we build and then set the timestamp
+	execPath, err := thorbuilder.NewAndBuild(thorBuilder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build thor: %w", err)
+	}
+	// skip thorbuilder as build has been done
+	// make sure to update the nodes with the execution path
+	thorBuilder = nil
 
 	nodes := make([]node.Config, 0)
 	genesis := Genesis(config)
 	usedPorts := make([]int, 0, config.Nodes*2)
 	for i := range config.Nodes {
-		node, apiPort, p2pPort := makeNode(config, i, ValidatorAccounts[i], genesis)
+		node, apiPort, p2pPort := makeNode(config, i, ValidatorAccounts[i], execPath, genesis)
 		nodes = append(nodes, node)
 		usedPorts = append(usedPorts, apiPort, p2pPort)
 	}
@@ -163,18 +172,12 @@ func (n *Network) AttachNode(buildConfig *thorbuilder.Config, additionalArgs map
 	buildMutex.Lock()
 	defer buildMutex.Unlock()
 
-	builder := thorbuilder.New(buildConfig)
-
-	if err := builder.Download(); err != nil {
-		return fmt.Errorf("failed to download builder: %w", err)
-	}
-	path, err := builder.Build()
+	path, err := thorbuilder.NewAndBuild(buildConfig)
 	if err != nil {
 		return fmt.Errorf("failed to build node: %w", err)
 	}
 
-	node, apiPort, p2pPort := makeNode(n.config, len(n.nodes), ValidatorAccounts[len(n.nodes)], n.genesis)
-	node.SetExecArtifact(path)
+	node, apiPort, p2pPort := makeNode(n.config, len(n.nodes), ValidatorAccounts[len(n.nodes)], path, n.genesis)
 	node.SetAdditionalArgs(additionalArgs)
 	n.nodes = append(n.nodes, node)
 	n.usedPorts = append(n.usedPorts, apiPort, p2pPort)
@@ -188,7 +191,7 @@ func (n *Network) AttachNode(buildConfig *thorbuilder.Config, additionalArgs map
 	return nil
 }
 
-func makeNode(config *Config, i int, signer *NodePair, customGenesis *genesis.CustomGenesis) (node.Config, int, int) {
+func makeNode(config *Config, i int, signer *NodePair, binpath string, customGenesis *genesis.CustomGenesis) (node.Config, int, int) {
 	verbosity := 3
 	if config.Verbosity > 0 {
 		verbosity = config.Verbosity
@@ -216,5 +219,6 @@ func makeNode(config *Config, i int, signer *NodePair, customGenesis *genesis.Cu
 		AdditionalArgs: additionalArgs,
 		APIAddr:        fmt.Sprintf("0.0.0.0:%d", apiPort),
 		P2PListenPort:  p2pPort,
+		ExecArtifact:   binpath,
 	}, apiPort, p2pPort
 }
