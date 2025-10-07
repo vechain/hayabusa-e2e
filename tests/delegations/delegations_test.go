@@ -129,6 +129,7 @@ func Test_Delegations_Delegate1PeriodOnly(t *testing.T) {
 func Test_Delegations(t *testing.T) {
 	staker, config, validationIDs, network := newDelegationSetup(t)
 	ticker := utils.NewTicker(staker.Raw().Client())
+
 	t.Run("Delegate update auto renew after first period", func(t *testing.T) {
 		t.Parallel()
 
@@ -386,7 +387,7 @@ func Test_Delegations(t *testing.T) {
 		err = utils.WaitForCondition(
 			t.Context(),
 			staker.Raw().Client(),
-			config.ForkBlock+config.TransitionPeriod+config.MinStakingPeriod*4,
+			config.ForkBlock+config.TransitionPeriod+config.MinStakingPeriod*5,
 			func() (bool, error) {
 				validation, err := staker.GetValidation(validatorID)
 				if err != nil {
@@ -445,22 +446,16 @@ func Test_Delegations(t *testing.T) {
 
 		// Add 3 validators - first 2 will be active, 3rd will be queued
 		queuedValidationIDs := [3]thor.Address{}
-		senders := &utils.Senders{}
 
 		for i := range queuedValidationIDs {
 			account := hayabusa.ValidatorAccounts[i]
-			sender := queuedStaker.AddValidation(account.Node.Address(), builtin.MinStake(), queuedConfig.MinStakingPeriod).
+			queuedStaker.AddValidation(account.Node.Address(), builtin.MinStake(), queuedConfig.MinStakingPeriod).
 				Send().
 				WithSigner(account.Endorser).
-				WithOptions(testutil.TxOptions())
-			senders.Add(sender)
+				WithOptions(testutil.TxOptions()).
+				SubmitAndConfirm(testutil.TxContext(t))
 			queuedValidationIDs[i] = account.Node.Address()
 		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		_, _, err = senders.Send(ctx)
-		require.NoError(t, err)
 
 		// Wait for PoS to activate
 		require.NoError(t, utils.WaitForPOS(t.Context(), queuedStaker, queuedConfig.ForkBlock+queuedConfig.TransitionPeriod))
