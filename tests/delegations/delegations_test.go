@@ -349,7 +349,7 @@ func Test_Delegations(t *testing.T) {
 	t.Run("One exiting delegator should not change the weight", func(t *testing.T) {
 		t.Parallel()
 
-		validator, err := staker.GetValidation(validationIDs[3])
+		validator, err := staker.GetValidation(validationIDs[4])
 		require.NoError(t, err)
 
 		for _, acc := range hayabusa.ValidatorAccounts {
@@ -360,7 +360,7 @@ func Test_Delegations(t *testing.T) {
 
 		// add the delegation
 		receipt := testutil.Send(t, hayabusa.Stargate,
-			staker.AddDelegation(validationIDs[3], builtin.MinStake(), 100))
+			staker.AddDelegation(validationIDs[4], builtin.MinStake(), 100))
 		require.NoError(t, err)
 		delegationID1 := testutil.ReceiptToID(receipt)
 		delegation1, err := staker.GetDelegation(delegationID1)
@@ -371,7 +371,7 @@ func Test_Delegations(t *testing.T) {
 
 		// add the delegation
 		receipt = testutil.Send(t, hayabusa.Stargate,
-			staker.AddDelegation(validationIDs[3], builtin.MinStake(), 100))
+			staker.AddDelegation(validationIDs[4], builtin.MinStake(), 100))
 		delegationID2 := testutil.ReceiptToID(receipt)
 		delegation2, err := staker.GetDelegation(delegationID2)
 		require.NoError(t, err)
@@ -381,19 +381,19 @@ func Test_Delegations(t *testing.T) {
 
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*1))
 
-		validator, err = staker.GetValidation(validationIDs[3])
+		validator, err = staker.GetValidation(validationIDs[4])
 		expectedWeight := big.NewInt(0).Mul(validator.Stake, big.NewInt(2))
 		expectedWeight = big.NewInt(0).Add(expectedWeight, big.NewInt(0).Mul(builtin.MinStake(), big.NewInt(2)))
 
 		assert.Equal(t, expectedWeight, validator.Weight)
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID1))
 
-		validator, err = staker.GetValidation(validationIDs[3])
+		validator, err = staker.GetValidation(validationIDs[4])
 		expectedWeight = big.NewInt(0).Mul(validator.Stake, big.NewInt(2))
 		expectedWeight = big.NewInt(0).Add(expectedWeight, builtin.MinStake())
 
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*2))
-		validator, err = staker.GetValidation(validationIDs[3])
+		validator, err = staker.GetValidation(validationIDs[4])
 		expectedWeight = big.NewInt(0).Mul(validator.Stake, big.NewInt(2))
 		expectedWeight = big.NewInt(0).Add(expectedWeight, builtin.MinStake())
 		assert.Equal(t, expectedWeight, validator.Weight)
@@ -401,7 +401,7 @@ func Test_Delegations(t *testing.T) {
 		receipt = testutil.Send(t, hayabusa.Stargate, staker.SignalDelegationExit(delegationID2))
 
 		require.NoError(t, ticker.WaitForBlock(receipt.Meta.BlockNumber+config.MinStakingPeriod*3))
-		validator, err = staker.GetValidation(validationIDs[3])
+		validator, err = staker.GetValidation(validationIDs[4])
 		expectedWeight = validator.Stake
 		assert.Equal(t, expectedWeight, validator.Weight)
 	})
