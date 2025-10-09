@@ -12,8 +12,6 @@ import (
 	native "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thorclient"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
@@ -21,10 +19,8 @@ import (
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
-	"github.com/vechain/thor/v2/tx"
 )
 
 func Test_Stargate_SingleDelegator(t *testing.T) {
@@ -545,69 +541,10 @@ posActive:
 }
 
 func setStargate(t *testing.T, staker *builtin.Staker) *stargate.Stargate {
-	genesis, err := staker.Raw().Client().Block("0")
-	require.NoError(t, err)
-	chainTag := genesis.ID[31]
-
-	acc := hayabusa.AdditionalAccounts[0]
-
-	bytecode := stargate.Bin
-	bytecode = strings.TrimSpace(bytecode)
-	bytes, err := hexutil.Decode("0x" + bytecode)
-	require.NoError(t, err)
-
-	clause := tx.NewClause(nil).WithData(bytes)
-	trx := new(tx.Builder).
-		Clause(clause).
-		Gas(40_000_000).
-		Nonce(datagen.RandUint64()).
-		ChainTag(chainTag).
-		Expiration(10000).
-		GasPriceCoef(255).
-		Build()
-
-	caller := acc.Address()
-	inspection, err := staker.Raw().Client().InspectClauses(&api.BatchCallData{
-		Caller: &caller,
-		Clauses: api.Clauses{
-			{
-				Data:  "0x" + bytecode,
-				Value: (*math.HexOrDecimal256)(trx.Clauses()[0].Value()),
-				To:    trx.Clauses()[0].To(),
-			},
-		},
-	})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(inspection))
-
-	trx, err = hayabusa.Stargate.SignTransaction(trx)
-	require.NoError(t, err)
-	res, err := staker.Raw().Client().SendTransaction(trx)
-	require.NoError(t, err)
-
-	var receipt *api.Receipt
-	for range 30 {
-		receipt, err = staker.Raw().Client().TransactionReceipt(res.ID)
-		if err == nil && receipt != nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
-	if receipt == nil {
-		t.Fatalf("failed to get transaction receipt: %v", err)
-	}
-
-	contractAddr := receipt.Outputs[0].ContractAddress
-
-	stargate := stargate.NewStargate(staker.Raw().Client(), *contractAddr)
-
-	params, err := builtin.NewParams(staker.Raw().Client())
-	require.NoError(t, err)
-	key := thor.BytesToBytes32([]byte("delegator-contract-address"))
-	value := new(big.Int).SetBytes(contractAddr[:])
-	testutil.Send(t, hayabusa.Executor, params.Set(key, value))
-
-	return stargate
+	client := staker.Raw().Client()
+	contractAddr := testutil.DeployContract(t, client, hayabusa.Stargate, stargate.Bin)
+	testutil.SetDelegatorContract(t, client, contractAddr)
+	return stargate.NewStargate(staker.Raw().Client(), contractAddr)
 }
 
 func receiptToDelegationID(t *testing.T, receipt *api.Receipt) *big.Int {

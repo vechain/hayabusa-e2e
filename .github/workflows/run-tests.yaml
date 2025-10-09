@@ -47,6 +47,7 @@ jobs:
           - tests/pause
           - tests/eviction
           - tests/balance
+          - tests/reentrancy
       fail-fast: false
 
     steps:

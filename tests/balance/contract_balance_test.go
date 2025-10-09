@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/hayabusa-e2e/hayabusa"
@@ -50,14 +49,12 @@ func Test_ContractSuicide_StakerRecipient(t *testing.T) {
 	require.NoError(t, utils.WaitForPOS(t.Context(), staker, config.ForkBlock+config.TransitionPeriod))
 
 	// Deploy the SelfDestruct contract
-	deployClause := tx.NewClause(nil).WithData(hexutil.MustDecode("0x" + selfdestruct.Bin))
-	receipt := testutil.SendClauses(t, hayabusa.AdditionalAccounts[0], []*tx.Clause{deployClause}, client, testutil.TxContext(t))
-	contractAddress := receipt.Outputs[0].ContractAddress
-	bind, err := bind2.NewContract(client, selfdestruct.ABI, contractAddress)
+	contractAddress := testutil.DeployContract(t, client, hayabusa.AdditionalAccounts[0], selfdestruct.Bin)
+	bind, err := bind2.NewContract(client, selfdestruct.ABI, &contractAddress)
 	require.NoError(t, err)
 
 	// Send VET to the new contract
-	sendClause := tx.NewClause(contractAddress).WithValue(builtin.MinStake())
+	sendClause := tx.NewClause(&contractAddress).WithValue(builtin.MinStake())
 	testutil.SendClauses(t, hayabusa.AdditionalAccounts[0], []*tx.Clause{sendClause}, client, testutil.TxContext(t))
 
 	// Self-destruct the contract, sending balance to a staker
@@ -67,7 +64,7 @@ func Test_ContractSuicide_StakerRecipient(t *testing.T) {
 	// Signal exit and wait for 1 validator
 	// The below exit and withdraw should verify balance sheet.
 	// If the below statements are untrue, we have an issue processing extra VET
-	receipt = testutil.Send(t, val1.Endorser, staker.SignalExit(val1.Node.Address()))
+	receipt := testutil.Send(t, val1.Endorser, staker.SignalExit(val1.Node.Address()))
 	exitBlock := receipt.Meta.BlockNumber + (config.MinStakingPeriod - receipt.Meta.BlockNumber%config.MinStakingPeriod)
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(exitBlock))
 	validation, err := staker.GetValidation(val1.Node.Address())
