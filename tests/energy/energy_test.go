@@ -3,6 +3,7 @@ package energy
 import (
 	"math/big"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/vechain/hayabusa-e2e/testutil"
 	"github.com/vechain/hayabusa-e2e/utils"
 	"github.com/vechain/thor/v2/api"
+	native "github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
@@ -36,6 +38,7 @@ func runEnergyTest(t *testing.T) error {
 		Name:              t.Name(),
 		BlockInterval:     uint64(2),
 	}
+	growthStopTimeKey := thor.Blake2b([]byte("growth-stop-time"))
 
 	network, err := hayabusa.NewNetwork(config, t.Context())
 	require.NoError(t, err)
@@ -133,7 +136,27 @@ func runEnergyTest(t *testing.T) error {
 	}
 	t.Logf("✅ - PoA growth is as expected")
 
-	block := config.ForkBlock
+	stopTime, err := client.AccountStorage(&native.Energy.Address, &growthStopTimeKey)
+	assert.NoError(t, err)
+
+	stopTimeParsed, _ := new(big.Int).SetString(strings.TrimPrefix(stopTime.Value, "0x"), 16)
+	blk, err := client.Block("best")
+	assert.NoError(t, err)
+	time := blk.Timestamp
+	block := blk.Number
+	for time != stopTimeParsed.Uint64() {
+		block = block - 1
+		if block == 0 {
+			break
+		}
+		blk, err = client.Block(strconv.FormatUint(uint64(block), 10))
+		assert.NoError(t, err)
+		time = blk.Timestamp
+		block = blk.Number
+	}
+
+	assert.Equal(t, blk.Number, config.ForkBlock)
+	t.Logf("✅ - Growth stop time is as expected")
 
 	poaBlock := block
 	lastPOASupply, err := energy.Revision(strconv.FormatUint(uint64(poaBlock), 10)).TotalSupply()
