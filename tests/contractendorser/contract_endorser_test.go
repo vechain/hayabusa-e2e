@@ -119,7 +119,7 @@ func newTest(t *testing.T, bytecode string, abiBytes []byte) {
 
 			if event.Address == *staker.Raw().Address() {
 				if event.Topics[0] == thor.Bytes32(stakerWithdraw.Id()) {
-					t.Log("🤨 - Staker withdrawn event was emitted, but expected it to not be emitted")
+					t.Log("🤨 - Staker withdrawn event was emitted, but shouldn't have been")
 				}
 			}
 		}
