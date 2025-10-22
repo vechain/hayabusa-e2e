@@ -261,7 +261,7 @@ func (d *DelegatorLifecycle) queueDelegation(validator *validation.Validation) e
 	stake := new(big.Int).Mul(d.config.Position.Stake, big.NewInt(ethToWei))
 
 	// Create delegation transaction
-	sender := d.stack.Staker().AddDelegation(d.config.ValidationID, stake, d.config.Position.Multiplier)
+	sender := d.stack.Staker().AddDelegation(d.config.ValidationID, stake, d.config.Position.WeightMultiplier)
 
 	receipt, err := d.sendOrPoll(sender, &d.queuedTx, errValidationNotQueuedOrActive)
 	if err != nil {

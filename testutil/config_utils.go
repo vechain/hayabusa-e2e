@@ -17,7 +17,7 @@ func SetupTestNetworkWithEpochAndBlockInterval(t *testing.T, maxBlockProposers u
 	config := &hayabusa.Config{
 		Nodes:                      6,
 		MaxBlockProposers:          maxBlockProposers,
-		ForkBlock:                  0,
+		ForkBlock:                  10,
 		TransitionPeriod:           10,
 		EpochLength:                epochLength,
 		CooldownPeriod:             2,

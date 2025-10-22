@@ -4,12 +4,28 @@ import (
 	"math/big"
 )
 
+type Type string
+
 type Position struct {
-	Name        string
-	Stake       *big.Int
-	MainnetUsed int // the amount of used positions according to:https://vechainstats.com/vechain-nodes/#xnode-log
-	Multiplier  uint8
+	Name             Type
+	Stake            *big.Int
+	MainnetUsed      int // the amount of used positions according to:https://vechainstats.com/vechain-nodes/#xnode-log
+	WeightMultiplier uint8
+	RewardMultiplier uint16
 }
+
+const (
+	MjolnirX  Type = "Mjolnir X"
+	ThunderX  Type = "Thunder X"
+	StrengthX Type = "Strength X"
+	VeThorX   Type = "VeThor X"
+	Mjolnir   Type = "Mjolnir"
+	Thunder   Type = "Thunder"
+	Strength  Type = "Strength"
+	Flash     Type = "Flash"
+	Lightning Type = "Lightning"
+	Dawn      Type = "Dawn"
+)
 
 var NoPositions []*Position
 
@@ -25,14 +41,14 @@ func DevnetPositions(mbp uint32) []*Position {
 }
 
 var MainnetPositions = []*Position{
-	{"Mjolnir X", big.NewInt(15600000), 158, 150},
-	{"Thunder X", big.NewInt(5600000), 188, 150},
-	{"Strength X", big.NewInt(1600000), 836, 150},
-	{"VeThor X", big.NewInt(600000), 719, 150},
-	{"Mjolnir", big.NewInt(15000000), 96, 100},
-	{"Thunder", big.NewInt(5000000), 257, 100},
-	{"Strength", big.NewInt(1000000), 1644, 100},
-	{"Flash", big.NewInt(200000), 1941, 100},
-	{"Lightning", big.NewInt(50000), 2688, 100},
-	{"Dawn", big.NewInt(10000), 4614, 100},
+	{MjolnirX, big.NewInt(15600000), 158, 150, 500},
+	{ThunderX, big.NewInt(5600000), 188, 150, 400},
+	{StrengthX, big.NewInt(1600000), 836, 150, 300},
+	{VeThorX, big.NewInt(600000), 719, 150, 200},
+	{Mjolnir, big.NewInt(15000000), 96, 100, 350},
+	{Thunder, big.NewInt(5000000), 257, 100, 250},
+	{Strength, big.NewInt(1000000), 1644, 100, 150},
+	{Flash, big.NewInt(200000), 1941, 100, 130},
+	{Lightning, big.NewInt(50000), 2688, 100, 115},
+	{Dawn, big.NewInt(10000), 4614, 100, 100},
 }
