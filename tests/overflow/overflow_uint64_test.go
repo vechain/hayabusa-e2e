@@ -38,7 +38,7 @@ func newHugeConfig(name string, maxBlockProposers uint32) *hayabusa.Config {
 	}
 }
 
-func Test_AddValidation_Overflow_TruncatesToUint64Remainder(t *testing.T) {
+func Test_AddValidation_Overflow_StakerAboveMaxSupply(t *testing.T) {
 	t.Parallel()
 	cfg := newHugeConfig(t.Name(), 3)
 	net, err := hayabusa.NewNetwork(cfg, t.Context())
@@ -54,15 +54,21 @@ func Test_AddValidation_Overflow_TruncatesToUint64Remainder(t *testing.T) {
 	targetWei := testutil.CalculateValidatorStake()
 	overflowWei := makeOverflowWei(targetWei)
 
-	receipt := testutil.Send(t, account.Endorser, staker.AddValidation(account.Node.Address(), overflowWei, cfg.MinStakingPeriod))
-	require.False(t, receipt.Reverted)
-
-	queued, err := staker.QueuedStake()
-	require.NoError(t, err)
-	assert.Equal(t, targetWei, queued)
+	sender := staker.AddValidation(account.Node.Address(), overflowWei, cfg.MinStakingPeriod)
+	receipt, _, _ := sender.Send().
+		WithOptions(testutil.TxOptions()).
+		WithSigner(account.Endorser).
+		SubmitAndConfirm(testutil.TxContext(t))
+	require.True(t, receipt.Reverted)
+	_, err = sender.Call().
+		AtRevision(receipt.Meta.BlockID.String()).
+		Caller(&receipt.Meta.TxOrigin).
+		Execute()
+	require.Error(t, err)
+	require.Equal(t, "contract call reverted (contract=0x00000000000000000000000000005374616b6572, method=addValidation, value=18446744073734551616000000000000000000, args=[0xc2c76defc505fc15bf6a768a8c8e760bb4844124, 4]): staker: stake is above max supply | VM error: execution reverted", err.Error())
 }
 
-func Test_IncreaseStake_Overflow_TruncatesDeltaQueued(t *testing.T) {
+func Test_IncreaseStake_Overflow_StakerAboveMaxSupply(t *testing.T) {
 	t.Parallel()
 	cfg := newHugeConfig(t.Name(), 3)
 	net, err := hayabusa.NewNetwork(cfg, t.Context())
@@ -85,18 +91,21 @@ func Test_IncreaseStake_Overflow_TruncatesDeltaQueued(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, id1, firstActive)
 
-	beforeQueued, err := staker.QueuedStake()
-	require.NoError(t, err)
-
 	incTarget := testutil.CalculateValidatorStake()
 	incOverflow := makeOverflowWei(incTarget)
-	r := testutil.Send(t, hayabusa.ValidatorAccounts[0].Endorser, staker.IncreaseStake(id1, incOverflow))
-	require.False(t, r.Reverted)
+	sender := staker.IncreaseStake(id1, incOverflow)
 
-	afterQueued, err := staker.QueuedStake()
-	require.NoError(t, err)
-	expected := new(big.Int).Add(beforeQueued, incTarget)
-	assert.Equal(t, expected, afterQueued)
+	receipt, _, _ := sender.Send().
+		WithOptions(testutil.TxOptions()).
+		WithSigner(hayabusa.ValidatorAccounts[0].Endorser).
+		SubmitAndConfirm(testutil.TxContext(t))
+	require.True(t, receipt.Reverted)
+	_, err = sender.Call().
+		AtRevision(receipt.Meta.BlockID.String()).
+		Caller(&receipt.Meta.TxOrigin).
+		Execute()
+	require.Error(t, err)
+	require.Equal(t, "contract call reverted (contract=0x00000000000000000000000000005374616b6572, method=increaseStake, value=18446744073734551616000000000000000000, args=[0xc2c76defc505fc15bf6a768a8c8e760bb4844124]): staker: stake is above max supply | VM error: execution reverted", err.Error())
 }
 
 func Test_DecreaseStake_Overflow_TruncatesLockedDecrease(t *testing.T) {
