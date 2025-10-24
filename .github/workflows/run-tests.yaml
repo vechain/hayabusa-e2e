@@ -62,7 +62,7 @@ jobs:
         with:
           repository: vechain/thor
           path: thor
-          ref: ${{ inputs.thor-branch || 'release/hayabusa' }}
+          ref: ${{ inputs.thor-branch || 'vanja/feat/fix-stake-checks' }}
 
       - name: Install Go
         uses: actions/setup-go@v5
