@@ -79,14 +79,14 @@ func Test_IncreaseStake_Overflow_TruncatesDeltaQueued(t *testing.T) {
 	_ = testutil.AddValidator(seq, staker, hayabusa.ValidatorAccounts[1], cfg.MinStakingPeriod)
 	_ = testutil.AddValidator(seq, staker, hayabusa.ValidatorAccounts[2], cfg.MinStakingPeriod)
 
-	beforeQueued, err := staker.QueuedStake()
-	require.NoError(t, err)
-
 	block := cfg.ForkBlock + cfg.TransitionPeriod
 	require.NoError(t, utils.WaitForPOS(t.Context(), staker, block))
 	_, firstActive, err := staker.FirstActive()
 	require.NoError(t, err)
 	require.Equal(t, id1, firstActive)
+
+	beforeQueued, err := staker.QueuedStake()
+	require.NoError(t, err)
 
 	incTarget := testutil.CalculateValidatorStake()
 	incOverflow := makeOverflowWei(incTarget)
