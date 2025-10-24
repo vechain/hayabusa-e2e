@@ -10,7 +10,7 @@ on:
       thor-branch:
         description: 'Branch to test against'
         required: true
-        default: 'release/hayabusa'
+        default: 'master'
   workflow_call:
     inputs:
       thor-branch:
