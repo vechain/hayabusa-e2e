@@ -10,7 +10,7 @@ on:
       thor-branch:
         description: 'Branch to test against'
         required: true
-        default: 'release/hayabusa'
+        default: 'master'
   workflow_call:
     inputs:
       thor-branch:
@@ -47,6 +47,7 @@ jobs:
           - tests/pause
           - tests/eviction
           - tests/balance
+          - tests/overflow
       fail-fast: false
 
     steps:
@@ -61,7 +62,7 @@ jobs:
         with:
           repository: vechain/thor
           path: thor
-          ref: ${{ inputs.thor-branch || 'release/hayabusa' }}
+          ref: ${{ inputs.thor-branch || 'master' }}
 
       - name: Install Go
         uses: actions/setup-go@v5

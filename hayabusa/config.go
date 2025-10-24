@@ -32,6 +32,7 @@ type Config struct {
 	BlockInterval              uint64 // block interval
 	ValidatorEvictionThreshold uint32 // validator eviction threshold
 	EvictionCheckInterval      uint32 // eviction check interval
+	HugeBalances               bool   // if true, allocate extremely large balances for dev accounts
 }
 
 // Apply the configuration to the genesis file.

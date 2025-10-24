@@ -31,7 +31,7 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 	executor := Executor.Address()
 	return genesisbuilder.New(int(config.MaxBlockProposers)).
 		Overrider(config.Apply).
-		Accounts(genesisAccounts()).
+		Accounts(genesisAccounts(config)).
 		Authority(authorities()).
 		Executor(thorgenesis.Executor{
 			Approvers: make([]thorgenesis.Approver, 0),
@@ -58,7 +58,7 @@ func authorities() []thorgenesis.Authority {
 	return authorities
 }
 
-func genesisAccounts() []thorgenesis.Account {
+func genesisAccounts(cfg *Config) []thorgenesis.Account {
 	accounts := make([]thorgenesis.Account, 0)
 
 	oneEth := big.NewInt(1e18)
@@ -66,6 +66,16 @@ func genesisAccounts() []thorgenesis.Account {
 	tenBillion := new(big.Int).Mul(oneEth, big.NewInt(10e9))
 	hundredBillion := new(big.Int).Mul(oneEth, big.NewInt(100e9))
 	oneBillion := new(big.Int).Mul(oneEth, big.NewInt(1e9))
+
+	if cfg != nil && cfg.HugeBalances {
+		twoTo64 := new(big.Int).Lsh(big.NewInt(1), 64)
+		hugeVet := new(big.Int).Mul(twoTo64, big.NewInt(1))
+		hugeVet.Mul(hugeVet, big.NewInt(1e6))
+		hugeWei := new(big.Int).Mul(hugeVet, oneEth)
+		tenBillion = new(big.Int).Set(hugeWei)
+		hundredBillion = new(big.Int).Set(hugeWei)
+		oneBillion = new(big.Int).Set(hugeWei)
+	}
 
 	addAccount := func(account bind.Signer, balance *big.Int) {
 		accounts = append(accounts, thorgenesis.Account{

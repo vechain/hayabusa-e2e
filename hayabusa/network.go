@@ -54,7 +54,7 @@ func NewNetwork(config *Config, ctx context.Context) (*Network, error) {
 		thorBuilder = &thorbuilder.Config{
 			DownloadConfig: &thorbuilder.DownloadConfig{
 				RepoUrl:    repo,
-				Branch:     "release/hayabusa",
+				Branch:     "master",
 				IsReusable: true,
 			},
 		}
