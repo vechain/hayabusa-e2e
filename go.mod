@@ -22,7 +22,7 @@ require (
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
 	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/pkg/errors v0.9.1
-	github.com/vechain/networkhub v0.0.5
+	github.com/vechain/networkhub v0.0.6-0.20251121141639-ce79c69d3adc
 )
 
 require (

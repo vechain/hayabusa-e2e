@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -31,6 +32,7 @@ func Genesis(config *Config) *genesis.CustomGenesis {
 	executor := Executor.Address()
 	return genesisbuilder.New(int(config.MaxBlockProposers)).
 		Overrider(config.Apply).
+		GenesisTimestampDelay(10 * time.Second).
 		Accounts(genesisAccounts(config)).
 		Authority(authorities()).
 		Executor(thorgenesis.Executor{
