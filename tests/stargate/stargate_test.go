@@ -35,7 +35,7 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 }
 
 func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, validationID thor.Address, expectedPeriods uint32) error {
-	err := ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
+	err := ticker.WaitForCondition(time.Minute*2, func() (bool, error) {
 		periodDetails, err := staker.GetValidationPeriodDetails(validationID)
 		slog.Info("⚠️ - completed periods, waiting for greater or equal than expected", "completed", int(periodDetails.CompletedPeriods), "expected", expectedPeriods)
 		if err != nil {
@@ -463,6 +463,73 @@ func runTestStargateDelegatorFlowStakeAndClaimAutoRenewOnAndOff(t *testing.T) er
 	assert.Equal(t, diff, big.NewInt(0).Sub(amountAfter, amountBefore))
 
 	return nil
+}
+
+// TestStargate_LateDeploy tests the scenario where the stargate contract is deployed after some staking periods have already completed.
+func TestStargate_LateDeploy(t *testing.T) {
+	t.Parallel()
+
+	config := &hayabusa.Config{
+		Nodes:             3,
+		MaxBlockProposers: 3,
+		ForkBlock:         0,
+		TransitionPeriod:  2,
+		EpochLength:       2,
+		CooldownPeriod:    2,
+		MinStakingPeriod:  2,
+		MidStakingPeriod:  12,
+		HighStakingPeriod: 24,
+		Name:              t.Name(),
+		BlockInterval:     uint64(2),
+	}
+
+	network, err := hayabusa.NewNetwork(config, t.Context())
+	require.NoError(t, err)
+	t.Cleanup(network.Stop)
+	require.NoError(t, network.Start())
+	client := network.ThorClient()
+
+	staker, err := builtin.NewStaker(client)
+	require.NoError(t, err)
+
+	senders := &utils.Senders{}
+	for i := range config.Nodes {
+		account := hayabusa.ValidatorAccounts[i]
+		sender := staker.AddValidation(account.Node.Address(), builtin.MinStake(), config.MinStakingPeriod).Send().WithSigner(account.Endorser).WithOptions(testutil.TxOptions())
+		senders.Add(sender)
+	}
+	_, _, err = senders.Send(testutil.TxContext(t))
+	require.NoError(t, err)
+
+	// wait for pos
+	require.NoError(t, utils.WaitForPOS(t.Context(), staker, 4))
+
+	val, addr, err := staker.FirstActive()
+	require.NoError(t, err)
+	require.False(t, addr.IsZero())
+	require.True(t, val.Stake.Sign() == 1)
+
+	require.NoError(t, waitForCompletedPeriods(utils.NewTicker(staker.Raw().Client()), staker, addr, 2))
+
+	stargate := setStargate(t, staker)
+
+	// add 1 delegation to each validator
+	senders = &utils.Senders{}
+	for i := range config.Nodes {
+		validator := hayabusa.ValidatorAccounts[i]
+		sender := stargate.AddDelegator(validator.Node.Address(), 100, big.NewInt(1e18)).Send().WithSigner(validator.Endorser).WithOptions(testutil.TxOptions())
+		senders.Add(sender)
+	}
+	_, _, err = senders.Send(testutil.TxContext(t))
+	require.NoError(t, err)
+
+	require.NoError(t, waitForCompletedPeriods(utils.NewTicker(staker.Raw().Client()), staker, addr, 5))
+
+	// check stargate is receiving rewards
+	stargateAcc, err := staker.Raw().Client().Account(stargate.Address())
+	require.NoError(t, err)
+	stargateEnergy := (*big.Int)(stargateAcc.Energy)
+	require.True(t, stargateEnergy.Sign() == 1, "stargate should have received some energy rewards")
 }
 
 func newDelegationSetup(t *testing.T) (*builtin.Staker, *stargate.Stargate, *hayabusa.Config, [3]thor.Address, thorclient.Client) {
