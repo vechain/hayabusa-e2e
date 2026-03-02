@@ -16,6 +16,10 @@ on:
       thor-branch:
         type: string
         required: false
+      thor-repo:
+        type: string
+        required: false
+        default: vechain/thor
       codebuild-name:
         type: string
         required: false
@@ -60,7 +64,7 @@ jobs:
       - name: Checkout Thor
         uses: actions/checkout@v4
         with:
-          repository: vechain/thor
+          repository: ${{ inputs.thor-repo || 'vechain/thor' }}
           path: thor
           ref: ${{ inputs.thor-branch || 'master' }}
 
