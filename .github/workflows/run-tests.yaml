@@ -67,7 +67,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'hayabusa-e2e/go.mod'
 
       - name: Test
         run: go test -v -parallel 4 -failfast -timeout 3600s ./${{ matrix.packages }}
