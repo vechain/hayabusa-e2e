@@ -793,7 +793,7 @@ func assertValidatorStakingPeriod(t *testing.T, staker *builtin.Staker, validato
 	assert.Equal(t, expectedPeriod, validator.Period)
 }
 
-func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config, *thorclient.Client, hayabusa.Network) {
+func setupTestNetwork(t *testing.T, maxBlockProposers uint32) (*hayabusa.Config, *thorclient.Client, *hayabusa.Network) {
 	return testutil.SetupTestNetworkWithEpochAndBlockInterval(t, maxBlockProposers, 2, 5)
 }
 
