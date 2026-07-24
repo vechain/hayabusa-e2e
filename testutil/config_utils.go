@@ -13,7 +13,7 @@ import (
 	"github.com/vechain/thor/v2/thorclient/builtin"
 )
 
-func SetupTestNetworkWithEpochAndBlockInterval(t *testing.T, maxBlockProposers uint32, epochLength uint32, blockInterval uint64) (*hayabusa.Config, *thorclient.Client, hayabusa.Network) {
+func SetupTestNetworkWithEpochAndBlockInterval(t *testing.T, maxBlockProposers uint32, epochLength uint32, blockInterval uint64) (*hayabusa.Config, *thorclient.Client, *hayabusa.Network) {
 	config := &hayabusa.Config{
 		Nodes:                      6,
 		MaxBlockProposers:          maxBlockProposers,
@@ -34,7 +34,7 @@ func SetupTestNetworkWithEpochAndBlockInterval(t *testing.T, maxBlockProposers u
 	require.NoError(t, err)
 	t.Cleanup(network.Stop)
 	require.NoError(t, network.Start())
-	return config, network.ThorClient(), *network
+	return config, network.ThorClient(), network
 }
 
 func SetupStakerAndWaitForFork(t *testing.T, client *thorclient.Client, config *hayabusa.Config) *builtin.Staker {
