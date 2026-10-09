@@ -1,6 +1,7 @@
 package stargate
 
 import (
+	"fmt"
 	"log/slog"
 	"math/big"
 	"strconv"
@@ -37,14 +38,17 @@ func Test_Stargate_SingleDelegator(t *testing.T) {
 func waitForCompletedPeriods(ticker *utils.Ticker, staker *builtin.Staker, validationID thor.Address, expectedPeriods uint32) error {
 	err := ticker.WaitForCondition(time.Minute*1, func() (bool, error) {
 		periodDetails, err := staker.GetValidationPeriodDetails(validationID)
-		slog.Info("⚠️ - completed periods, waiting for greater or equal than expected", "completed", int(periodDetails.CompletedPeriods), "expected", expectedPeriods)
 		if err != nil {
-			return false, err
+			// keep polling: a failed query is not a result, and WaitForCondition
+			// still bounds the wait
+			slog.Warn("⚠️ - failed to get validation period details", "validationID", validationID, "err", err)
+			return false, nil
 		}
+		slog.Info("⚠️ - completed periods, waiting for greater or equal than expected", "completed", int(periodDetails.CompletedPeriods), "expected", expectedPeriods)
 		return periodDetails.CompletedPeriods >= expectedPeriods, nil
 	})
 	if err != nil {
-		return testutil.StakerStatusUnknownError{ValidationID: validationID.String()}
+		return fmt.Errorf("waiting for %d completed periods of %s: %w", expectedPeriods, validationID, err)
 	}
 	return nil
 }

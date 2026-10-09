@@ -1,6 +1,7 @@
 package validations
 
 import (
+	"fmt"
 	"log/slog"
 	"math/big"
 	"testing"
@@ -772,14 +773,16 @@ func assertMatchingValidators(t *testing.T, staker *builtin.Staker, id1 thor.Add
 func assertValidatorStatus(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.GetValidation(validatorID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedStatus, validator.Status)
 }
 
 func assertValidatorStatusUnknown(t *testing.T, staker *builtin.Staker, validatorID thor.Address, expectedStatus builtin.StakerStatus, waitForBlock uint32) error {
 	assert.NoError(t, utils.NewTicker(staker.Raw().Client()).WaitForBlock(waitForBlock))
 	validator, err := staker.GetValidation(validatorID)
-	assert.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("getting validation %s: %w", validatorID, err)
+	}
 	if validator.Status == builtin.StakerStatusUnknown {
 		return testutil.StakerStatusUnknownError{ValidationID: validatorID.String()}
 	}
