@@ -101,7 +101,9 @@ func (t *Ticker) WaitForCondition(timeout time.Duration, conditionalFunc Conditi
 			if resp {
 				return nil
 			}
-			time.Sleep(10 * time.Second)
+			// thor's API server closes idle connections after 10s; polling on that same
+			// interval races the close and surfaces EOF on non-retried POSTs
+			time.Sleep(3 * time.Second)
 		}
 	}
 }
