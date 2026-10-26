@@ -50,9 +50,13 @@ func (pm *PortManager) RemovePorts(id string) {
 
 // rndPort generates a random port using global synchronization to avoid race conditions
 func (pm *PortManager) rndPort() int {
+	// Stay below the default ephemeral port ranges (Linux 32768-60999,
+	// macOS/Windows 49152-65535): a port that is free when probed can be
+	// handed out as an outbound source port by the kernel before the node
+	// binds it, which showed up in CI as "bind: address already in use".
 	const (
-		minPort     = 49152
-		maxPort     = 65535
+		minPort     = 20000
+		maxPort     = 32767
 		maxAttempts = 100
 	)
 
